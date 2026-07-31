@@ -1,16 +1,17 @@
-// Sistema de Controle de Medidas Socioeducativas v10.0
-// Backend: Upstash Redis REST API (direto do frontend)
-// ================================================================
+// ============================================================
+// SISTEMA DE CONTROLE DE MEDIDAS SOCIOEDUCATIVAS v2.0
+// BACKEND: UPSTASH REDIS REST API
+// ============================================================
 
-// ================================================================
-// CONFIGURAÇÃO
-// ================================================================
+// ============================================================
+// CONFIGURAÇÃO UPSTASH
+// ============================================================
 const UPSTASH_URL = 'https://enhanced-lobster-167489.upstash.io';
 const UPSTASH_TOKEN = 'gQAAAAAAAo5BAAIgcDI0NjUxNzdjMzdiYzg0YTBlOTFkZWZjY2Y0MGI5YjQ1YQ';
 
-// ================================================================
+// ============================================================
 // NÍVEIS DE ACESSO E PERMISSÕES
-// ================================================================
+// ============================================================
 const NIVEIS_ACESSO = {
   desenvolvedor: { nome: 'Desenvolvedor' },
   gestor: { nome: 'Gestor' },
@@ -21,31 +22,16 @@ const NIVEIS_ACESSO = {
   admin: { nome: 'Desenvolvedor' }
 };
 
-// ================================================================
-// ESTADO GLOBAL
-// ================================================================
-let estado = {
-  usuarios: [], 
-  jovens: [], 
-  profissionais: [], 
-  oficinas: [], 
-  planejamentos: [],
-  online: false, 
-  usuarioAtual: null, 
-  graficos: {},
-  exclusaoPendente: null,
-  suspensaoPendente: null
-};
+const NIVEIS_COM_STATUS = ['desenvolvedor', 'admin', 'gestor', 'tecnico'];
 
-// ================================================================
+// ============================================================
 // CAMPOS DO FORMULÁRIO (baseados na planilha real)
-// ================================================================
+// ============================================================
 const CAMPOS = [
   ['REFERENCIA','REFERÊNCIA','text'],['NOME','NOME','text'],['NOME DO RESPONSÁVEL','RESPONSÁVEL','text'],
   ['REINCIDÊNCIA','REINCIDÊNCIA','text'],
   ['MEDIDA','MEDIDA','select', [['','Selecione...'],['LA','LA - Liberdade Assistida'],['PSC','PSC - Prestação de Serviço'],['Internação','Internação'],['Liberação','Liberação']]],
-  ['MESES','MESES','text'],
-  ['HORAS','HORAS','number'],['PROTETIVA','PROTETIVA','text'],['NASC.','NASCIMENTO','date'],
+  ['MESES','MESES','text'],['HORAS','HORAS','number'],['PROTETIVA','PROTETIVA','text'],['NASC.','NASCIMENTO','date'],
   ['MÊS ANIVERSARIO','MÊS ANIVER.','text'],['NATURALIDADE','NATURALIDADE','text'],
   ['IDADE','IDADE','number'],['GÊNERO','GÊNERO','select',[['','Selecione...'],['M','Masculino'],['F','Feminino'],['NB','Não-binário']]],
   ['COR','COR','select',[['','Selecione...'],['Branca','Branca'],['Preta','Preta'],['Parda','Parda'],
@@ -61,294 +47,31 @@ const CAMPOS = [
   ['QUAL NOME SOCIAL?','NOME SOCIAL','text']
 ];
 
-// ================================================================
-// INJEÇÃO DE HTML (MODAIS, TELAS DE CADASTRO E APROVAÇÃO)
-// ================================================================
-function injetarHTMLDinamico() {
-  // Tela de Cadastro Original
-  if (!document.getElementById('telaCadastro')) {
-    const telaCadastro = document.createElement('div');
-    telaCadastro.id = 'telaCadastro';
-    telaCadastro.style.display = 'none';
-    telaCadastro.innerHTML = `
-      <div class="login-box" style="margin: 20px auto;">
-        <h2>📝 Solicitar Cadastro</h2>
-        <p style="text-align:center; color:#6b7280; margin-bottom:20px;">Seu cadastro passará por aprovação.</p>
-        <div class="campo">
-          <label>Nome Completo</label>
-          <input type="text" id="cadastroNome" placeholder="Seu nome completo">
-        </div>
-        <div class="campo">
-          <label>E-mail</label>
-          <input type="email" id="cadastroEmail" placeholder="seu@email.com">
-        </div>
-        <div class="campo">
-          <label>Senha</label>
-          <input type="password" id="cadastroSenha" placeholder="••••••••">
-        </div>
-        <div class="campo">
-          <label>Confirmar Senha</label>
-          <input type="password" id="cadastroSenhaConfirm" placeholder="••••••••">
-        </div>
-        <div class="campo">
-          <label>Nível de Acesso</label>
-          <select id="cadastroNivel">
-            <option value="oficineiro">Oficineiro</option>
-            <option value="tecnico">Técnico</option>
-            <option value="gestor">Gestor</option>
-            <option value="autoridade">Autoridade Jurídica</option>
-            <option value="jovem">Jovem</option>
-          </select>
-        </div>
-        <button id="cadastrarBtn" class="btn btn-primary" style="margin-top:10px; width:100%;">Enviar Solicitação</button>
-        <button id="voltarLoginBtn" class="btn btn-secondary" style="margin-top:10px; width:100%;">Voltar para Login</button>
-        <div id="cadastroErro" class="login-erro"></div>
-        <div id="cadastroSucesso" style="color: #10b981; text-align: center; margin-top: 10px; display: none;"></div>
-      </div>
-    `;
-    document.body.appendChild(telaCadastro);
-  }
+// ============================================================
+// ESTADO GLOBAL
+// ============================================================
+let estado = {
+  usuarios: [], 
+  jovens: [], 
+  profissionais: [], 
+  oficinas: [], 
+  planejamentos: [],
+  mensagens: [],
+  online: false, 
+  usuarioAtual: null, 
+  graficos: {},
+  exclusaoPendente: null,
+  suspensaoPendente: null,
+  usuarioEdicaoHorario: null,
+  acoesLATemporarias: []
+};
 
-  // Novo Cronômetro de Saída
-  if (!document.getElementById('cronometroSaida')) {
-    const cronometro = document.createElement('div');
-    cronometro.id = 'cronometroSaida';
-    cronometro.style.cssText = 'display:none; position:fixed; top:0; left:50%; transform:translateX(-50%); background:#ef4444; color:white; padding:10px 20px; border-radius:0 0 12px 12px; z-index:10000; font-weight:600; box-shadow:0 4px 6px rgba(0,0,0,0.1);';
-    cronometro.innerHTML = `⚠️ Seu turno encerra em: <span id="cronometroTempo">30:00</span>`;
-    document.body.appendChild(cronometro);
-  }
+let intervaloCronometro = null;
+let pollingInterval = null;
 
-  // Modal Ficha
-  if (!document.getElementById('modalFicha')) {
-    const modalFicha = document.createElement('div');
-    modalFicha.className = 'modal-overlay';
-    modalFicha.id = 'modalFicha';
-    modalFicha.innerHTML = `
-      <div class="modal-box ficha-container" style="max-width:800px; max-height:90vh; overflow-y:auto;">
-        <h2 id="fichaTitulo">Ficha do Jovem</h2>
-        <div id="fichaConteudo"></div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" id="fecharFicha" onclick="document.getElementById('modalFicha').style.display='none'">Fechar</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalFicha);
-  }
-
-  // Modal Alterar Senha Original
-  if (!document.getElementById('modalAlterarSenha')) {
-    const modalSenha = document.createElement('div');
-    modalSenha.className = 'modal-overlay';
-    modalSenha.id = 'modalAlterarSenha';
-    modalSenha.innerHTML = `
-      <div class="modal-box">
-        <h2>🔑 Alterar Senha</h2>
-        <div class="campo"><label>Nova Senha</label><input type="password" id="novaSenhaInput"></div>
-        <div class="campo"><label>Confirmar Nova Senha</label><input type="password" id="confirmarNovaSenhaInput"></div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="fecharModalSenha()">Cancelar</button>
-          <button class="btn btn-primary" onclick="salvarNovaSenha()">Salvar Senha</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalSenha);
-  }
-
-  // Modal Alterar Logo Original
-  if (!document.getElementById('modalAlterarLogo')) {
-    const modalLogo = document.createElement('div');
-    modalLogo.className = 'modal-overlay';
-    modalLogo.id = 'modalAlterarLogo';
-    modalLogo.innerHTML = `
-      <div class="modal-box">
-        <h2>🖼️ Alterar Logo</h2>
-        <div class="campo"><label>Imagem do Logo (PNG, JPG)</label><input type="file" id="novaLogoInput" accept="image/*"></div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="fecharModalLogo()">Cancelar</button>
-          <button class="btn btn-primary" onclick="salvarLogo()">Salvar Logo</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalLogo);
-  }
-
-  // Novo Modal Confirmação de Exclusão (2 Passos)
-  if (!document.getElementById('modalConfirmExclusao')) {
-    const modalDel = document.createElement('div');
-    modalDel.className = 'modal-overlay';
-    modalDel.id = 'modalConfirmExclusao';
-    modalDel.innerHTML = `
-      <div class="modal-box" style="max-width:400px;">
-        <h2>⚠️ Confirmar Exclusão</h2>
-        <p id="textoConfirmExclusao" style="color:#6b7280; margin-bottom:20px;"></p>
-        <p style="font-weight:600; color:#dc3545;">Tem certeza que deseja apagar este registro?</p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="document.getElementById('modalConfirmExclusao').style.display='none'">Cancelar</button>
-          <button class="btn btn-danger" onclick="executarExclusao()">Excluir Permanentemente</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalDel);
-  }
-
-  // Novo Modal Suspensão (Rosa)
-  if (!document.getElementById('modalSuspensao')) {
-    const modalSusp = document.createElement('div');
-    modalSusp.className = 'modal-overlay';
-    modalSusp.id = 'modalSuspensao';
-    modalSusp.innerHTML = `
-      <div class="modal-box" style="border-top: 5px solid #be185d;">
-        <h2 style="color:#be185d;">🔴 Suspender Jovem</h2>
-        <p id="nomeJovemSuspensao" style="font-weight:600; margin-bottom:15px;"></p>
-        <div class="campo">
-          <label>Motivo da Suspensão *</label>
-          <textarea id="motivoSuspensaoInput" rows="3" placeholder="Descreva o motivo..."></textarea>
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="document.getElementById('modalSuspensao').style.display='none'">Cancelar</button>
-          <button class="btn" style="background:#be185d; color:white;" onclick="salvarSuspensao()">Confirmar Suspensão</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalSusp);
-  }
-
-  // Novo Modal Horários de Acesso
-  if (!document.getElementById('modalHorarios')) {
-    const modalHorarios = document.createElement('div');
-    modalHorarios.className = 'modal-overlay';
-    modalHorarios.id = 'modalHorarios';
-    modalHorarios.innerHTML = `
-      <div class="modal-box" style="max-width:600px;">
-        <h2>⏰ Configurar Acesso: <span id="nomeUserHorario"></span></h2>
-        <div id="gridHorarios" style="display:grid; gap:10px; margin-top:15px;"></div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="document.getElementById('modalHorarios').style.display='none'">Cancelar</button>
-          <button class="btn btn-primary" onclick="salvarHorariosUsuario()">Salvar Horários</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalHorarios);
-  }
-
-  // Novo Modal Aviso Gestor (Jovens Ausentes)
-  if (!document.getElementById('modalAvisoGestor')) {
-    const modalAviso = document.createElement('div');
-    modalAviso.className = 'modal-overlay';
-    modalAviso.id = 'modalAvisoGestor';
-    modalAviso.innerHTML = `
-      <div class="modal-box" style="max-width:700px;">
-        <h2>⚠️ Atenção: Jovens Ausentes</h2>
-        <div style="display:flex; gap:20px; margin-top:15px;">
-          <div style="flex:1;">
-            <h4 style="color:#f59e0b;">🕒 7+ Dias Sem Comparecer</h4>
-            <ul id="listaAviso7Dias" style="color:#6b7280; font-size:0.9rem; padding-left:20px;"></ul>
-          </div>
-          <div style="flex:1;">
-            <h4 style="color:#ef4444;">🚨 14+ Dias Sem Comparecer</h4>
-            <ul id="listaAviso14Dias" style="color:#6b7280; font-size:0.9rem; padding-left:20px;"></ul>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-primary" onclick="document.getElementById('modalAvisoGestor').style.display='none'">Estou Ciente</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalAviso);
-  }
-
-  // Modal Vincular Jovem Original
-  if (!document.getElementById('modalVincularJovem')) {
-    const modalVincular = document.createElement('div');
-    modalVincular.className = 'modal-overlay';
-    modalVincular.id = 'modalVincularJovem';
-    modalVincular.innerHTML = `
-      <div class="modal-box">
-        <h2>🔗 Vincular Usuário a Jovem</h2>
-        <p style="color:#6b7280; margin-bottom:15px;">Selecione o jovem correspondente a este usuário.</p>
-        <div class="campo">
-          <label>Jovem</label>
-          <select id="selectVincularJovem"></select>
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="fecharModalVincular()">Cancelar</button>
-          <button class="btn btn-primary" onclick="salvarVinculoJovem()">Vincular e Aprovar</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalVincular);
-  }
-
-  // Adicionar aba de aprovação na tab de usuários Original
-  const tabUsuarios = document.getElementById('tabUsuarios');
-  if (tabUsuarios && !document.getElementById('listaPendentes')) {
-    const aprovarSection = document.createElement('div');
-    aprovarSection.innerHTML = `
-      <h3 style="margin-top:30px; margin-bottom:15px;">⏳ Solicitações Pendentes</h3>
-      <div class="tabela-wrapper">
-        <table>
-          <thead><tr><th>Nome</th><th>E-mail</th><th>Nível Solicitado</th><th>Status</th><th>Ações</th></tr></thead>
-          <tbody id="listaPendentes"></tbody>
-        </table>
-      </div>
-    `;
-    tabUsuarios.appendChild(aprovarSection);
-  }
-
-  // Novos Filtros Avançados na Aba de Frequência
-  const tab2 = document.getElementById('tab2');
-  if (tab2 && !document.getElementById('filtrosFrequencia')) {
-    const filtrosDiv = document.createElement('div');
-    filtrosDiv.id = 'filtrosFrequencia';
-    filtrosDiv.style.cssText = 'background:#f8fafc; padding:15px; border-radius:12px; margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; border:1px solid #e2e8f0;';
-    filtrosDiv.innerHTML = `
-      <div class="campo" style="flex:1; min-width:150px;"><label>Buscar Nome/ID</label><input type="text" id="filtroNome" oninput="carregarLista()"></div>
-      <div class="campo" style="flex:1; min-width:150px;"><label>Medida</label><select id="filtroMedida" onchange="carregarLista()"><option value="">Todas</option><option value="LA">LA</option><option value="PSC">PSC</option></select></div>
-      <div class="campo" style="flex:1; min-width:150px;"><label>Status</label><select id="filtroStatus" onchange="carregarLista()"><option value="">Todos</option><option value="ativo">Ativo</option><option value="suspenso">Suspenso</option><option value="concluído">Concluído</option></select></div>
-      <div class="campo" style="flex:1; min-width:150px;"><label>Saldo</label><select id="filtroSaldo" onchange="carregarLista()"><option value="">Todos</option><option value="critico">Crítico (>0h)</option></select></div>
-    `;
-    tab2.insertBefore(filtrosDiv, tab2.firstChild);
-  }
-
-  // Aba Planejamento de Oficinas
-  if (!document.getElementById('tabPlanejamento')) {
-    document.getElementById('tabsContainer')?.insertAdjacentHTML('beforeend', `<button class="tab-btn" data-tab="tabPlanejamento" data-niveis="gestor,oficineiro,desenvolvedor">📅 Planejamento</button>`);
-    document.querySelector('.app-container')?.insertAdjacentHTML('beforeend', `
-      <div id="tabPlanejamento" class="tab-content">
-        <h2>📅 Planejamento de Oficinas</h2>
-        <div class="card" style="margin-bottom:20px;">
-          <input type="text" id="planTitulo" placeholder="Título da Oficina" style="width:100%; margin-bottom:10px; padding:10px;">
-          <textarea id="planDesc" placeholder="Descrição" rows="3" style="width:100%; margin-bottom:10px; padding:10px;"></textarea>
-          <input type="text" id="planMats" placeholder="Materiais necessários (separados por vírgula)" style="width:100%; margin-bottom:10px; padding:10px;">
-          <button class="btn btn-primary" onclick="salvarPlanejamento()">Salvar Planejamento</button>
-        </div>
-        <div id="listaPlanejamentosHTML" style="display:grid; gap:15px;"></div>
-      </div>
-    `);
-  }
-
-  // Relatório de Revertência e Cursos Obrigatórios na aba Oficinas
-  const tabOficinas = document.getElementById('tab6');
-  if (tabOficinas && !document.getElementById('oficinaGeraHorasContainer')) {
-    tabOficinas.insertAdjacentHTML('afterbegin', `
-      <div style="background:#ecfdf5; padding:15px; border-radius:12px; margin-bottom:20px; border:1px solid #10b981;">
-        <h3 style="color:#065f46;">🌱 Relatório de Revertência Social</h3>
-        <p style="font-size:0.9rem; color:#065f46; margin-bottom:10px;">Oficinas que geraram benefício direto à sociedade.</p>
-        <button class="btn btn-success" onclick="abrirRelatorioRevertencia()">Visualizar Relatório Completo</button>
-      </div>
-      <div style="margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">
-        <label><input type="checkbox" id="oficinaCursoObg" onchange="document.getElementById('oficinaGeraHorasContainer').style.display = this.checked ? 'block' : 'none'"> É Curso Obrigatório?</label>
-        <div id="oficinaGeraHorasContainer" style="display:none; margin-top:5px; padding-left:20px;">
-           <label><input type="checkbox" id="oficinaGeraHoras" checked> Este curso contabiliza horas para o jovem?</label>
-        </div>
-      </div>
-    `);
-  }
-}
-
-// ================================================================
-// UPSTASH REST API
-// ================================================================
+// ============================================================
+// UPSTASH REST API HELPERS
+// ============================================================
 async function upstash(cmd, ...args) {
   const encodedArgs = args.map(a => encodeURIComponent(String(a)));
   const url = `${UPSTASH_URL}/${cmd}/${encodedArgs.join('/')}`;
@@ -362,16 +85,6 @@ async function upstash(cmd, ...args) {
   return data.result;
 }
 
-async function upstashPipeline(commands) {
-  const res = await fetch(`${UPSTASH_URL}/pipeline`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(commands)
-  });
-  if (!res.ok) throw new Error(`Upstash pipeline error: ${res.status}`);
-  return res.json();
-}
-
 async function withRetry(fn, retries = 3) {
   let lastErr;
   for (let i = 0; i < retries; i++) {
@@ -381,11 +94,106 @@ async function withRetry(fn, retries = 3) {
   throw lastErr;
 }
 
-// ================================================================
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file);
+  });
+}
+
+// ============================================================
+// NAVEGAÇÃO (para o novo menu lateral)
+// ============================================================
+function navigateTo(pageId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById(pageId);
+    if (target) target.classList.add('active');
+
+    const titles = {
+        'pageDashboard': 'Dashboard',
+        'pageCadastro': 'Cadastrar / Editar Jovem',
+        'pageLista': 'Lista Geral',
+        'pageAcompInd': 'Acompanhamento Individual',
+        'pageObservacoes': 'Observações',
+        'pageOficinas': 'Oficinas Realizadas',
+        'pagePlanejamento': 'Planejamento de Oficinas',
+        'pageRelatorios': 'Relatórios',
+        'pageLA': 'Ações LA',
+        'pageUsuarios': 'Gerenciar Usuários',
+        'pagePendentes': 'Solicitações Pendentes',
+        'pageMensagens': 'Mensagens',
+        'pageProfissionais': 'Profissionais',
+        'pageConfig': 'Configurações',
+        'pageDashboardJovem': 'Minhas Ações'
+    };
+    const icons = {
+        'pageDashboard': 'chart-pie',
+        'pageCadastro': 'user-plus',
+        'pageLista': 'list-ul',
+        'pageAcompInd': 'user-circle',
+        'pageObservacoes': 'eye',
+        'pageOficinas': 'tools',
+        'pagePlanejamento': 'calendar-plus',
+        'pageRelatorios': 'file-alt',
+        'pageLA': 'handshake',
+        'pageUsuarios': 'users-cog',
+        'pagePendentes': 'user-clock',
+        'pageMensagens': 'envelope',
+        'pageProfissionais': 'user-md',
+        'pageConfig': 'cog',
+        'pageDashboardJovem': 'user'
+    };
+    const titleEl = document.getElementById('pageTitle');
+    if (titleEl && titles[pageId]) {
+        titleEl.innerHTML = `<i class="fas fa-${icons[pageId] || 'circle'}"></i> ${titles[pageId]}`;
+    }
+    document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
+    const activeItem = document.querySelector(`.menu-item[data-page="${pageId}"]`);
+    if (activeItem) activeItem.classList.add('active');
+
+    // Ações ao carregar página
+    if (pageId === 'pageObservacoes') { renderizarAcompanhamento(); listarMetasLAProximas(); }
+    if (pageId === 'pageLista') { carregarLista(); }
+    if (pageId === 'pageRelatorios') { renderizarRelatorios(); }
+    if (pageId === 'pageAcompInd') { popularSelectAcompInd(); }
+    if (pageId === 'pageOficinas') { renderizarJovensOficina(); renderizarOficinas(); }
+    if (pageId === 'pagePlanejamento') { renderizarPlanejamentos(); }
+    if (pageId === 'pageMensagens') { renderizarMensagens(); }
+    if (pageId === 'pageUsuarios') { renderizarUsuarios(); renderizarPendentes(); }
+    if (pageId === 'pageDashboardJovem') { renderizarDashboardJovem(); }
+    if (pageId === 'pageLA') { renderizarAcoesLA(); }
+
+    closeSidebar();
+}
+
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('active');
+}
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('active');
+}
+
+// ============================================================
 // LOGIN, HORÁRIOS E SENHA
-// ================================================================
-let intervaloCronometro = null;
-let pollingInterval = null;
+// ============================================================
+function validarHorarioAcesso(user) {
+    if (user.nivel === 'desenvolvedor' || user.nivel === 'admin') {
+        return true;
+    }
+    if (!user.horariosConfigurados || !user.horarios) {
+        return true;
+    }
+    const agora = new Date();
+    const diasSemana = ['domingo','segunda','terca','quarta','quinta','sexta','sabado'];
+    const diaHoje = diasSemana[agora.getDay()];
+    const configDia = user.horarios[diaHoje];
+    if (!configDia || !configDia.ativo) {
+        return false;
+    }
+    const horaAtualStr = agora.getHours().toString().padStart(2,'0') + ':' + agora.getMinutes().toString().padStart(2,'0');
+    return horaAtualStr >= configDia.inicio && horaAtualStr <= configDia.fim;
+}
 
 async function fazerLogin() {
   const email = document.getElementById('loginEmail').value.trim();
@@ -421,7 +229,6 @@ async function fazerLogin() {
     if (!user) { document.getElementById('loginErro').textContent = 'E-mail ou senha incorretos.'; return; }
     if (user.status !== 'ativo') { document.getElementById('loginErro').textContent = 'Seu cadastro está pendente de aprovação.'; return; }
 
-    // VALIDAÇÃO DE HORÁRIO DE ACESSO
     if (!validarHorarioAcesso(user)) {
       document.getElementById('loginErro').textContent = '❌ Acesso bloqueado: Fora do horário de trabalho permitido.';
       return;
@@ -433,15 +240,22 @@ async function fazerLogin() {
     localStorage.setItem('nivelUsuario', user.nivel);
 
     document.getElementById('telaLogin').style.display = 'none';
-    document.querySelector('.app-container').style.display = 'block';
-    document.getElementById('nomeUsuario').textContent = user.nome || user.email;
-    document.getElementById('nivelUsuario').textContent = NIVEIS_ACESSO[user.nivel]?.nome || user.nivel;
+    document.querySelector('.main-content').style.display = 'flex';
+    document.getElementById('nomeUsuarioHeader').textContent = user.nome || user.email;
+    document.getElementById('nivelUsuarioHeader').textContent = NIVEIS_ACESSO[user.nivel]?.nome || user.nivel;
 
     const btnLogo = document.getElementById('btnAlterarLogo');
     if (btnLogo) {
       btnLogo.style.display = (user.nivel === 'desenvolvedor' || user.nivel === 'admin' || user.nivel === 'gestor') ? '' : 'none';
     }
 
+    const btnMeusHorarios = document.getElementById('btnMeusHorarios');
+    if (btnMeusHorarios) {
+      const podeVerHorarios = ['desenvolvedor', 'admin', 'gestor'].includes(user.nivel);
+      btnMeusHorarios.style.display = podeVerHorarios ? '' : 'none';
+    }
+    
+    mostrarHorarioAtual(user);
     carregarLogo();
     mostrarAbasPorNivel(user.nivel);
     iniciarMonitoramentoHorario(user);
@@ -450,7 +264,10 @@ async function fazerLogin() {
       carregarJovemPeloCPF(user.cpf);
     } else {
       await carregarTodosDados();
-      if (['gestor', 'tecnico', 'desenvolvedor'].includes(user.nivel)) exibirAvisoObservacoes();
+      // NÃO chama verificarDescumprimentoAutomatico (removido)
+      if (['gestor', 'tecnico', 'desenvolvedor'].includes(user.nivel)) {
+        setTimeout(() => exibirAvisoObservacoes(), 1500);
+      }
     }
     iniciarPolling();
   } catch (err) {
@@ -460,56 +277,160 @@ async function fazerLogin() {
   }
 }
 
-function validarHorarioAcesso(user) {
-  if (user.nivel === 'desenvolvedor' || !user.horariosConfigurados || !user.horarios) return true;
-  const agora = new Date();
-  const diasSemana = ['domingo','segunda','terca','quarta','quinta','sexta','sabado'];
-  const diaHoje = diasSemana[agora.getDay()];
-  const configDia = user.horarios[diaHoje];
-  if (!configDia || !configDia.ativo) return false;
-  
-  const horaAtualStr = agora.getHours().toString().padStart(2,'0') + ':' + agora.getMinutes().toString().padStart(2,'0');
-  return horaAtualStr >= configDia.inicio && horaAtualStr <= configDia.fim;
-}
-
-function iniciarMonitoramentoHorario(user) {
-  if (intervaloCronometro) clearInterval(intervaloCronometro);
-  if (user.nivel === 'desenvolvedor' || !user.horariosConfigurados) return;
-
-  intervaloCronometro = setInterval(() => {
+function mostrarHorarioAtual(user) {
+    const horarioSpan = document.getElementById('horarioAtual');
+    if (!horarioSpan) return;
+    
+    if (user.nivel === 'desenvolvedor' || user.nivel === 'admin') {
+        horarioSpan.style.display = 'inline';
+        horarioSpan.textContent = '🟢 Acesso irrestrito';
+        horarioSpan.style.color = '#10b981';
+        horarioSpan.style.background = 'rgba(255,255,255,0.1)';
+        horarioSpan.style.padding = '2px 10px';
+        horarioSpan.style.borderRadius = '20px';
+        return;
+    }
+    
+    if (!user.horariosConfigurados || !user.horarios) {
+        horarioSpan.style.display = 'none';
+        return;
+    }
+    
     const agora = new Date();
     const diasSemana = ['domingo','segunda','terca','quarta','quinta','sexta','sabado'];
     const diaHoje = diasSemana[agora.getDay()];
     const configDia = user.horarios[diaHoje];
     
-    if (!configDia || !configDia.ativo) { deslogarSistema(); return; }
+    if (configDia && configDia.ativo) {
+        const horaAtualStr = agora.getHours().toString().padStart(2,'0') + ':' + agora.getMinutes().toString().padStart(2,'0');
+        const dentroHorario = horaAtualStr >= configDia.inicio && horaAtualStr <= configDia.fim;
+        horarioSpan.style.display = 'inline';
+        horarioSpan.textContent = `🕐 ${configDia.inicio} - ${configDia.fim}`;
+        horarioSpan.style.color = dentroHorario ? '#10b981' : '#ef4444';
+        horarioSpan.style.background = 'rgba(255,255,255,0.1)';
+        horarioSpan.style.padding = '2px 10px';
+        horarioSpan.style.borderRadius = '20px';
+    } else {
+        horarioSpan.style.display = 'inline';
+        horarioSpan.textContent = '🔴 Sem expediente hoje';
+        horarioSpan.style.color = '#ef4444';
+        horarioSpan.style.background = 'rgba(255,255,255,0.1)';
+        horarioSpan.style.padding = '2px 10px';
+        horarioSpan.style.borderRadius = '20px';
+    }
+}
 
+function atualizarIndicadorHorario(user) {
+    const horarioSpan = document.getElementById('horarioAtual');
+    if (!horarioSpan || !user) return;
+    
+    if (user.nivel === 'desenvolvedor' || user.nivel === 'admin') {
+        horarioSpan.textContent = '🟢 Acesso irrestrito';
+        horarioSpan.style.color = '#10b981';
+        return;
+    }
+    
+    if (!user.horariosConfigurados || !user.horarios) {
+        horarioSpan.style.display = 'none';
+        return;
+    }
+    
+    const agora = new Date();
+    const diasSemana = ['domingo','segunda','terca','quarta','quinta','sexta','sabado'];
+    const diaHoje = diasSemana[agora.getDay()];
+    const configDia = user.horarios[diaHoje];
+    
+    if (!configDia || !configDia.ativo) {
+        horarioSpan.textContent = '🔴 Sem expediente hoje';
+        horarioSpan.style.color = '#ef4444';
+        return;
+    }
+    
     const [horaFim, minFim] = configDia.fim.split(':').map(Number);
     const msFim = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), horaFim, minFim, 0).getTime();
     const diffMs = msFim - agora.getTime();
     const minutosRestantes = diffMs / 60000;
-
-    const divCronometro = document.getElementById('cronometroSaida');
-    if (minutosRestantes <= 0) {
-      deslogarSistema();
-    } else if (minutosRestantes <= 30) {
-      divCronometro.style.display = 'block';
-      const m = Math.floor(minutosRestantes);
-      const s = Math.floor((minutosRestantes - m) * 60);
-      document.getElementById('cronometroTempo').textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    
+    const horaAtualStr = agora.getHours().toString().padStart(2,'0') + ':' + agora.getMinutes().toString().padStart(2,'0');
+    const dentroHorario = horaAtualStr >= configDia.inicio && horaAtualStr <= configDia.fim;
+    
+    if (dentroHorario && minutosRestantes <= 30 && minutosRestantes > 0) {
+        const m = Math.floor(minutosRestantes);
+        const s = Math.floor((minutosRestantes - m) * 60);
+        horarioSpan.textContent = `⏳ ${m}m ${s}s restantes`;
+        horarioSpan.style.color = '#f59e0b';
+    } else if (dentroHorario) {
+        horarioSpan.textContent = `🕐 ${configDia.inicio} - ${configDia.fim} ✅`;
+        horarioSpan.style.color = '#10b981';
     } else {
-      divCronometro.style.display = 'none';
+        horarioSpan.textContent = `🔴 Fora do horário`;
+        horarioSpan.style.color = '#ef4444';
     }
-  }, 1000);
+}
+
+function iniciarMonitoramentoHorario(user) {
+    if (intervaloCronometro) clearInterval(intervaloCronometro);
+    
+    if (user.nivel === 'desenvolvedor' || user.nivel === 'admin') {
+        return;
+    }
+    
+    if (!user.horariosConfigurados) {
+        return;
+    }
+
+    intervaloCronometro = setInterval(() => {
+        const agora = new Date();
+        const diasSemana = ['domingo','segunda','terca','quarta','quinta','sexta','sabado'];
+        const diaHoje = diasSemana[agora.getDay()];
+        const configDia = user.horarios[diaHoje];
+        
+        if (!configDia || !configDia.ativo) { 
+            deslogarSistema(); 
+            return; 
+        }
+
+        const [horaFim, minFim] = configDia.fim.split(':').map(Number);
+        const msFim = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), horaFim, minFim, 0).getTime();
+        const diffMs = msFim - agora.getTime();
+        const minutosRestantes = diffMs / 60000;
+
+        atualizarIndicadorHorario(user);
+
+        if (minutosRestantes <= 0) {
+            deslogarSistema();
+            return;
+        }
+
+        const divCronometro = document.getElementById('cronometroSaida');
+        if (!divCronometro) {
+            const cronometro = document.createElement('div');
+            cronometro.id = 'cronometroSaida';
+            cronometro.style.cssText = 'display:none; position:fixed; top:0; left:50%; transform:translateX(-50%); background:#ef4444; color:white; padding:10px 20px; border-radius:0 0 12px 12px; z-index:10000; font-weight:600; box-shadow:0 4px 6px rgba(0,0,0,0.1);';
+            cronometro.innerHTML = `⚠️ Seu turno encerra em: <span id="cronometroTempo">30:00</span>`;
+            document.body.appendChild(cronometro);
+        }
+        
+        const divCronometroAtual = document.getElementById('cronometroSaida');
+        if (minutosRestantes <= 30) {
+            divCronometroAtual.style.display = 'block';
+            const m = Math.floor(minutosRestantes);
+            const s = Math.floor((minutosRestantes - m) * 60);
+            document.getElementById('cronometroTempo').textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        } else {
+            divCronometroAtual.style.display = 'none';
+        }
+    }, 1000);
 }
 
 function deslogarSistema() {
   estado.usuarioAtual = null;
   localStorage.removeItem('usuarioLogado');
   localStorage.removeItem('nivelUsuario');
-  document.querySelector('.app-container').style.display = 'none';
+  document.querySelector('.main-content').style.display = 'none';
   document.getElementById('telaLogin').style.display = 'flex';
-  document.getElementById('cronometroSaida').style.display = 'none';
+  const cronometro = document.getElementById('cronometroSaida');
+  if (cronometro) cronometro.style.display = 'none';
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginSenha').value = '';
   if (intervaloCronometro) clearInterval(intervaloCronometro);
@@ -534,364 +455,32 @@ async function salvarNovaSenha() {
   } catch (err) { alert('Erro ao alterar senha: ' + err.message); }
 }
 
-// ================================================================
-// AVISO OBSERVACÕES GESTOR (7 e 14 dias)
-// ================================================================
-function exibirAvisoObservacoes() {
-  const agora = new Date();
-  let html7 = '', html14 = '';
-  
-  estado.jovens.forEach(j => {
-    if (j.status === 'concluído' || j.status === 'suspenso' || j['MEDIDA'] === 'Liberação') return;
-    const hist = j.historicoFrequencia || [];
-    if (hist.length > 0) {
-      const ultimo = new Date(Math.max(...hist.map(h => new Date(h.data))));
-      const diffDias = Math.floor((agora - ultimo) / (1000 * 60 * 60 * 24));
-      const li = `<li><strong>${j['NOME']}</strong> - Último comparecimento: ${ultimo.toLocaleDateString('pt-BR')}</li>`;
-      if (diffDias >= 14) html14 += li;
-      else if (diffDias >= 7) html7 += li;
-    }
-  });
-
-  if (html7 || html14) {
-    document.getElementById('listaAviso7Dias').innerHTML = html7 || '<li>Nenhum jovem ausente nesta faixa.</li>';
-    document.getElementById('listaAviso14Dias').innerHTML = html14 || '<li>Nenhum jovem ausente nesta faixa.</li>';
-    document.getElementById('modalAvisoGestor').style.display = 'flex';
-  }
-}
-
-// ================================================================
-// LOGO PERSONALIZADO
-// ================================================================
-async function carregarLogo() {
-  try {
-    const logoBase64 = await upstash('GET', 'config:logo');
-    if (logoBase64) {
-      document.getElementById('logoImg').src = logoBase64;
-      const logoLogin = document.getElementById('logoLogin');
-      if (logoLogin) { logoLogin.src = logoBase64; logoLogin.style.display = 'block'; }
-    }
-  } catch (e) { console.error('Erro ao carregar logo', e); }
-}
-function fecharModalLogo() { document.getElementById('modalAlterarLogo').style.display = 'none'; }
-async function salvarLogo() {
-  const fileInput = document.getElementById('novaLogoInput');
-  if (!fileInput.files[0]) return alert('Selecione uma imagem.');
-  try {
-    const base64 = await fileToBase64(fileInput.files[0]);
-    await upstash('SET', 'config:logo', base64);
-    document.getElementById('logoImg').src = base64;
-    alert('Logo atualizado com sucesso!');
-    fecharModalLogo();
-  } catch (err) { alert('Erro ao salvar logo: ' + err.message); }
-}
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file);
-  });
-}
-
-// ================================================================
-// ABAS E NÍVEIS
-// ================================================================
-function mostrarAbasPorNivel(nivel) {
-  const tabsContainer = document.getElementById('tabsContainer');
-  if (!tabsContainer) return;
-  
-  let nivelNormalizado = (nivel || '').toLowerCase().trim();
-  if (['admin', 'administrador', 'desenvolvedor'].includes(nivelNormalizado)) nivelNormalizado = 'desenvolvedor';
-  if (['oficineira'].includes(nivelNormalizado)) nivelNormalizado = 'oficineiro';
-  if (['técnico'].includes(nivelNormalizado)) nivelNormalizado = 'tecnico';
-  if (['gestora'].includes(nivelNormalizado)) nivelNormalizado = 'gestor';
-  if (['autoridade jurídica', 'autoridade juridica'].includes(nivelNormalizado)) nivelNormalizado = 'autoridade';
-  
-  const config = NIVEIS_ACESSO[nivelNormalizado];
-  if (!config) return;
-  
-  tabsContainer.querySelectorAll('.tab-btn').forEach(btn => {
-    const niveisDoBotao = btn.getAttribute('data-niveis');
-    if (!niveisDoBotao) return;
-    const temAcesso = niveisDoBotao.split(',').map(n => n.trim().toLowerCase()).includes(nivelNormalizado);
-    btn.style.display = temAcesso ? '' : 'none';
-    const tabContent = document.getElementById(btn.dataset.tab);
-    if (tabContent) tabContent.style.display = temAcesso ? '' : 'none';
-  });
-
-  const primeiraVisivel = tabsContainer.querySelector('.tab-btn:not([style*="display: none"])');
-  if (primeiraVisivel) {
-    tabsContainer.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    primeiraVisivel.classList.add('active');
-    const target = document.getElementById(primeiraVisivel.dataset.tab);
-    if (target) target.classList.add('active');
-  }
-
-  tabsContainer.querySelectorAll('.tab-btn').forEach(btn => {
-    const newBtn = btn.cloneNode(true);
-    btn.parentNode.replaceChild(newBtn, btn);
-    newBtn.addEventListener('click', () => {
-      tabsContainer.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      newBtn.classList.add('active');
-      const target = document.getElementById(newBtn.dataset.tab);
-      if (target) target.classList.add('active');
-      
-      if (newBtn.dataset.tab === 'tab3') renderizarRelatorios();
-      if (newBtn.dataset.tab === 'tab5') renderizarAcompanhamento();
-      if (newBtn.dataset.tab === 'tabAcompInd') popularSelectAcompInd();
-      if (newBtn.dataset.tab === 'tab6') renderizarJovensOficina();
-      if (newBtn.dataset.tab === 'tabDashboardJovem') renderizarDashboardJovem();
-      if (newBtn.dataset.tab === 'tabMensagens') renderizarMensagens();
-      if (newBtn.dataset.tab === 'tabUsuarios') { renderizarUsuarios(); renderizarPendentes(); }
-    });
-  });
-}
-
-// ================================================================
-// CADASTRO E APROVAÇÃO DE USUÁRIOS E GESTÃO DE HORÁRIOS
-// ================================================================
-async function cadastrarUsuario() {
-  const nome = document.getElementById('cadastroNome').value.trim();
-  const email = document.getElementById('cadastroEmail').value.trim();
-  const senha = document.getElementById('cadastroSenha').value.trim();
-  const senha2 = document.getElementById('cadastroSenhaConfirm').value.trim();
-  const nivel = document.getElementById('cadastroNivel').value;
-  
-  if (!nome || !email || !senha) return alert('Preencha todos os campos obrigatórios.');
-  if (senha !== senha2) return alert('As senhas não coincidem.');
-  if (senha.length < 6) return alert('Senha deve ter no mínimo 6 caracteres.');
-
-  try {
-    const user = { id: 'usr_' + Date.now(), nome, email, senha, nivel, status: 'pendente', cpf: '' };
-    await upstash('SET', `user:${user.id}`, JSON.stringify(user));
-    await upstash('SADD', 'users:all', user.id);
-    document.getElementById('cadastroSucesso').style.display = 'block';
-    document.getElementById('cadastroSucesso').textContent = 'Cadastro enviado! Aguarde aprovação.';
-    ['cadastroNome','cadastroEmail','cadastroSenha','cadastroSenhaConfirm'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.value = '';
-    });
-  } catch (err) { document.getElementById('cadastroErro').textContent = 'Erro: ' + err.message; }
-}
-
-let userParaVincular = null;
-function renderizarPendentes() {
-  const tbody = document.getElementById('listaPendentes');
-  if (!tbody) return;
-  const pendentes = estado.usuarios.filter(u => u.status !== 'ativo');
-  tbody.innerHTML = pendentes.map(u => `
-    <tr>
-      <td>${u.nome || '-'}</td><td>${u.email || '-'}</td><td>${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel || '-'}</td>
-      <td style="color:#ef4444;">${u.status || 'pendente'}</td>
-      <td>
-        <button onclick="aprovarUsuario('${u.id}', '${u.nivel}')" class="btn-acao" style="background:#10b981;">✅ Aprovar</button>
-        <button onclick="abrirModalExclusao('usuario', '${u.id}', '${u.nome}')" class="btn-acao btn-danger">🗑️ Rejeitar</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-window.aprovarUsuario = async function(id, nivel) {
-  const user = estado.usuarios.find(u => u.id === id);
-  if (!user) return;
-
-  if (nivel === 'jovem') {
-    userParaVincular = user;
-    const select = document.getElementById('selectVincularJovem');
-    select.innerHTML = '<option value="">Selecione o Jovem...</option>' + 
-      estado.jovens.map(j => `<option value="${j['CPF'] || j.id}">${j['NOME'] || j['REFERENCIA']} (CPF: ${j['CPF'] || 'Não informado'})</option>`).join('');
-    document.getElementById('modalVincularJovem').style.display = 'flex';
-  } else {
-    user.status = 'ativo';
-    try {
-      await upstash('SET', `user:${user.id}`, JSON.stringify(user));
-      await carregarTodosDados();
-      alert('Usuário aprovado com sucesso!');
-    } catch (err) { alert('Erro: ' + err.message); }
-  }
-}
-
-function fecharModalVincular() {
-  document.getElementById('modalVincularJovem').style.display = 'none';
-  userParaVincular = null;
-}
-
-async function salvarVinculoJovem() {
-  const cpfOuId = document.getElementById('selectVincularJovem').value;
-  if (!cpfOuId) return alert('Selecione um jovem.');
-  
-  userParaVincular.cpf = cpfOuId; 
-  userParaVincular.status = 'ativo';
-  
-  try {
-    await upstash('SET', `user:${userParaVincular.id}`, JSON.stringify(userParaVincular));
-    fecharModalVincular();
-    await carregarTodosDados();
-    alert('Jovem vinculado e aprovado com sucesso!');
-  } catch (err) { alert('Erro: ' + err.message); }
-}
-
-function renderizarUsuarios() {
-  const tbody = document.getElementById('listaUsuarios');
-  if (!tbody) return;
-  tbody.innerHTML = estado.usuarios.filter(u => u.status === 'ativo').map(u => `
-    <tr>
-      <td>${u.nome || '-'}</td><td>${u.email || '-'}</td><td>${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel || '-'}</td>
-      <td style="color:#10b981;">${u.status}</td>
-      <td>
-        ${['gestor','desenvolvedor'].includes(estado.usuarioAtual.nivel) ? `<button onclick="abrirModalHorarios('${u.id}')" class="btn-acao" style="background:#f59e0b; color:white;">⏱️ Horários</button>` : ''}
-        <button onclick="abrirModalExclusao('usuario', '${u.id}', '${u.nome}')" class="btn-acao btn-danger">🗑️</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-window.abrirModalHorarios = function(id) {
-  const u = estado.usuarios.find(x => x.id === id);
-  estado.usuarioEdicaoHorario = u;
-  document.getElementById('nomeUserHorario').textContent = u.nome;
-  
-  const dias = ['segunda','terca','quarta','quinta','sexta'];
-  const cfg = u.horarios || {};
-  
-  document.getElementById('gridHorarios').innerHTML = `
-    <label><input type="checkbox" id="horariosAtivosGlobais" ${u.horariosConfigurados ? 'checked' : ''}> Limitar Acesso por Horário</label>
-    <div id="diasContainer" style="display:${u.horariosConfigurados ? 'block' : 'none'}; margin-top:10px;">
-      ${dias.map(d => `
-        <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
-          <input type="checkbox" id="chk_${d}" ${cfg[d]?.ativo ? 'checked' : ''}>
-          <span style="width:70px; text-transform:capitalize;">${d}</span>
-          <input type="time" id="ini_${d}" value="${cfg[d]?.inicio || '08:00'}"> até
-          <input type="time" id="fim_${d}" value="${cfg[d]?.fim || '17:00'}">
-        </div>
-      `).join('')}
-    </div>
-  `;
-  document.getElementById('horariosAtivosGlobais').onchange = (e) => {
-    document.getElementById('diasContainer').style.display = e.target.checked ? 'block' : 'none';
-  };
-  document.getElementById('modalHorarios').style.display = 'flex';
-}
-
-window.salvarHorariosUsuario = async function() {
-  const u = estado.usuarioEdicaoHorario;
-  u.horariosConfigurados = document.getElementById('horariosAtivosGlobais').checked;
-  u.horarios = {};
-  ['segunda','terca','quarta','quinta','sexta'].forEach(d => {
-    u.horarios[d] = {
-      ativo: document.getElementById(`chk_${d}`).checked,
-      inicio: document.getElementById(`ini_${d}`).value,
-      fim: document.getElementById(`fim_${d}`).value
-    };
-  });
-  
-  await upstash('SET', `user:${u.id}`, JSON.stringify(u));
-  document.getElementById('modalHorarios').style.display = 'none';
-  alert('Horários de acesso salvos com sucesso!');
-}
-
-async function salvarNovoUsuario() {
-  const nivel = document.getElementById('userNivel').value;
-  if (nivel === 'desenvolvedor') return alert('Não é possível cadastrar Desenvolvedor.');
-
-  const user = {
-    id: 'usr_' + Date.now(),
-    nome: document.getElementById('userNome').value.trim(),
-    email: document.getElementById('userEmail').value.trim(),
-    senha: document.getElementById('userSenha').value.trim(),
-    nivel,
-    status: 'ativo'
-  };
-  if (!user.nome || !user.email || !user.senha) return alert('Preencha todos os campos.');
-  try {
-    await upstash('SET', `user:${user.id}`, JSON.stringify(user));
-    await upstash('SADD', 'users:all', user.id);
-    estado.usuarios.push(user);
-    renderizarUsuarios();
-    ['userNome','userEmail','userSenha'].forEach(id => document.getElementById(id).value = '');
-  } catch (err) { alert('Erro: ' + err.message); }
-}
-
-// ================================================================
-// EXCLUSÃO EM 2 PASSOS E SUSPENSÃO
-// ================================================================
-window.abrirModalExclusao = function(tipo, id, nome) {
-  estado.exclusaoPendente = { tipo, id };
-  document.getElementById('textoConfirmExclusao').textContent = `Você está prestes a apagar permanentemente os registros de: ${nome}`;
-  document.getElementById('modalConfirmExclusao').style.display = 'flex';
-}
-
-window.executarExclusao = async function() {
-  if (!estado.exclusaoPendente) return;
-  const { tipo, id } = estado.exclusaoPendente;
-  try {
-    if (tipo === 'jovem') {
-      await upstash('DEL', `jovem:${id}`); await upstash('SREM', 'jovens:all', id);
-      estado.jovens = estado.jovens.filter(j => j.id !== id);
-    } else if (tipo === 'usuario') {
-      await upstash('DEL', `user:${id}`); await upstash('SREM', 'users:all', id);
-      estado.usuarios = estado.usuarios.filter(u => u.id !== id);
-    } else if (tipo === 'oficina') {
-      await upstash('DEL', `oficina:${id}`); await upstash('SREM', 'oficinas:all', id);
-      estado.oficinas = estado.oficinas.filter(o => o.id !== id);
-    } else if (tipo === 'planejamento') {
-      await upstash('DEL', `planejamento:${id}`); await upstash('SREM', 'planejamentos:all', id);
-      estado.planejamentos = estado.planejamentos.filter(p => p.id !== id);
-    } else if (tipo === 'profissional') {
-      await upstash('DEL', `profissional:${id}`); await upstash('SREM', 'profissionais:all', id);
-      estado.profissionais = estado.profissionais.filter(p => p.id !== id);
-    }
-    document.getElementById('modalConfirmExclusao').style.display = 'none';
-    atualizarInterfaceCompleta();
-    alert('✅ Registro excluído com sucesso!');
-  } catch (err) { alert('Erro ao excluir: ' + err.message); }
-}
-
-window.abrirModalSuspensao = function(jovemId, jovemNome) {
-  estado.suspensaoPendente = jovemId;
-  document.getElementById('nomeJovemSuspensao').textContent = jovemNome;
-  document.getElementById('motivoSuspensaoInput').value = '';
-  document.getElementById('modalSuspensao').style.display = 'flex';
-}
-
-window.salvarSuspensao = async function() {
-  const motivo = document.getElementById('motivoSuspensaoInput').value.trim();
-  if (!motivo) return alert('É obrigatório informar o motivo da suspensão.');
-  
-  const jovem = estado.jovens.find(j => j.id === estado.suspensaoPendente);
-  if (!jovem) return;
-  
-  jovem.status = 'suspenso';
-  jovem.motivoSuspensao = motivo;
-  jovem.dataSuspensao = new Date().toISOString();
-  
-  try {
-    await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-    document.getElementById('modalSuspensao').style.display = 'none';
-    atualizarInterfaceCompleta();
-  } catch (e) { alert('Erro ao suspender: ' + e.message); }
-}
-
-// ================================================================
+// ============================================================
 // CARREGAR DADOS GERAIS
-// ================================================================
+// ============================================================
 async function carregarTodosDados() {
   try {
-    estado.jovens = []; estado.profissionais = []; estado.oficinas = []; estado.usuarios = []; estado.planejamentos = [];
+    estado.jovens = []; estado.profissionais = []; estado.oficinas = []; estado.usuarios = []; estado.planejamentos = []; estado.mensagens = [];
     const queries = [
       { key: 'jovens:all', prefix: 'jovem:', arr: 'jovens' },
       { key: 'profissionais:all', prefix: 'profissional:', arr: 'profissionais' },
       { key: 'oficinas:all', prefix: 'oficina:', arr: 'oficinas' },
       { key: 'users:all', prefix: 'user:', arr: 'usuarios' },
-      { key: 'planejamentos:all', prefix: 'planejamento:', arr: 'planejamentos' }
+      { key: 'planejamentos:all', prefix: 'planejamento:', arr: 'planejamentos' },
+      { key: 'mensagens:all', prefix: 'mensagem:', arr: 'mensagens' }
     ];
 
     for (let q of queries) {
       const ids = await upstash('SMEMBERS', q.key) || [];
       for (const id of ids) {
         const raw = await upstash('GET', `${q.prefix}${id}`);
-        if (raw) estado[q.arr].push(JSON.parse(raw));
+        if (raw) {
+          const obj = JSON.parse(raw);
+          estado[q.arr].push(obj);
+        }
       }
     }
+    // NÃO chama verificarDescumprimentoAutomatico (removido)
     atualizarInterfaceCompleta();
   } catch (err) { console.error('Erro ao carregar dados:', err); }
 }
@@ -927,30 +516,77 @@ function atualizarInterfaceCompleta() {
   renderizarAcompanhamento();
   popularSelectAcompInd();
   renderizarPlanejamentos();
+  renderizarMensagens();
+  renderizarAcoesLA();
+  atualizarContadorLista(estado.jovens.length);
+  listarMetasLAProximas(); // atualiza se visível
 }
 
-// ================================================================
+// ============================================================
+// ABAS E NÍVEIS
+// ============================================================
+function mostrarAbasPorNivel(nivel) {
+  let nivelNormalizado = (nivel || '').toLowerCase().trim();
+  if (['admin', 'administrador', 'desenvolvedor'].includes(nivelNormalizado)) nivelNormalizado = 'desenvolvedor';
+  if (['oficineira'].includes(nivelNormalizado)) nivelNormalizado = 'oficineiro';
+  if (['técnico'].includes(nivelNormalizado)) nivelNormalizado = 'tecnico';
+  if (['gestora'].includes(nivelNormalizado)) nivelNormalizado = 'gestor';
+  if (['autoridade jurídica', 'autoridade juridica'].includes(nivelNormalizado)) nivelNormalizado = 'autoridade';
+  
+  const config = NIVEIS_ACESSO[nivelNormalizado];
+  if (!config) return;
+  
+  // Controle de visibilidade pelo menu lateral (itens com data-page)
+  const permissoes = {
+    'desenvolvedor': ['pageDashboard','pageCadastro','pageLista','pageAcompInd','pageObservacoes','pageOficinas','pagePlanejamento','pageRelatorios','pageLA','pageUsuarios','pagePendentes','pageMensagens','pageProfissionais','pageConfig'],
+    'admin': ['pageDashboard','pageCadastro','pageLista','pageAcompInd','pageObservacoes','pageOficinas','pagePlanejamento','pageRelatorios','pageLA','pageUsuarios','pagePendentes','pageMensagens','pageProfissionais','pageConfig'],
+    'gestor': ['pageDashboard','pageCadastro','pageLista','pageAcompInd','pageObservacoes','pageOficinas','pagePlanejamento','pageRelatorios','pageLA','pageUsuarios','pagePendentes','pageMensagens','pageProfissionais','pageConfig'],
+    'tecnico': ['pageDashboard','pageCadastro','pageLista','pageAcompInd','pageObservacoes','pageOficinas','pageRelatorios','pageLA','pageMensagens','pageProfissionais'],
+    'oficineiro': ['pageDashboard','pageOficinas','pagePlanejamento','pageRelatorios'],
+    'autoridade': ['pageDashboard','pageCadastro','pageLista','pageAcompInd','pageObservacoes','pageRelatorios','pageMensagens','pageLA'],
+    'jovem': ['pageDashboardJovem']
+  };
+  const paginasPermitidas = permissoes[nivelNormalizado] || ['pageDashboard'];
+
+  document.querySelectorAll('.menu-item[data-page]').forEach(item => {
+    const page = item.dataset.page;
+    item.style.display = paginasPermitidas.includes(page) ? '' : 'none';
+  });
+
+  // Se a página atual não for permitida, navega para a primeira permitida
+  const currentPage = document.querySelector('.page.active');
+  if (currentPage && !paginasPermitidas.includes(currentPage.id)) {
+    const first = paginasPermitidas[0];
+    if (first) navigateTo(first);
+  }
+}
+
+// ============================================================
 // DASHBOARD
-// ================================================================
+// ============================================================
 function renderizarDashboard() {
   const cards = document.getElementById('cardsDashboard');
   if (!cards) return;
   const total = estado.jovens.length;
   const ativos = estado.jovens.filter(j => {
-    if (!j['MEDIDA'] || j['MEDIDA'] === 'Liberação' || j.status === 'suspenso') return false;
+    if (!j['MEDIDA'] || j['MEDIDA'] === 'Liberação' || j.status === 'suspenso' || j.status === 'descumprimento') return false;
     return parseFloat(calcularSaldo(j)) > 0 || j['MEDIDA'] === 'LA';
   }).length;
+  const descumprimento = estado.jovens.filter(j => j.status === 'descumprimento').length;
+  const suspensos = estado.jovens.filter(j => j.status === 'suspenso').length;
+  const concluidos = estado.jovens.filter(j => j.status === 'concluído').length;
   const liberados = estado.jovens.filter(j => {
     if (j['MEDIDA'] === 'Liberação') return true;
     return parseFloat(calcularSaldo(j)) <= 0 && j['MEDIDA'] !== 'LA';
   }).length;
-  const suspensos = estado.jovens.filter(j => j.status === 'suspenso').length;
   
   cards.innerHTML = `
-    <div class="card"><h4>Total</h4><p>${total}</p><div class="sub-info">Jovens cadastrados</div></div>
-    <div class="card"><h4>Ativos</h4><p style="color:#10b981;">${ativos}</p><div class="sub-info">Em cumprimento</div></div>
-    <div class="card"><h4>Suspensos</h4><p style="color:#be185d;">${suspensos}</p><div class="sub-info">Atividades paudadas</div></div>
-    <div class="card"><h4>Concluídos</h4><p style="color:#6b7280;">${liberados}</p><div class="sub-info">Medida concluída</div></div>
+    <div class="card card-info"><div class="card-icon"><i class="fas fa-users"></i></div><div class="card-value">${total}</div><div class="card-label">Total de Jovens</div></div>
+    <div class="card card-success"><div class="card-icon"><i class="fas fa-check-circle"></i></div><div class="card-value">${ativos}</div><div class="card-label">Ativos</div><div class="card-sub">Em cumprimento</div></div>
+    <div class="card card-danger"><div class="card-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="card-value">${descumprimento}</div><div class="card-label">Descumprimento</div><div class="card-sub">14+ dias sem comparecer</div></div>
+    <div class="card card-warning"><div class="card-icon"><i class="fas fa-pause-circle"></i></div><div class="card-value">${suspensos}</div><div class="card-label">Suspensos</div></div>
+    <div class="card" style="border-left:4px solid #1A2A4A;"><div class="card-icon"><i class="fas fa-flag-checkered"></i></div><div class="card-value">${concluidos}</div><div class="card-label">Concluídos</div></div>
+    <div class="card" style="border-left:4px solid #94a3b8;"><div class="card-icon"><i class="fas fa-door-open"></i></div><div class="card-value">${liberados}</div><div class="card-label">Liberados</div></div>
   `;
   renderizarGraficos();
 }
@@ -966,27 +602,30 @@ function renderizarDashboardJovem() {
   const jovem = estado.jovens[0];
   
   if (jovem['MEDIDA'] === 'LA') {
-    // Dashboard Focada em Ações (LA)
     const acoes = jovem.acoesLA || [];
     const concluidas = acoes.filter(a => a.realizado).length;
     const progresso = acoes.length > 0 ? ((concluidas / acoes.length) * 100).toFixed(0) : 0;
+    const profissional = estado.usuarios.find(u => u.id === jovem.profissionalLA);
 
     cards.innerHTML = `
       <div class="card"><h4>Nome</h4><p style="font-size:1.1rem;">${jovem['NOME'] || '-'}</p></div>
       <div class="card"><h4>Medida</h4><p>Liberdade Assistida</p></div>
       <div class="card"><h4>Ações Concluídas</h4><p style="font-size:1.5rem; color:#10b981;">${concluidas}/${acoes.length}</p></div>
-      <div class="card"><h4>Progresso Geral</h4><p style="font-size:1.5rem; color:#3b82f6;">${progresso}%</p></div>
+      <div class="card"><h4>Progresso</h4><p style="font-size:1.5rem; color:#3b82f6;">${progresso}%</p></div>
+      ${profissional ? `<div class="card"><h4>Técnico</h4><p style="font-size:0.9rem;">${profissional.nome}</p></div>` : ''}
     `;
 
     freqDiv.innerHTML = `
       <div class="card" style="margin-top:16px;">
         <h3>📝 Minhas Ações/Compromissos</h3>
         <ul style="list-style:none; padding:0; margin-top:15px;">
-          ${acoes.map(a => `<li style="padding:10px; background:${a.realizado ? '#d1fae5' : '#fffbeb'}; margin-bottom:8px; border-radius:8px; border-left:4px solid ${a.realizado ? '#10b981' : '#f59e0b'};"><strong>${a.texto}</strong> - <span style="color:${a.realizado ? '#065f46' : '#92400e'}">${a.realizado ? '✅ Cumprido' : '⏳ Pendente'}</span></li>`).join('')}
+          ${acoes.map(a => `<li style="padding:10px; background:${a.realizado ? '#d1fae5' : '#fffbeb'}; margin-bottom:8px; border-radius:8px; border-left:4px solid ${a.realizado ? '#10b981' : '#f59e0b'}; display:flex; justify-content:space-between; align-items:center;">
+            <span><strong>${a.texto}</strong> - <span style="color:${a.realizado ? '#065f46' : '#92400e'}">${a.realizado ? '✅ Cumprido' : '⏳ Pendente'}</span></span>
+            <span style="font-size:0.75rem; color:#6b7280;">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
+          </li>`).join('')}
         </ul>
       </div>`;
   } else {
-    // Dashboard Focada em Horas (PSC, etc)
     const horasTotal = parseFloat(jovem['HORAS'] || 0);
     const hist = jovem.historicoFrequencia || [];
     const horasFeitas = hist.reduce((s, h) => s + (parseFloat(h.horas) || 0), 0);
@@ -1014,22 +653,80 @@ function renderizarDashboardJovem() {
 }
 
 function renderizarGraficos() {
+  // Limpa gráficos anteriores
   Object.values(estado.graficos).forEach(c => c.destroy());
   estado.graficos = {};
+  
   const ativos = estado.jovens.filter(j => {
-    if (!j['MEDIDA'] || j['MEDIDA'] === 'Liberação' || j.status === 'suspenso') return false;
+    if (!j['MEDIDA'] || j['MEDIDA'] === 'Liberação' || j.status === 'suspenso' || j.status === 'descumprimento') return false;
     return parseFloat(calcularSaldo(j)) > 0 || j['MEDIDA'] === 'LA';
   });
 
+  // Gráfico de Medidas
   const medidas = {};
   ativos.forEach(j => { const m = j['MEDIDA'] || 'Não informada'; medidas[m] = (medidas[m] || 0) + 1; });
   const ctx1 = document.getElementById('graficoMedidas')?.getContext('2d');
-  if (ctx1) estado.graficos.medidas = new Chart(ctx1, { type: 'bar', data: { labels: Object.keys(medidas), datasets: [{ label: 'Jovens', data: Object.values(medidas), backgroundColor: '#2c3e66' }] }});
+  if (ctx1) estado.graficos.medidas = new Chart(ctx1, { type: 'bar', data: { labels: Object.keys(medidas), datasets: [{ label: 'Jovens', data: Object.values(medidas), backgroundColor: '#2c3e66' }] } });
+
+  // Gráfico de Gênero
+  const genero = {};
+  estado.jovens.forEach(j => { const g = j['GÊNERO'] || 'Não informado'; genero[g] = (genero[g] || 0) + 1; });
+  const ctx2 = document.getElementById('graficoGenero')?.getContext('2d');
+  if (ctx2) estado.graficos.genero = new Chart(ctx2, { type: 'pie', data: { labels: Object.keys(genero), datasets: [{ data: Object.values(genero), backgroundColor: ['#3b82f6', '#ec4899', '#8b5cf6', '#94a3b8'] }] } });
+
+  // Gráfico de Idade
+  const idade = {};
+  estado.jovens.forEach(j => { const i = parseInt(j['IDADE']) || 0; const faixa = i < 12 ? '0-11' : i < 15 ? '12-14' : i < 18 ? '15-17' : '18+'; idade[faixa] = (idade[faixa] || 0) + 1; });
+  const ctx3 = document.getElementById('graficoIdade')?.getContext('2d');
+  if (ctx3) estado.graficos.idade = new Chart(ctx3, { type: 'bar', data: { labels: Object.keys(idade), datasets: [{ label: 'Jovens', data: Object.values(idade), backgroundColor: '#f59e0b' }] } });
+
+  // Frequência Semanal
+  const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
+  const freq = Array(7).fill(0);
+  const hoje = new Date();
+  const umaSemana = new Date(hoje.getTime() - 7*24*60*60*1000);
+  estado.jovens.forEach(j => {
+    (j.historicoFrequencia || []).forEach(h => {
+      const d = new Date(h.data);
+      if (d >= umaSemana && d <= hoje) {
+        freq[d.getDay()]++;
+      }
+    });
+  });
+  const ctx4 = document.getElementById('graficoFrequenciaSemanal')?.getContext('2d');
+  if (ctx4) estado.graficos.freqSemanal = new Chart(ctx4, { type: 'line', data: { labels: dias, datasets: [{ label: 'Registros', data: freq, borderColor: '#10b981', fill: false }] } });
+
+  // Revertência
+  const reverte = { Sim: 0, Não: 0 };
+  estado.oficinas.forEach(o => { if (o.reverte) reverte.Sim++; else reverte.Não++; });
+  const ctx5 = document.getElementById('graficoReverte')?.getContext('2d');
+  if (ctx5) estado.graficos.reverte = new Chart(ctx5, { type: 'pie', data: { labels: ['Reverte', 'Não Reverte'], datasets: [{ data: [reverte.Sim, reverte.Não], backgroundColor: ['#10b981', '#94a3b8'] }] } });
+
+  // Evolução de Status (últimos 6 meses)
+  const meses = [];
+  const statusData = { ativo: [], suspenso: [], descumprimento: [], concluído: [] };
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    meses.push(d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }));
+    const mesInicio = new Date(d.getFullYear(), d.getMonth(), 1);
+    const mesFim = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    statusData.ativo.push(estado.jovens.filter(j => j.status === 'ativo' && new Date(j.historicoFrequencia?.[0]?.data || j.dataCadastro || Date.now()) <= mesFim).length);
+    statusData.suspenso.push(estado.jovens.filter(j => j.status === 'suspenso').length);
+    statusData.descumprimento.push(estado.jovens.filter(j => j.status === 'descumprimento').length);
+    statusData.concluído.push(estado.jovens.filter(j => j.status === 'concluído').length);
+  }
+  const ctx6 = document.getElementById('graficoEvolucao')?.getContext('2d');
+  if (ctx6) estado.graficos.evolucao = new Chart(ctx6, { type: 'line', data: { labels: meses, datasets: [
+    { label: 'Ativo', data: statusData.ativo, borderColor: '#10b981', fill: false },
+    { label: 'Suspenso', data: statusData.suspenso, borderColor: '#f59e0b', fill: false },
+    { label: 'Descumprimento', data: statusData.descumprimento, borderColor: '#ef4444', fill: false },
+    { label: 'Concluído', data: statusData.concluído, borderColor: '#1A2A4A', fill: false }
+  ] } });
 }
 
-// ================================================================
+// ============================================================
 // FORMULÁRIO DE CADASTRO E AÇÕES LA
-// ================================================================
+// ============================================================
 function renderizarCamposFormulario() {
   const grid = document.getElementById('camposGrid');
   if (!grid || grid.innerHTML !== "") return; 
@@ -1041,15 +738,16 @@ function renderizarCamposFormulario() {
     return `<div class="campo"><label>${label}</label><input type="${type}" id="campo_${key}"></div>`;
   }).join('');
   
-  // Injetar container de Ações LA logo após o grid
   grid.insertAdjacentHTML('afterend', `
     <div id="containerAcoesLA" style="display:none; background:#f8fafc; padding:15px; border-radius:12px; margin-bottom:15px; border:1px solid #e2e8f0;">
-      <h4 style="color:#1e2a4a; margin-bottom:10px;">📋 Ações de Compromisso (LA)</h4>
-      <div style="display:flex; gap:10px;">
-        <input type="text" id="novaAcaoLAInput" placeholder="Descreva a ação a ser cumprida..." style="flex:1; padding:8px; border:1px solid #d1d9e6; border-radius:8px;">
-        <button type="button" class="btn btn-secondary" onclick="adicionarAcaoLAForm()">Adicionar</button>
+      <h4 style="color:#1e2a4a; margin-bottom:10px;">📋 Ações de Compromisso (LA) com Prazo</h4>
+      <p style="font-size:0.85rem; color:#6b7280; margin-bottom:10px;">Adicione as ações que o jovem se comprometeu a realizar.</p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <input type="text" id="novaAcaoLAInput" placeholder="Descreva a ação..." style="flex:1; padding:8px; border:1px solid #d1d9e6; border-radius:8px; min-width:180px;">
+        <input type="date" id="novaAcaoPrazoInput" style="padding:8px; border:1px solid #d1d9e6; border-radius:8px;">
+        <button type="button" class="btn-primary" onclick="adicionarAcaoLAForm()">➕ Adicionar</button>
       </div>
-      <ul id="listaAcoesLAForm" style="margin-top:10px; padding-left:20px; font-size:0.9rem;"></ul>
+      <ul id="listaAcoesLAForm" style="margin-top:10px; padding-left:20px; font-size:0.9rem; max-height:200px; overflow-y:auto;"></ul>
     </div>
   `);
 }
@@ -1058,21 +756,33 @@ let acoesLATemporarias = [];
 
 window.toggleAcoesLA = function() {
   const medida = document.getElementById('campo_MEDIDA')?.value;
-  document.getElementById('containerAcoesLA').style.display = medida === 'LA' ? 'block' : 'none';
+  const container = document.getElementById('containerAcoesLA');
+  if (container) container.style.display = medida === 'LA' ? 'block' : 'none';
 }
 
 window.adicionarAcaoLAForm = function() {
   const input = document.getElementById('novaAcaoLAInput');
-  if (input.value.trim() !== '') {
-    acoesLATemporarias.push({ id: Date.now(), texto: input.value.trim(), realizado: false });
-    input.value = '';
-    atualizarListaAcoesLAForm();
-  }
+  const prazoInput = document.getElementById('novaAcaoPrazoInput');
+  if (input.value.trim() === '') return alert('Descreva a ação.');
+  if (!prazoInput.value) return alert('Defina a data de vencimento.');
+  acoesLATemporarias.push({
+    id: Date.now(),
+    texto: input.value.trim(),
+    realizado: false,
+    data: new Date().toISOString(),
+    prazo: prazoInput.value
+  });
+  input.value = '';
+  prazoInput.value = '';
+  atualizarListaAcoesLAForm();
 }
 
 window.atualizarListaAcoesLAForm = function() {
   const ul = document.getElementById('listaAcoesLAForm');
-  ul.innerHTML = acoesLATemporarias.map(a => `<li style="margin-bottom:5px;">${a.texto} <span style="color:red; cursor:pointer; font-weight:bold; margin-left:10px;" onclick="removerAcaoLAForm(${a.id})">X</span></li>`).join('');
+  ul.innerHTML = acoesLATemporarias.map(a => `<li style="margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding:4px 0;">
+    <span>${a.texto} <span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span></span>
+    <span style="color:red; cursor:pointer; font-weight:bold; margin-left:10px;" onclick="removerAcaoLAForm(${a.id})">✕</span>
+  </li>`).join('');
 }
 
 window.removerAcaoLAForm = function(id) {
@@ -1119,24 +829,9 @@ function limparFormulario() {
   window._editarId = null;
 }
 
-window.editarJovem = function(id) {
-  const j = estado.jovens.find(x => x.id === id);
-  if(!j) return;
-  window._editarId = id;
-  
-  CAMPOS.forEach(([key]) => { const el = document.getElementById(`campo_${key}`); if (el) el.value = j[key] || ''; });
-  document.getElementById('campo_ID_DIGITAL').value = j['ID_DIGITAL'] || '';
-  
-  acoesLATemporarias = j.acoesLA || [];
-  toggleAcoesLA();
-  atualizarListaAcoesLAForm();
-  
-  document.querySelector('#tab1').scrollIntoView({ behavior: 'smooth' });
-}
-
-// ================================================================
-// LISTA E FILTROS DE FREQUÊNCIA
-// ================================================================
+// ============================================================
+// LISTA E FILTROS DE ACOMPANHAMENTO GERAL
+// ============================================================
 function carregarLista() {
   const tbody = document.getElementById('listaCorpo');
   if (!tbody) return;
@@ -1145,35 +840,54 @@ function carregarLista() {
   const fMedida = document.getElementById('filtroMedida')?.value;
   const fStatus = document.getElementById('filtroStatus')?.value;
   const fSaldo = document.getElementById('filtroSaldo')?.value;
+  const fGenero = document.getElementById('filtroGenero')?.value;
+  const fIdade = document.getElementById('filtroIdade')?.value;
 
   let lista = estado.jovens.filter(j => {
-    // Definir Status Renderizado
     if (j.status === 'suspenso') j._statusRender = 'suspenso';
+    else if (j.status === 'descumprimento') j._statusRender = 'descumprimento';
+    else if (j.status === 'concluído') j._statusRender = 'concluído';
     else if (j['MEDIDA'] === 'Liberação') j._statusRender = 'liberado';
-    else {
-      j._statusRender = parseFloat(calcularSaldo(j)) <= 0 && j['MEDIDA'] !== 'LA' ? 'concluído' : 'ativo';
-    }
+    else j._statusRender = j.status || 'ativo';
 
-    // Aplicar Filtros
     if (fNome && !(j['NOME']||'').toLowerCase().includes(fNome) && !(j['ID_DIGITAL']||'').includes(fNome)) return false;
     if (fMedida && j['MEDIDA'] !== fMedida) return false;
     if (fStatus && j._statusRender !== fStatus) return false;
     if (fSaldo === 'critico' && parseFloat(calcularSaldo(j)) <= 0 && j['MEDIDA'] !== 'LA') return false;
-    
+    if (fSaldo === 'zerado' && parseFloat(calcularSaldo(j)) > 0 && j['MEDIDA'] !== 'LA') return false;
+    if (fGenero && j['GÊNERO'] !== fGenero) return false;
+    if (fIdade) {
+      const idade = parseInt(j['IDADE']) || 0;
+      if (fIdade === '12-15' && (idade < 12 || idade > 15)) return false;
+      if (fIdade === '16-18' && (idade < 16 || idade > 18)) return false;
+      if (fIdade === '19+' && idade < 19) return false;
+    }
     return true;
   }).sort((a, b) => (a['NOME'] || '').localeCompare((b['NOME'] || ''), 'pt-BR'));
+
+  atualizarContadorLista(lista.length);
+
+  const podeAlterarStatus = NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel);
 
   tbody.innerHTML = lista.map(j => {
     const hist = j.historicoFrequencia || [];
     const ultimo = hist.length > 0 ? new Date(Math.max(...hist.map(h => new Date(h.data)))).toLocaleDateString('pt-BR') : 'Nunca';
     
-    let bgStatus = j._statusRender === 'suspenso' ? 'background:#fce7f3; color:#be185d;' : (j._statusRender === 'ativo' ? 'background:#d1fae5; color:#065f46;' : 'background:#e5e7eb; color:#374151;');
+    let bgStatus = j._statusRender === 'suspenso' ? 'background:#fce7f3; color:#be185d;' : 
+                   j._statusRender === 'descumprimento' ? 'background:#fee2e2; color:#991b1b;' :
+                   j._statusRender === 'concluído' ? 'background:#d1fae5; color:#065f46;' :
+                   j._statusRender === 'ativo' ? 'background:#d1fae5; color:#065f46;' : 
+                   'background:#e5e7eb; color:#374151;';
+    
     const renderSaldo = j['MEDIDA'] === 'LA' ? `Ações: ${j.acoesLA?.filter(a=>a.realizado).length || 0}/${j.acoesLA?.length || 0}` : `${calcularSaldo(j)}h`;
 
     const hoje = new Date();
     const hojeStr = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
     let temEntradaAberta = false;
-    let podeRegistrarPonto = j['MEDIDA'] !== 'Liberação' && j._statusRender !== 'suspenso' && (parseFloat(calcularSaldo(j)) > 0 || j['MEDIDA'] === 'LA');
+    
+    const podeRegistrarPonto = j['MEDIDA'] !== 'Liberação' && 
+                               j._statusRender !== 'suspenso' && 
+                               j._statusRender !== 'concluído';
 
     if (podeRegistrarPonto && j['MEDIDA'] !== 'LA') {
       for (let i = hist.length - 1; i >= 0; i--) {
@@ -1188,6 +902,52 @@ function carregarLista() {
       }
     }
 
+    let botoesStatus = '';
+    if (podeAlterarStatus && j._statusRender !== 'concluído' && j['MEDIDA'] !== 'Liberação') {
+      if (j._statusRender === 'suspenso') {
+        botoesStatus = `<button onclick="reativarJovem('${j.id}')" class="btn-sm btn-sm-success">✅ Reativar</button>`;
+      } else if (j._statusRender === 'descumprimento') {
+        botoesStatus = `
+          <button onclick="reativarJovem('${j.id}')" class="btn-sm btn-sm-success">✅ Reativar</button>
+          <button onclick="abrirModalSuspensao('${j.id}', '${j['NOME']}')" class="btn-sm btn-sm-danger">🔴 Suspender</button>
+        `;
+      } else {
+        botoesStatus = `<button onclick="abrirModalSuspensao('${j.id}', '${j['NOME']}')" class="btn-sm btn-sm-danger">🔴 Suspender</button>`;
+      }
+    }
+
+    let botoesAlterarStatus = '';
+    if (podeAlterarStatus && j._statusRender !== 'concluído' && j['MEDIDA'] !== 'Liberação') {
+      const opcoes = ['ativo', 'suspenso', 'descumprimento', 'concluído'];
+      botoesAlterarStatus = `
+        <select onchange="alterarStatusManual('${j.id}', this.value)" style="padding:2px 6px; font-size:0.7rem; border:1px solid #d1d9e6; border-radius:4px; background:white;">
+          <option value="">Status</option>
+          ${opcoes.map(s => `<option value="${s}" ${j._statusRender === s ? 'selected' : ''}>${s.toUpperCase()}</option>`).join('')}
+        </select>
+      `;
+    }
+
+    let motivoStatus = '';
+    if (j._statusRender === 'suspenso' && j.motivoSuspensao) {
+      motivoStatus = `<span title="${j.motivoSuspensao}" style="cursor:help; font-size:0.75rem; color:#be185d;">${j.motivoSuspensao.substring(0, 20)}${j.motivoSuspensao.length > 20 ? '...' : ''}</span>`;
+    } else if (j._statusRender === 'descumprimento') {
+      motivoStatus = `<span style="font-size:0.75rem; color:#991b1b;">14+ dias sem comparecer</span>`;
+    }
+
+    let botaoPonto = '';
+    if (podeRegistrarPonto) {
+      botaoPonto = `<button onclick="registrarPontoNaLinha('${j.id}')" class="btn-sm ${temEntradaAberta ? 'btn-sm-warning' : 'btn-sm-success'}">${temEntradaAberta ? '🚪 Saída' : '🚪 Entrada'}</button>`;
+    }
+
+    // Botão de Ficha
+    const botaoFicha = `<button onclick="abrirFichaModal('${j.id}')" class="btn-sm btn-sm-primary">📋</button>`;
+
+    // Botão Editar
+    const botaoEditar = `<button onclick="editarJovem('${j.id}')" class="btn-sm btn-sm-primary">✏️</button>`;
+
+    // Botão Excluir
+    const botaoExcluir = `<button onclick="abrirModalExclusao('jovem', '${j.id}', '${j['NOME']}')" class="btn-sm btn-sm-danger">🗑️</button>`;
+
     return `<tr>
       <td>${j['NOME'] || j['REFERENCIA'] || '-'}</td>
       <td>${j['ID_DIGITAL'] || '-'}</td>
@@ -1195,16 +955,63 @@ function carregarLista() {
       <td>${j['MEDIDA'] || '-'}</td>
       <td>${renderSaldo}</td>
       <td><span style="font-weight:600; padding:4px 12px; border-radius:20px; ${bgStatus}">${j._statusRender.toUpperCase()}</span></td>
+      <td>${motivoStatus}</td>
       <td>${ultimo}</td>
-      <td>
-        ${podeRegistrarPonto && j['MEDIDA'] !== 'LA' ? `<button onclick="registrarPontoNaLinha('${j.id}')" class="btn-acao ${temEntradaAberta ? 'btn-ponto-saida' : 'btn-ponto-entrada'}">${temEntradaAberta ? '🚪 Saída' : '🚪 Entrada'}</button>` : ''}
-        <button onclick="editarJovem('${j.id}')" class="btn-acao btn-edit">✏️</button>
-        <button onclick="abrirFichaModal('${j.id}')" class="btn-acao btn-ficha">📋 Ficha</button>
-        ${['gestor','tecnico'].includes(estado.usuarioAtual?.nivel) && j._statusRender !== 'suspenso' ? `<button onclick="abrirModalSuspensao('${j.id}', '${j['NOME']}')" class="btn-acao" style="background:#be185d; color:white;">🔴 Suspender</button>` : ''}
-        <button onclick="abrirModalExclusao('jovem', '${j.id}', '${j['NOME']}')" class="btn-acao btn-danger">🗑️</button>
+      <td style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+        ${botaoPonto}
+        ${botaoEditar}
+        ${botaoFicha}
+        ${botoesStatus}
+        ${botoesAlterarStatus}
+        ${botaoExcluir}
       </td>
     </tr>`;
   }).join('');
+}
+
+function atualizarContadorLista(total) {
+  let contadorContainer = document.getElementById('contadorContainer');
+  if (!contadorContainer) {
+    const tabelaWrapper = document.querySelector('#pageLista .table-wrapper');
+    if (tabelaWrapper) {
+      contadorContainer = document.createElement('div');
+      contadorContainer.id = 'contadorContainer';
+      tabelaWrapper.appendChild(contadorContainer);
+    }
+  }
+  
+  if (contadorContainer) {
+    const filtrosAtivos = [];
+    const fNome = document.getElementById('filtroNome')?.value?.trim() || '';
+    const fMedida = document.getElementById('filtroMedida')?.value || '';
+    const fStatus = document.getElementById('filtroStatus')?.value || '';
+    const fSaldo = document.getElementById('filtroSaldo')?.value || '';
+    const fGenero = document.getElementById('filtroGenero')?.value || '';
+    const fIdade = document.getElementById('filtroIdade')?.value || '';
+    
+    if (fNome) filtrosAtivos.push(`Nome: "${fNome}"`);
+    if (fMedida) filtrosAtivos.push(`Medida: ${fMedida}`);
+    if (fStatus) filtrosAtivos.push(`Status: ${fStatus}`);
+    if (fSaldo === 'critico') filtrosAtivos.push('Saldo: Crítico');
+    if (fSaldo === 'zerado') filtrosAtivos.push('Saldo: Zerado');
+    if (fGenero) filtrosAtivos.push(`Gênero: ${fGenero}`);
+    if (fIdade) filtrosAtivos.push(`Idade: ${fIdade}`);
+    
+    let textoFiltros = '';
+    if (filtrosAtivos.length > 0) {
+      textoFiltros = ` <span style="font-weight: 400; color: #6b7280; font-size: 0.85rem;">| Filtros: ${filtrosAtivos.join(', ')}</span>`;
+    }
+    
+    contadorContainer.innerHTML = `
+      <div id="contadorListaJovens" style="padding: 10px 15px; font-weight: 600; color: #1e2a4a; background: #f1f5f9; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+        <span>👥 Total de jovens: <strong style="color: #2c3e66; font-size: 1.1rem;">${total}</strong></span>
+        <span style="font-size: 0.85rem; color: #6b7280;">
+          ${total === 1 ? '1 jovem exibido' : `${total} jovens exibidos`}
+          ${textoFiltros}
+        </span>
+      </div>
+    `;
+  }
 }
 
 function parseNum(val) {
@@ -1214,18 +1021,386 @@ function parseNum(val) {
 }
 
 function calcularSaldo(jovem) {
-  if(jovem['MEDIDA'] === 'LA') return 0; // LA não usa saldo de horas
+  if(jovem['MEDIDA'] === 'LA') return 0;
   const horasTotal = parseNum(jovem['HORAS']);
   const horasFeitas = (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
   return Math.max(0, horasTotal - horasFeitas).toFixed(1);
 }
 
-// ================================================================
-// PONTO DIGITAL E NA LINHA
-// ================================================================
+// ============================================================
+// STATUS - SUSPENSÃO, REATIVAÇÃO E DESCUMPRIMENTO MANUAL
+// ============================================================
+window.alterarStatusManual = async function(jovemId, novoStatus) {
+    if (!NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel)) {
+        alert('❌ Você não tem permissão para alterar status.');
+        return;
+    }
+    
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) {
+        alert('Jovem não encontrado.');
+        return;
+    }
+    
+    const statusPermitidos = ['ativo', 'suspenso', 'descumprimento', 'concluído'];
+    if (!statusPermitidos.includes(novoStatus)) {
+        alert('Status inválido.');
+        return;
+    }
+    
+    if (!confirm(`Tem certeza que deseja alterar o status de ${jovem['NOME']} de "${jovem.status}" para "${novoStatus}"?`)) {
+        return;
+    }
+    
+    const statusAnterior = jovem.status;
+    jovem.status = novoStatus;
+    
+    if (novoStatus === 'suspenso') {
+        const motivo = prompt('Digite o motivo da suspensão:');
+        if (motivo) {
+            jovem.motivoSuspensao = motivo;
+            jovem.dataSuspensao = new Date().toISOString();
+            jovem.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
+        } else {
+            alert('Motivo obrigatório para suspensão.');
+            return;
+        }
+    } else if (novoStatus === 'descumprimento') {
+        jovem.dataDescumprimento = new Date().toISOString();
+    } else if (novoStatus === 'ativo') {
+        jovem.motivoSuspensao = '';
+        jovem.dataSuspensao = '';
+        jovem.dataDescumprimento = '';
+    }
+    
+    if (!jovem.observacoes) jovem.observacoes = [];
+    jovem.observacoes.push({
+        data: new Date().toISOString(),
+        profissional: estado.usuarioAtual?.nome || 'Sistema',
+        texto: `📌 Status alterado manualmente de "${statusAnterior}" para "${novoStatus.toUpperCase()}"${jovem.motivoSuspensao ? ' - Motivo: ' + jovem.motivoSuspensao : ''}`
+    });
+    
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        await carregarTodosDados();
+        alert(`✅ Status alterado para "${novoStatus.toUpperCase()}" com sucesso!`);
+    } catch (err) {
+        alert('Erro ao alterar status: ' + err.message);
+    }
+};
+
+window.abrirModalSuspensao = function(jovemId, jovemNome) {
+  estado.suspensaoPendente = jovemId;
+  document.getElementById('nomeJovemSuspensao').textContent = jovemNome;
+  document.getElementById('motivoSuspensaoInput').value = '';
+  document.getElementById('modalSuspensao').style.display = 'flex';
+}
+
+window.salvarSuspensao = async function() {
+  const motivo = document.getElementById('motivoSuspensaoInput').value.trim();
+  if (!motivo) return alert('É obrigatório informar o motivo da suspensão.');
+  
+  const jovem = estado.jovens.find(j => j.id === estado.suspensaoPendente);
+  if (!jovem) return;
+  
+  jovem.status = 'suspenso';
+  jovem.motivoSuspensao = motivo;
+  jovem.dataSuspensao = new Date().toISOString();
+  jovem.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
+  
+  if (!jovem.observacoes) jovem.observacoes = [];
+  jovem.observacoes.push({
+    data: new Date().toISOString(),
+    profissional: jovem.suspensoPor,
+    texto: `🔴 Jovem suspenso por: ${motivo}`
+  });
+  
+  try {
+    await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+    document.getElementById('modalSuspensao').style.display = 'none';
+    await carregarTodosDados();
+    alert('✅ Jovem suspenso com sucesso!');
+  } catch (e) { alert('Erro ao suspender: ' + e.message); }
+}
+
+window.reativarJovem = async function(id) {
+  if (!confirm('Tem certeza que deseja reativar este jovem?')) return;
+  const jovem = estado.jovens.find(j => j.id === id);
+  if (!jovem) return;
+  
+  const statusAnterior = jovem.status;
+  jovem.status = 'ativo';
+  jovem.motivoSuspensao = '';
+  jovem.dataSuspensao = '';
+  jovem.dataDescumprimento = '';
+  
+  if (!jovem.observacoes) jovem.observacoes = [];
+  jovem.observacoes.push({
+    data: new Date().toISOString(),
+    profissional: estado.usuarioAtual?.nome || 'Sistema',
+    texto: `✅ Jovem reativado (estava em ${statusAnterior === 'suspenso' ? 'suspensão' : 'descumprimento'})`
+  });
+  
+  try {
+    await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+    await carregarTodosDados();
+    alert('✅ Jovem reativado com sucesso!');
+  } catch (err) {
+    alert('Erro ao reativar: ' + err.message);
+  }
+};
+
+// ============================================================
+// MARCAR DESCUMPRIMENTO MANUAL (na aba Observações)
+// ============================================================
+window.marcarDescumprimentoManual = async function(jovemId) {
+  if (!confirm('Tem certeza que deseja marcar este jovem como "Descumprimento"? Esta ação é manual.')) return;
+  const jovem = estado.jovens.find(j => j.id === jovemId);
+  if (!jovem) { alert('Jovem não encontrado.'); return; }
+  jovem.status = 'descumprimento';
+  jovem.dataDescumprimento = new Date().toISOString();
+  if (!jovem.observacoes) jovem.observacoes = [];
+  jovem.observacoes.push({
+    data: new Date().toISOString(),
+    profissional: estado.usuarioAtual?.nome || 'Sistema',
+    texto: '🔴 Status alterado manualmente para "Descumprimento" pelo usuário.'
+  });
+  try {
+    await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+    await carregarTodosDados();
+    alert('✅ Status alterado para Descumprimento.');
+  } catch (err) { alert('Erro: ' + err.message); }
+};
+
+// ============================================================
+// METAS LA PRÓXIMAS AO VENCIMENTO
+// ============================================================
+function listarMetasLAProximas() {
+    const container = document.getElementById('listaMetasLAProximas');
+    if (!container) return;
+    const hoje = new Date();
+    const limite = new Date(hoje.getTime() + 7 * 24 * 60 * 60 * 1000);
+    let metas = [];
+
+    estado.jovens.forEach(j => {
+        if (j['MEDIDA'] !== 'LA') return;
+        const acoes = j.acoesLA || [];
+        acoes.forEach(a => {
+            if (!a.prazo) return;
+            const dataPrazo = new Date(a.prazo);
+            if (isNaN(dataPrazo.getTime())) return;
+            if (dataPrazo >= hoje && dataPrazo <= limite) {
+                metas.push({
+                    nome: j['NOME'] || j['REFERENCIA'] || 'Sem nome',
+                    acao: a.texto,
+                    prazo: dataPrazo,
+                    jovemId: j.id
+                });
+            }
+        });
+    });
+    metas.sort((a, b) => a.prazo - b.prazo);
+
+    if (metas.length === 0) {
+        container.innerHTML = '<p style="color:#6b7280;">Nenhuma meta com vencimento próximo (≤ 7 dias).</p>';
+        return;
+    }
+    container.innerHTML = metas.map(m => `
+        <div class="meta-card ${m.prazo < new Date() ? 'vencido' : ''}">
+            <div class="meta-info">
+                <span class="nome">${m.nome}</span>
+                <span class="acao">${m.acao}</span>
+                <span class="prazo"><i class="far fa-calendar-alt"></i> Vence em: ${m.prazo.toLocaleDateString('pt-BR')}</span>
+            </div>
+            <span class="meta-badge ${m.prazo < new Date() ? 'vencido' : 'urgente'}">
+                ${m.prazo < new Date() ? '⚠️ Vencido' : '⏳ Próximo'}
+            </span>
+        </div>
+    `).join('');
+}
+
+// ============================================================
+// OBSERVAÇÕES E ACOMPANHAMENTO INDIVIDUAL
+// ============================================================
+function renderizarAcompanhamento() {
+  const agora = new Date();
+  const tabela7 = document.getElementById('tabela7dias');
+  const tabela14 = document.getElementById('tabela14dias');
+  if (!tabela7 || !tabela14) return;
+  
+  const semComparecimento = estado.jovens.filter(j => { 
+    if (j['MEDIDA'] === 'Liberação' || j.status === 'suspenso' || j.status === 'concluído') return false; 
+    const hist = j.historicoFrequencia || []; 
+    if (hist.length === 0) return true; 
+    const ultimo = new Date(Math.max(...hist.map(h => new Date(h.data)))); 
+    return Math.floor((agora - ultimo) / (1000 * 60 * 60 * 24)) >= 7; 
+  });
+  
+  const sem7 = semComparecimento.filter(j => { 
+    const hist = j.historicoFrequencia || []; 
+    if (hist.length === 0) return true; 
+    return Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) < 14; 
+  });
+  
+  const sem14 = semComparecimento.filter(j => { 
+    const hist = j.historicoFrequencia || []; 
+    if (hist.length === 0) return true; 
+    return Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) >= 14; 
+  });
+  
+  tabela7.innerHTML = sem7.map(j => { 
+    const hist = j.historicoFrequencia || []; 
+    const ultimo = hist.length > 0 ? new Date(Math.max(...hist.map(h => new Date(h.data)))).toLocaleDateString('pt-BR') : 'Nunca'; 
+    const dias = hist.length > 0 ? Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) : '?'; 
+    return `<tr><td>${j['NOME'] || '-'}</td><td>${ultimo}</td><td>${dias}</td><td><button onclick="abrirFichaModal('${j.id}')" class="btn-sm btn-sm-primary"><i class="fas fa-file-alt"></i></button></td></tr>`; 
+  }).join('') || '<tr><td colspan="4" style="text-align:center; color:#6b7280;">✅ Nenhum jovem com 7+ dias sem comparecer.</td></tr>';
+  
+  tabela14.innerHTML = sem14.map(j => { 
+    const hist = j.historicoFrequencia || []; 
+    const ultimo = hist.length > 0 ? new Date(Math.max(...hist.map(h => new Date(h.data)))).toLocaleDateString('pt-BR') : 'Nunca'; 
+    const dias = hist.length > 0 ? Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) : '?'; 
+    return `<tr><td>${j['NOME'] || '-'}</td><td>${ultimo}</td><td>${dias}</td>
+        <td>
+            <button onclick="abrirFichaModal('${j.id}')" class="btn-sm btn-sm-primary"><i class="fas fa-file-alt"></i></button>
+            <button onclick="marcarDescumprimentoManual('${j.id}')" class="btn-sm btn-sm-danger"><i class="fas fa-exclamation-triangle"></i> Marcar Descumprimento</button>
+        </td>
+    </tr>`; 
+  }).join('') || '<tr><td colspan="4" style="text-align:center; color:#10b981;">✅ Nenhum jovem com 14+ dias sem comparecer.</td></tr>';
+}
+
+// ============================================================
+// FICHA MODAL
+// ============================================================
+window.abrirFichaModal = function(id) {
+    if (!id) { alert('ID do jovem não fornecido.'); return; }
+    const jovem = estado.jovens.find(j => j.id === id);
+    if (!jovem) { alert('Jovem não encontrado.'); return; }
+    
+    const modalFicha = document.getElementById('modalFicha');
+    if (!modalFicha) { alert('Modal de ficha não encontrado.'); return; }
+    
+    document.getElementById('fichaTitulo').textContent = `📋 Ficha: ${jovem['NOME'] || 'Sem nome'}`;
+    
+    let acoesLAHTML = '';
+    if (jovem['MEDIDA'] === 'LA') {
+        const acoes = jovem.acoesLA || [];
+        const profs = estado.usuarios.filter(u => u.nivel === 'tecnico' || u.nivel === 'gestor');
+        const profAtual = estado.usuarios.find(u => u.id === jovem.profissionalLA);
+        const podeMarcar = NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel);
+        
+        acoesLAHTML = `
+            <h3 style="margin-top:20px; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚖️ Acompanhamento LA</h3>
+            <div style="margin-bottom:15px;">
+                <label style="font-weight:bold;">Profissional Responsável:</label>
+                <select onchange="vincularProfissionalLA('${jovem.id}', this.value)" style="padding:5px; border-radius:5px; margin-left:10px; border:1px solid #d1d9e6;">
+                    <option value="">Não atribuído</option>
+                    ${profs.map(p => `<option value="${p.id}" ${jovem.profissionalLA === p.id ? 'selected' : ''}>${p.nome}</option>`).join('')}
+                </select>
+                ${profAtual ? `<span style="margin-left:15px; color:#10b981;">✅ Atribuído a: ${profAtual.nome}</span>` : ''}
+            </div>
+            <ul style="list-style:none; padding:0;">
+                ${acoes.map(a => `
+                    <li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-radius:8px;">
+                        <span style="${a.realizado ? 'text-decoration:line-through; color:#10b981;' : ''}">${a.texto}</span>
+                        <div>
+                            <span style="font-size:0.7rem; color:#6b7280; margin-right:10px;">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
+                            <span style="font-size:0.7rem; color:#6b7280; margin-right:10px;">Vence: ${a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : 'Sem prazo'}</span>
+                            ${podeMarcar ? `<button class="btn-sm ${a.realizado ? 'btn-sm-success' : 'btn-sm-primary'}" onclick="toggleAcaoLA('${jovem.id}', ${a.id})">
+                                ${a.realizado ? '✅ Feito' : 'Marcar Feito'}
+                            </button>` : `<span style="color:${a.realizado ? '#10b981' : '#92400e'};">${a.realizado ? '✅ Cumprido' : '⏳ Pendente'}</span>`}
+                        </div>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+    }
+
+    const hist = jovem.historicoFrequencia || [];
+    const totalHoras = hist.reduce((s, h) => s + parseFloat(h.horas || 0), 0);
+    const saldo = jovem['MEDIDA'] === 'LA' ? 'N/A' : calcularSaldo(jovem) + 'h';
+    
+    const frequenciaHTML = hist.length > 0 ? 
+        `<ul style="list-style:none; padding:0; margin-top:10px;">
+            ${hist.sort((a, b) => new Date(a.data) - new Date(b.data)).map(h => {
+                const tipoLabel = h.tipo === 'saida' ? '🚪 Saída' : '🚪 Entrada';
+                const horasLabel = h.tipo === 'saida' ? '' : `${parseFloat(h.horas || 0).toFixed(1)}h`;
+                return `<li style="padding:6px 0; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
+                    <span>${tipoLabel} - ${new Date(h.data).toLocaleDateString('pt-BR')} ${new Date(h.data).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</span>
+                    <span>${horasLabel} ${h.observacao ? '- ' + h.observacao : ''}</span>
+                </li>`;
+            }).join('')}
+        </ul>` : 
+        '<p style="color:#6b7280;">Sem registros de frequência</p>';
+    
+    document.getElementById('fichaConteudo').innerHTML = `
+        <div style="margin-bottom:20px;">
+            <h3 style="border-bottom:2px solid #e2e8f0; padding-bottom:8px;">Dados Pessoais</h3>
+            <div class="grid-campos" style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; margin-top:12px;">
+                ${CAMPOS.map(([key, label]) => `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2;"><strong style="font-size:0.78rem; color:#1e2a4a;">${label}:</strong> ${jovem[key] || '-'}</div>`).join('')}
+                <div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2;"><strong style="font-size:0.78rem; color:#1e2a4a;">ID Digital:</strong> ${jovem['ID_DIGITAL'] || '-'}</div>
+                ${jovem.motivoSuspensao ? `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2; grid-column:1/-1; background:#fce7f3; padding:8px; border-radius:4px;"><strong style="color:#be185d;">Motivo da Suspensão:</strong> ${jovem.motivoSuspensao}</div>` : ''}
+                ${jovem.status === 'descumprimento' ? `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2; grid-column:1/-1; background:#fee2e2; padding:8px; border-radius:4px;"><strong style="color:#991b1b;">⚠️ Status: Descumprimento</strong> - 14+ dias sem comparecer</div>` : ''}
+                ${jovem.status === 'concluído' ? `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2; grid-column:1/-1; background:#d1fae5; padding:8px; border-radius:4px;"><strong style="color:#065f46;">✅ Medida Finalizada</strong></div>` : ''}
+            </div>
+        </div>
+        ${acoesLAHTML}
+        <div class="secao-historico" style="margin-top:20px;">
+            <h4 style="border-bottom:2px solid #e2e8f0; padding-bottom:8px;">📊 Frequência (${hist.length} registros) | Total: ${jovem['MEDIDA'] === 'LA' ? 'N/A' : totalHoras.toFixed(1) + 'h'} | Saldo: ${saldo}</h4>
+            ${frequenciaHTML}
+        </div>
+    `;
+    
+    modalFicha.style.display = 'flex';
+}
+
+window.toggleAcaoLA = async function(jovemId, acaoId) {
+  const jovem = estado.jovens.find(j => j.id === jovemId);
+  const acao = jovem.acoesLA.find(a => a.id === acaoId);
+  acao.realizado = !acao.realizado;
+  await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+  abrirFichaModal(jovemId);
+  carregarLista();
+}
+
+window.vincularProfissionalLA = async function(jovemId, profId) {
+  const jovem = estado.jovens.find(j => j.id === jovemId);
+  jovem.profissionalLA = profId;
+  await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+  abrirFichaModal(jovemId);
+  alert('Profissional vinculado com sucesso!');
+}
+
+function popularSelectAcompInd() {
+  const select = document.getElementById('selectJovemAcomp');
+  if (!select) return;
+  select.innerHTML = '<option value="">Selecione um jovem...</option>' + 
+    estado.jovens.sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR'))
+    .map(j => `<option value="${j.id}">${j['NOME'] || j['REFERENCIA']} - ${j['MEDIDA'] || ''} ${j.status === 'suspenso' ? '🔴' : j.status === 'descumprimento' ? '⚠️' : j.status === 'concluído' ? '✅' : ''}</option>`).join('');
+}
+
+// ============================================================
+// PONTO DIGITAL E NA LINHA (com reativação automática se descumprimento)
+// ============================================================
 window.registrarPontoNaLinha = async function(jovemId) {
   const jovem = estado.jovens.find(j => j.id === jovemId);
   if (!jovem) return;
+  
+  if (jovem['MEDIDA'] === 'Liberação') return alert('❌ Jovem está liberado.');
+  if (jovem.status === 'suspenso') return alert('❌ Jovem está suspenso.');
+  if (jovem.status === 'concluído') return alert('❌ Jovem já concluiu a medida.');
+  
+  // Se estiver em descumprimento, reativa automaticamente
+  if (jovem.status === 'descumprimento') {
+      jovem.status = 'ativo';
+      jovem.dataDescumprimento = '';
+      if (!jovem.observacoes) jovem.observacoes = [];
+      jovem.observacoes.push({
+          data: new Date().toISOString(),
+          profissional: estado.usuarioAtual?.nome || 'Sistema',
+          texto: '✅ Jovem reativado automaticamente ao registrar presença.'
+      });
+      await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+  }
   
   const now = new Date();
   jovem.historicoFrequencia = jovem.historicoFrequencia || [];
@@ -1246,22 +1421,28 @@ window.registrarPontoNaLinha = async function(jovemId) {
   }
 
   if (entradaAberta) {
-    const diffMs = now.getTime() - new Date(entradaAberta.data).getTime();
-    const horasReais = diffMs / (1000 * 60 * 60);
-    const horasArredondadas = Math.round(horasReais * 4) / 4;
+    if (jovem['MEDIDA'] === 'LA') {
+        entradaAberta.horaSaida = now.toISOString();
+        hist.push({ data: now.toISOString(), horas: 0, tipo: 'saida', observacao: 'Saída (LA)', entradaReferencia: new Date(entradaAberta.data).getTime() });
+        alert(`✅ Saída registrada para ${jovem['NOME']} às ${now.toLocaleTimeString('pt-BR')}`);
+    } else {
+        const diffMs = now.getTime() - new Date(entradaAberta.data).getTime();
+        const horasReais = diffMs / (1000 * 60 * 60);
+        const horasArredondadas = Math.round(horasReais * 4) / 4;
 
-    entradaAberta.horas = parseFloat(horasArredondadas.toFixed(2));
-    entradaAberta.horaSaida = now.toISOString();
-    hist.push({ data: now.toISOString(), horas: 0, tipo: 'saida', observacao: '', entradaReferencia: new Date(entradaAberta.data).getTime() });
-    alert(`✅ Saída registrada para ${jovem['NOME']} às ${now.toLocaleTimeString('pt-BR')} (${horasArredondadas.toFixed(2)}h)`);
+        entradaAberta.horas = parseFloat(horasArredondadas.toFixed(2));
+        entradaAberta.horaSaida = now.toISOString();
+        hist.push({ data: now.toISOString(), horas: 0, tipo: 'saida', observacao: '', entradaReferencia: new Date(entradaAberta.data).getTime() });
+        alert(`✅ Saída registrada para ${jovem['NOME']} às ${now.toLocaleTimeString('pt-BR')} (${horasArredondadas.toFixed(2)}h)`);
+    }
   } else {
-    hist.push({ data: now.toISOString(), horas: 0, tipo: 'entrada', observacao: '' });
+    hist.push({ data: now.toISOString(), horas: 0, tipo: 'entrada', observacao: jovem['MEDIDA'] === 'LA' ? 'Entrada (LA)' : '' });
     alert(`✅ Entrada registrada para ${jovem['NOME']} em ${now.toLocaleString('pt-BR')}`);
   }
 
   try {
     await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-    carregarLista(); renderizarDashboard();
+    await carregarTodosDados();
   } catch (err) { alert('Erro: ' + err.message); }
 }
 
@@ -1270,98 +1451,40 @@ async function registrarPontoDigital() {
   if (!id) return alert('Digite o código da digital.');
   const jovem = estado.jovens.find(j => j['ID_DIGITAL'] === id);
   if (!jovem) return alert('Código não encontrado.');
-  if (jovem['MEDIDA'] === 'LA') return alert('Medida LA não registra ponto digital por horas.');
   if (jovem.status === 'suspenso') return alert('Jovem está suspenso.');
+  if (jovem.status === 'concluído') return alert('Jovem já concluiu a medida.');
+  if (jovem['MEDIDA'] === 'Liberação') return alert('Jovem está liberado.');
   
   await registrarPontoNaLinha(jovem.id);
   document.getElementById('inputDigital').value = '';
 }
 
-// ================================================================
-// FICHA DO JOVEM E ACOMPANHAMENTO LA
-// ================================================================
-function popularSelectAcompInd() {
-  const select = document.getElementById('selectJovemAcomp');
-  if (!select) return;
-  select.innerHTML = '<option value="">Selecione um jovem...</option>' + estado.jovens.sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR')).map(j => `<option value="${j.id}">${j['NOME'] || j['REFERENCIA']} - ${j['MEDIDA'] || ''}</option>`).join('');
-}
-
-window.abrirFichaModal = function(id) {
-  const jovem = estado.jovens.find(j => j.id === id);
-  if (!jovem) return;
-  document.getElementById('fichaTitulo').textContent = `Ficha: ${jovem['NOME']}`;
-  
-  let acoesLAHTML = '';
-  if (jovem['MEDIDA'] === 'LA') {
-    const acoes = jovem.acoesLA || [];
-    const profs = estado.usuarios.filter(u => u.nivel === 'tecnico' || u.nivel === 'gestor');
-    
-    acoesLAHTML = `
-      <h3 style="margin-top:20px; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">Acompanhamento LA</h3>
-      <div style="margin-bottom:15px;">
-        <label style="font-weight:bold;">Profissional Responsável:</label>
-        <select onchange="vincularProfissionalLA('${jovem.id}', this.value)" style="padding:5px; border-radius:5px; margin-left:10px;">
-          <option value="">Não atribuído</option>
-          ${profs.map(p => `<option value="${p.id}" ${jovem.profissionalLA === p.id ? 'selected' : ''}>${p.nome}</option>`).join('')}
-        </select>
-      </div>
-      <ul style="list-style:none; padding:0;">
-        ${acoes.map(a => `
-          <li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center;">
-            <span style="${a.realizado ? 'text-decoration:line-through; color:#10b981;' : ''}">${a.texto}</span>
-            <button class="btn btn-${a.realizado ? 'success' : 'secondary'}" onclick="toggleAcaoLA('${jovem.id}', ${a.id})" style="padding:4px 8px; font-size:0.8rem;">${a.realizado ? '✅ Feito' : 'Marcar Feito'}</button>
-          </li>
-        `).join('')}
-      </ul>
-    `;
-  }
-
-  const hist = jovem.historicoFrequencia || [];
-  const totalHoras = hist.reduce((s, h) => s + parseNum(h.horas), 0);
-  
-  document.getElementById('fichaConteudo').innerHTML = `
-    <h3>Dados Pessoais</h3>
-    <div class="grid-campos">
-      ${CAMPOS.map(([key, label]) => `<div class="campo-item"><strong>${label}:</strong> ${jovem[key] || '-'}</div>`).join('')}
-    </div>
-    ${acoesLAHTML}
-    <div class="secao-historico">
-      <h4>Frequência (${hist.length} registros) | Total: ${jovem['MEDIDA'] === 'LA' ? 'N/A' : totalHoras.toFixed(1) + 'h'}</h4>
-      <ul>${hist.map(h => {
-        const tipoLabel = h.tipo === 'saida' ? '🚪 Saída' : '🚪 Entrada';
-        const horasLabel = h.tipo === 'saida' ? '' : `${h.horas || 0}h`;
-        return `<li>${tipoLabel} - ${new Date(h.data).toLocaleDateString('pt-BR')} ${new Date(h.data).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} ${horasLabel ? '- ' + horasLabel : ''} ${h.observacao || ''}</li>`;
-      }).join('') || '<li>Sem registros</li>'}</ul>
-    </div>
-  `;
-  document.getElementById('modalFicha').style.display = 'flex';
-}
-
-window.toggleAcaoLA = async function(jovemId, acaoId) {
-  const jovem = estado.jovens.find(j => j.id === jovemId);
-  const acao = jovem.acoesLA.find(a => a.id === acaoId);
-  acao.realizado = !acao.realizado;
-  await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-  abrirFichaModal(jovemId);
-  carregarLista();
-}
-
-window.vincularProfissionalLA = async function(jovemId, profId) {
-  const jovem = estado.jovens.find(j => j.id === jovemId);
-  jovem.profissionalLA = profId;
-  await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-  alert('Profissional vinculado com sucesso!');
-}
-
-// ================================================================
-// REGISTRO MANUAL E OBSERVAÇÃO
-// ================================================================
+// ============================================================
+// REGISTRO MANUAL
+// ============================================================
 function abrirRegistroManual() {
   const select = document.getElementById('manualJovem');
   if (!select) return;
-  select.innerHTML = estado.jovens.filter(j => j['MEDIDA'] !== 'Liberação' && j['MEDIDA'] !== 'LA' && j.status !== 'suspenso').sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR')).map(j => `<option value="${j.id}">${j['NOME'] || j['REFERENCIA']}</option>`).join('');
+  
+  const jovensDisponiveis = estado.jovens.filter(j => 
+    j['MEDIDA'] !== 'Liberação' && 
+    j.status !== 'suspenso' && 
+    j.status !== 'concluído'
+  );
+  
+  if (jovensDisponiveis.length === 0) {
+    alert('Não há jovens disponíveis para registro manual.');
+    select.innerHTML = '<option value="">Nenhum jovem disponível</option>';
+  } else {
+    select.innerHTML = jovensDisponiveis
+      .sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR'))
+      .map(j => `<option value="${j.id}">${j['NOME'] || j['REFERENCIA']} - ${j['MEDIDA'] || ''} ${j.status === 'descumprimento' ? '⚠️' : ''} ${j['MEDIDA'] === 'LA' ? '📋' : ''}</option>`)
+      .join('');
+  }
+  
   document.getElementById('modalRegistroManual').style.display = 'flex';
-  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  const now = new Date(); 
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   document.getElementById('manualDataHora').value = now.toISOString().slice(0, 16);
 }
 
@@ -1374,27 +1497,73 @@ async function salvarRegistroManual() {
 
   const jovem = estado.jovens.find(j => j.id === jovemId);
   if (!jovem) return;
+  
+  if (jovem.status === 'suspenso') return alert('❌ Jovem está suspenso.');
+  if (jovem.status === 'concluído') return alert('❌ Jovem já concluiu a medida.');
+  if (jovem['MEDIDA'] === 'Liberação') return alert('❌ Jovem está liberado.');
+  
+  if (jovem.status === 'descumprimento') {
+      jovem.status = 'ativo';
+      jovem.dataDescumprimento = '';
+      if (!jovem.observacoes) jovem.observacoes = [];
+      jovem.observacoes.push({
+          data: new Date().toISOString(),
+          profissional: estado.usuarioAtual?.nome || 'Sistema',
+          texto: '✅ Jovem reativado automaticamente ao registrar presença manual.'
+      });
+  }
+  
   jovem.historicoFrequencia = jovem.historicoFrequencia || [];
   
   const dataEntradaDate = new Date(dataEntrada);
-  jovem.historicoFrequencia.push({ data: dataEntradaDate.toISOString(), horas: horas, tipo: 'entrada', observacao: obs });
+  
+  if (jovem['MEDIDA'] === 'LA') {
+      jovem.historicoFrequencia.push({ 
+        data: dataEntradaDate.toISOString(), 
+        horas: 0, 
+        tipo: 'entrada', 
+        observacao: obs || 'Registro manual (LA)'
+      });
+      
+      const dataSaida = new Date(dataEntradaDate.getTime() + 30 * 60 * 1000);
+      jovem.historicoFrequencia.push({ 
+        data: dataSaida.toISOString(), 
+        horas: 0, 
+        tipo: 'saida', 
+        observacao: 'Saída (LA)', 
+        entradaReferencia: dataEntradaDate.getTime() 
+      });
+  } else {
+      jovem.historicoFrequencia.push({ 
+        data: dataEntradaDate.toISOString(), 
+        horas: horas, 
+        tipo: 'entrada', 
+        observacao: obs || 'Registro manual'
+      });
 
-  if (horas > 0) {
-    const dataSaida = new Date(dataEntradaDate.getTime() + horas * 60 * 60 * 1000);
-    jovem.historicoFrequencia.push({ data: dataSaida.toISOString(), horas: 0, tipo: 'saida', observacao: '', entradaReferencia: dataEntradaDate.getTime() });
+      if (horas > 0) {
+        const dataSaida = new Date(dataEntradaDate.getTime() + horas * 60 * 60 * 1000);
+        jovem.historicoFrequencia.push({ 
+          data: dataSaida.toISOString(), 
+          horas: 0, 
+          tipo: 'saida', 
+          observacao: '', 
+          entradaReferencia: dataEntradaDate.getTime() 
+        });
+      }
   }
 
   try {
     await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
     document.getElementById('modalRegistroManual').style.display = 'none';
-    carregarLista(); renderizarDashboard();
-    alert(`Registro salvo: ${horas}h para ${jovem['NOME']}`);
+    await carregarTodosDados();
+    alert(`✅ Registro salvo para ${jovem['NOME']}`);
   } catch (err) { alert('Erro: ' + err.message); }
 }
 
-// ================================================================
-// IMPORTAR E EXPORTAR EXCEL (Original Mantido)
-// ================================================================
+// ============================================================
+// IMPORTAR PLANILHA
+// ============================================================
 async function importarPlanilha() {
   const input = document.createElement('input');
   input.type = 'file'; input.accept = '.xlsx,.xls,.csv';
@@ -1409,64 +1578,217 @@ async function importarPlanilha() {
 
     try {
       const data = await file.arrayBuffer();
-      const wb = XLSX.read(data);
+      const wb = XLSX.read(data, { cellStyles: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { raw: false });
+      const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
 
       const colMap = {};
       const headers = Object.keys(rows[0] || {});
+      
       headers.forEach(h => {
         const hNorm = h.toUpperCase().replace(/\s/g, '').replace(/[ÀÁÂÃÄÅ]/g,'A').replace(/[ÈÉÊË]/g,'E').replace(/[ÌÍÎÏ]/g,'I').replace(/[ÒÓÔÕÖ]/g,'O').replace(/[ÙÚÛÜ]/g,'U').replace(/Ç/g,'C');
         for (const [key] of CAMPOS) {
           const kNorm = key.toUpperCase().replace(/\s/g, '').replace(/[ÀÁÂÃÄÅ]/g,'A').replace(/[ÈÉÊË]/g,'E').replace(/[ÌÍÎÏ]/g,'I').replace(/[ÒÓÔÕÖ]/g,'O').replace(/[ÙÚÛÜ]/g,'U').replace(/Ç/g,'C');
-          if (hNorm.includes(kNorm) || kNorm.includes(hNorm)) { colMap[key] = h; break; }
+          if (hNorm.includes(kNorm) || kNorm.includes(hNorm)) { 
+            colMap[key] = h; 
+            break; 
+          }
         }
         if (hNorm.includes('ID') && hNorm.includes('DIGITAL')) colMap['ID_DIGITAL'] = h;
+        if (hNorm === 'REFERENCIA' || hNorm.includes('REFERENCIA')) colMap['REFERENCIA'] = h;
       });
 
-      let importados = 0; let duplicados = 0;
+      const colNome = colMap['NOME'] || 'NOME';
+
+      let importados = 0;
+      let atualizados = 0;
+      let erros = 0;
+      let ignorados = 0;
 
       for (const row of rows) {
-        const nome = row[colMap['NOME']] || row['NOME'];
-        if (!nome || nome === 'undefined') continue;
-
-        const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
-        let existe = false;
-        if (cpfPlanilha) { existe = estado.jovens.some(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha); } 
-        else { existe = estado.jovens.some(j => (j['NOME'] || '').toUpperCase() === nome.toUpperCase()); }
-
-        if (existe) { duplicados++; continue; }
-
-        const jovemId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        const jovem = { id: jovemId, status: 'ativo' };
-        CAMPOS.forEach(([key]) => {
-          const colName = colMap[key];
-          if (colName && row[colName] !== undefined) {
-            let val = String(row[colName] || '').trim();
-            if (key === 'GÊNERO') { if (val.toUpperCase().includes('MASC')) val = 'M'; else if (val.toUpperCase().includes('FEM')) val = 'F'; else val = 'NB'; }
-            if (key === 'HORAS' || key === 'MESES') val = parseFloat(val) || 0;
-            jovem[key] = val;
+        try {
+          const nome = row[colNome] || '';
+          if (!nome || nome === 'undefined' || nome === '') {
+            ignorados++;
+            continue;
           }
-        });
-        jovem['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || '').trim();
-        jovem.historicoFrequencia = []; jovem.observacoes = []; jovem.documentos = [];
-        
-        await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovem));
-        await upstash('SADD', 'jovens:all', jovemId);
-        importados++;
+          
+          const nomeUpper = nome.toUpperCase().trim();
+          if (nomeUpper.includes('NOVOS ADOLESCENTES') || 
+              nomeUpper.includes('REGULAR') || 
+              nomeUpper.includes('IRREGULAR') || 
+              nomeUpper.includes('EM DESCUMPRIMENTO') ||
+              nomeUpper.includes('CÓDIGOS FAMILIARES') ||
+              nomeUpper.includes('PACTUAÇÃO') ||
+              nomeUpper.includes('MEDIDA FINALIZADA')) {
+            ignorados++;
+            continue;
+          }
+
+          const medida = row[colMap['MEDIDA']] || row['MEDIDA'] || '';
+          if (!medida && !nome) {
+            ignorados++;
+            continue;
+          }
+
+          const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
+          
+          let jovemExistente = null;
+          
+          if (cpfPlanilha && cpfPlanilha.length >= 11) {
+            jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
+          }
+          
+          if (!jovemExistente) {
+            jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nome.toUpperCase().trim());
+          }
+          
+          if (!jovemExistente) {
+            const nomeBusca = nome.toUpperCase().trim();
+            jovemExistente = estado.jovens.find(j => {
+              const jNome = (j['NOME'] || '').toUpperCase().trim();
+              return jNome === nomeBusca || jNome.includes(nomeBusca) || nomeBusca.includes(jNome);
+            });
+          }
+
+          if (jovemExistente) {
+            const jovemId = jovemExistente.id;
+            
+            const historicoFrequencia = jovemExistente.historicoFrequencia || [];
+            const observacoes = jovemExistente.observacoes || [];
+            const documentos = jovemExistente.documentos || [];
+            const acoesLA = jovemExistente.acoesLA || [];
+            const profissionalLA = jovemExistente.profissionalLA || '';
+            
+            const jovemAtualizado = { 
+              id: jovemId, 
+              profissionalLA: profissionalLA,
+              historicoFrequencia: historicoFrequencia,
+              observacoes: observacoes,
+              documentos: documentos,
+              acoesLA: acoesLA,
+              status: jovemExistente.status || 'ativo'
+            };
+            
+            CAMPOS.forEach(([key]) => {
+              const colName = colMap[key];
+              let valor = '';
+              
+              if (colName && row[colName] !== undefined && row[colName] !== '') {
+                valor = String(row[colName] || '').trim();
+              } else if (row[key] !== undefined && row[key] !== '') {
+                valor = String(row[key] || '').trim();
+              } else if (jovemExistente[key] !== undefined) {
+                valor = jovemExistente[key];
+              }
+              
+              if (key === 'GÊNERO' && valor) {
+                if (valor.toUpperCase().includes('MASC')) valor = 'M';
+                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
+                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
+              }
+              if ((key === 'HORAS' || key === 'MESES') && valor) {
+                valor = parseFloat(String(valor).replace(',', '.')) || 0;
+              }
+              if (key === 'IDADE' && valor) {
+                valor = parseInt(valor) || 0;
+              }
+              
+              jovemAtualizado[key] = valor;
+            });
+            
+            jovemAtualizado['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || jovemExistente['ID_DIGITAL'] || '').trim();
+            jovemAtualizado['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || jovemExistente['REFERENCIA'] || '').trim();
+            
+            await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
+            
+            const index = estado.jovens.findIndex(j => j.id === jovemId);
+            if (index !== -1) {
+              estado.jovens[index] = jovemAtualizado;
+            }
+            
+            atualizados++;
+            
+          } else {
+            const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            const novoJovem = { 
+              id: novoId, 
+              status: 'ativo',
+              historicoFrequencia: [],
+              observacoes: [],
+              documentos: [],
+              acoesLA: []
+            };
+            
+            CAMPOS.forEach(([key]) => {
+              const colName = colMap[key];
+              let valor = '';
+              
+              if (colName && row[colName] !== undefined && row[colName] !== '') {
+                valor = String(row[colName] || '').trim();
+              } else if (row[key] !== undefined && row[key] !== '') {
+                valor = String(row[key] || '').trim();
+              }
+              
+              if (key === 'GÊNERO' && valor) {
+                if (valor.toUpperCase().includes('MASC')) valor = 'M';
+                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
+                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
+              }
+              if ((key === 'HORAS' || key === 'MESES') && valor) {
+                valor = parseFloat(String(valor).replace(',', '.')) || 0;
+              }
+              if (key === 'IDADE' && valor) {
+                valor = parseInt(valor) || 0;
+              }
+              
+              novoJovem[key] = valor;
+            });
+            
+            novoJovem['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || '').trim();
+            novoJovem['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || '').trim();
+            
+            if (novoJovem['NOME']) {
+              await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
+              await upstash('SADD', 'jovens:all', novoId);
+              estado.jovens.push(novoJovem);
+              importados++;
+            } else {
+              ignorados++;
+            }
+          }
+          
+        } catch (rowError) {
+          console.error('Erro ao processar linha:', row, rowError);
+          erros++;
+        }
       }
 
       await carregarTodosDados();
-      statusDiv.style.background = '#d1fae5'; statusDiv.style.color = '#065f46';
-      statusDiv.textContent = `✅ Importação concluída! ${importados} adicionados (${duplicados} ignorados).`;
+      
+      let mensagem = `✅ Importação concluída!`;
+      if (importados > 0) mensagem += ` ${importados} novos adicionados.`;
+      if (atualizados > 0) mensagem += ` ${atualizados} atualizados.`;
+      if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas.`;
+      if (erros > 0) mensagem += ` ⚠️ ${erros} erros.`;
+      
+      statusDiv.style.background = '#d1fae5';
+      statusDiv.style.color = '#065f46';
+      statusDiv.textContent = mensagem;
+      
     } catch (err) {
-      statusDiv.style.background = '#fee2e2'; statusDiv.style.color = '#991b1b';
+      statusDiv.style.background = '#fee2e2';
+      statusDiv.style.color = '#991b1b';
       statusDiv.textContent = '❌ Erro: ' + err.message;
+      console.error('Erro na importação:', err);
     }
   };
   input.click();
 }
 
+// ============================================================
+// EXPORTAR EXCEL
+// ============================================================
 function exportarExcel() {
   const data = estado.jovens.map(j => ({
     Nome: j['NOME'] || j['REFERENCIA'], 
@@ -1474,21 +1796,91 @@ function exportarExcel() {
     Idade: j['IDADE'], 
     Medida: j['MEDIDA'],
     Saldo: calcularSaldo(j), 
+    Status: j.status || 'ativo',
+    Motivo: j.motivoSuspensao || '',
     Frequências: (j.historicoFrequencia || []).length,
-    Status: j.status || 'ativo'
+    'Ações LA': (j.acoesLA || []).filter(a => a.realizado).length + '/' + (j.acoesLA || []).length
   }));
   const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Jovens');
   XLSX.writeFile(wb, `relatorio_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-// ================================================================
-// OFICINAS, PLANEJAMENTO E RELATÓRIO DE REVERTÊNCIA
-// ================================================================
+// ============================================================
+// PROFISSIONAIS
+// ============================================================
+function renderizarProfissionais() {
+    const div = document.getElementById('listaProfissionais');
+    if (!div) return;
+    
+    div.innerHTML = estado.profissionais.map(p => `
+        <div class="profissional-item" style="background:#f8fafc; border-radius:12px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border-left:4px solid #2c3e66;">
+            <div>
+                <strong>${p.nome || 'Sem nome'}</strong>
+                ${p.funcao ? `<span style="color:#6b7280; margin-left:8px;">${p.funcao}</span>` : ''}
+                ${p.registro ? `<span style="font-size:0.75rem; color:#6b7280; margin-left:8px;">Reg: ${p.registro}</span>` : ''}
+                ${p.numero ? `<span style="font-size:0.75rem; color:#6b7280; margin-left:8px;">Nº ${p.numero}</span>` : ''}
+            </div>
+            <div>
+                <button onclick="abrirModalExclusao('profissional', '${p.id}', '${p.nome}')" class="btn-sm btn-sm-danger">🗑️</button>
+            </div>
+        </div>
+    `).join('');
+    
+    if (estado.profissionais.length === 0) {
+        div.innerHTML = '<p style="color:#6b7280; text-align:center; padding:20px;">Nenhum profissional cadastrado.</p>';
+    }
+}
+
+async function salvarProfissional() {
+    const nome = document.getElementById('profNome').value.trim();
+    if (!nome) {
+        alert('Preencha o nome do profissional.');
+        return;
+    }
+    
+    const profissional = {
+        id: 'prof_' + Date.now(),
+        nome: nome,
+        funcao: document.getElementById('profFuncao').value.trim(),
+        registro: document.getElementById('profRegistro').value.trim(),
+        numero: document.getElementById('profNumero').value.trim()
+    };
+    
+    try {
+        await upstash('SET', `profissional:${profissional.id}`, JSON.stringify(profissional));
+        await upstash('SADD', 'profissionais:all', profissional.id);
+        estado.profissionais.push(profissional);
+        
+        document.getElementById('profNome').value = '';
+        document.getElementById('profFuncao').value = '';
+        document.getElementById('profRegistro').value = '';
+        document.getElementById('profNumero').value = '';
+        
+        renderizarProfissionais();
+        alert('✅ Profissional salvo com sucesso!');
+    } catch (err) {
+        alert('Erro ao salvar profissional: ' + err.message);
+    }
+}
+
+// ============================================================
+// OFICINAS
+// ============================================================
 function renderizarJovensOficina() {
   const div = document.getElementById('listaJovensOficina'); if (!div) return;
-  const jovens = estado.jovens.filter(j => j['MEDIDA'] !== 'Liberação' && j.status !== 'suspenso').sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR'));
+  const jovens = estado.jovens.filter(j => j['MEDIDA'] !== 'Liberação' && j.status !== 'suspenso' && j.status !== 'descumprimento' && j.status !== 'concluído')
+    .sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR'));
   div.innerHTML = jovens.map(j => `<label class="jovem-checkbox"><input type="checkbox" value="${j.id}"><span class="jovem-nome">${j['NOME'] || j['REFERENCIA']}</span></label>`).join('');
+}
+
+function filtrarJovensOficina() {
+  const busca = document.getElementById('buscaJovensOficina').value.toLowerCase();
+  const labels = document.querySelectorAll('#listaJovensOficina .jovem-checkbox');
+  labels.forEach(label => {
+    const nome = label.querySelector('.jovem-nome').textContent.toLowerCase();
+    label.style.display = nome.includes(busca) ? '' : 'none';
+  });
 }
 
 async function salvarOficina() {
@@ -1497,7 +1889,6 @@ async function salvarOficina() {
   const conteudo = document.getElementById('oficinaConteudo').value.trim();
   const reverte = document.getElementById('oficinaReverte').checked;
   
-  // Regra de Cursos Obrigatórios
   const isCurso = document.getElementById('oficinaCursoObg')?.checked;
   const abateHoras = isCurso ? document.getElementById('oficinaGeraHoras')?.checked : true;
 
@@ -1513,9 +1904,14 @@ async function salvarOficina() {
     if (abateHoras) {
       for (const jId of jovensPresentes) {
         const j = estado.jovens.find(x => x.id === jId);
-        if (j && j['MEDIDA'] !== 'LA') {
+        if (j && j['MEDIDA'] !== 'LA' && j.status !== 'concluído') {
           j.historicoFrequencia = j.historicoFrequencia || [];
-          j.historicoFrequencia.push({ data: new Date().toISOString(), horas: 4, tipo: 'entrada', observacao: 'Oficina: ' + conteudo });
+          j.historicoFrequencia.push({ 
+            data: new Date().toISOString(), 
+            horas: 4, 
+            tipo: 'entrada', 
+            observacao: `Oficina: ${conteudo}${isCurso ? ' (Curso Obrigatório)' : ''}` 
+          });
           await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
         }
       }
@@ -1524,8 +1920,8 @@ async function salvarOficina() {
     renderizarOficinas(); 
     document.getElementById('oficinaConteudo').value = ''; 
     document.querySelectorAll('#listaJovensOficina input').forEach(cb => cb.checked = false); 
-    alert('Oficina salva!');
-    carregarTodosDados();
+    alert('✅ Oficina salva!');
+    await carregarTodosDados();
   } catch (err) { alert('Erro: ' + err.message); }
 }
 
@@ -1535,102 +1931,169 @@ function renderizarOficinas() {
   div.innerHTML = estado.oficinas.slice().reverse().map(o => {
     const dataFmt = new Date(o.data).toLocaleDateString('pt-BR');
     const jovensNomes = (o.jovensIds || []).map(id => { const j = estado.jovens.find(x => x.id === id); return j ? (j['NOME'] || j['REFERENCIA']) : 'Desconhecido'; });
-    return `<div class="oficina-card"><div class="oficina-header"><div><strong>📅 ${dataFmt}</strong><span style="margin-left:8px; color:#6b7280;">${o.periodo}</span><span class="${o.reverte ? 'badge-reverte' : 'badge-nao-reverte'}" style="margin-left:8px;">${o.reverte ? '✅ Benefício social' : 'Normal'}</span></div><div><span style="font-size:0.85rem; color:#3b82f6;">👥 ${jovensNomes.length} jovens</span><button onclick="abrirModalExclusao('oficina','${o.id}', '${o.conteudo}')" class="btn-action btn-danger" style="margin-left:8px;">🗑️</button></div></div><div class="oficina-conteudo">${o.conteudo}</div><div class="oficina-jovens-lista">${jovensNomes.length > 0 ? jovensNomes.map(n => `<span class="jovem-tag">${n}</span>`).join('') : '<span style="color:#9ca3af;">Nenhum jovem presente</span>'}</div></div>`;
+    return `<div class="oficina-card ${o.reverte ? 'reverte' : ''}">
+      <div class="info">
+        <div class="titulo">${o.conteudo}</div>
+        <div class="detalhes">
+          <span><i class="far fa-calendar-alt"></i> ${dataFmt} - ${o.periodo}</span>
+          <span><i class="fas fa-users"></i> ${jovensNomes.length} jovens</span>
+          ${o.reverte ? '<span class="tag tag-green"><i class="fas fa-check-circle"></i> Reverte em benefício social</span>' : ''}
+          ${o.isCurso ? '<span class="tag tag-blue">📚 Curso Obrigatório</span>' : ''}
+        </div>
+        <div class="tags" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
+          ${jovensNomes.map(n => `<span class="tag">${n}</span>`).join('')}
+        </div>
+      </div>
+      <div>
+        <button onclick="abrirModalExclusao('oficina','${o.id}', '${o.conteudo}')" class="btn-sm btn-sm-danger">🗑️</button>
+      </div>
+    </div>`;
   }).join('');
 }
 
-window.abrirRelatorioRevertencia = function() {
-  const ofs = estado.oficinas.filter(o => o.reverte);
-  let html = `<html><head><title>Relatório de Revertência</title><style>body{font-family:sans-serif; padding:20px;}</style></head><body><h2>🌱 Relatório de Oficinas com Benefício Social</h2>`;
-  html += ofs.map(o => {
-    const jovens = o.jovensIds.map(id => estado.jovens.find(j=>j.id===id)?.['NOME']).join(', ');
-    return `<div style="border-bottom:1px solid #ccc; padding:10px 0;"><strong>${new Date(o.data).toLocaleDateString('pt-BR')} - ${o.conteudo}</strong><br>Participantes: ${jovens || 'Nenhum'}</div>`;
-  }).join('');
-  html += `</body></html>`;
-  window.open('','_blank').document.write(html);
-}
-
-window.salvarPlanejamento = async function() {
-  const titulo = document.getElementById('planTitulo').value;
-  const descricao = document.getElementById('planDesc').value;
-  const materiais = document.getElementById('planMats').value;
-  if(!titulo) return alert('Insira um título');
+// ============================================================
+// PLANEJAMENTO DE OFICINAS
+// ============================================================
+async function salvarPlanejamento() {
+  const data = document.getElementById('planData').value;
+  const periodo = document.getElementById('planPeriodo').value;
+  const titulo = document.getElementById('planTitulo').value.trim();
+  const descricao = document.getElementById('planDesc').value.trim();
+  const materiais = document.getElementById('planMats').value.trim();
+  const reverte = document.getElementById('planReverte').checked;
   
-  const plan = { id: 'plan_'+Date.now(), titulo, descricao, materiais };
+  if(!data || !titulo) return alert('Preencha a data e o título da oficina.');
+  
+  const plan = { 
+    id: 'plan_'+Date.now(), 
+    data, 
+    periodo, 
+    titulo, 
+    descricao, 
+    materiais, 
+    reverte,
+    realizada: false,
+    dataCriacao: new Date().toISOString()
+  };
+  
   await upstash('SET', `planejamento:${plan.id}`, JSON.stringify(plan));
   await upstash('SADD', 'planejamentos:all', plan.id);
   estado.planejamentos.push(plan);
   
-  document.getElementById('planTitulo').value = ''; document.getElementById('planDesc').value = ''; document.getElementById('planMats').value = '';
-  renderizarPlanejamentos(); alert('Planejamento salvo!');
+  document.getElementById('planData').value = '';
+  document.getElementById('planTitulo').value = '';
+  document.getElementById('planDesc').value = '';
+  document.getElementById('planMats').value = '';
+  document.getElementById('planReverte').checked = false;
+  
+  renderizarPlanejamentos();
+  alert('✅ Planejamento salvo!');
+}
+
+window.converterPlanejamentoEmOficina = function(planId) {
+  const plan = estado.planejamentos.find(p => p.id === planId);
+  if (!plan) return alert('Planejamento não encontrado.');
+  
+  document.getElementById('oficinaData').value = plan.data;
+  document.getElementById('oficinaPeriodo').value = plan.periodo;
+  document.getElementById('oficinaConteudo').value = `${plan.titulo}\n${plan.descricao || ''}`;
+  document.getElementById('oficinaReverte').checked = plan.reverte;
+  
+  navigateTo('pageOficinas');
+  
+  plan.realizada = true;
+  upstash('SET', `planejamento:${plan.id}`, JSON.stringify(plan));
+  
+  alert('✅ Planejamento convertido! Preencha os jovens presentes e salve a oficina.');
+  renderizarPlanejamentos();
 }
 
 function renderizarPlanejamentos() {
   const listaHTML = document.getElementById('listaPlanejamentosHTML');
-  if (listaHTML) {
-    listaHTML.innerHTML = estado.planejamentos.map(p => `
-      <div style="background:#fff; border:1px solid #e2e8f0; border-left:4px solid #3b82f6; padding:15px; border-radius:8px;">
-        <h4 style="margin-bottom:5px;">${p.titulo}</h4><p style="color:#6b7280; font-size:0.9rem; margin-bottom:10px;">${p.descricao}</p>
-        <p style="font-size:0.85rem;"><strong>Materiais:</strong> ${p.materiais}</p>
-        <button class="btn btn-danger" style="margin-top:10px;" onclick="abrirModalExclusao('planejamento', '${p.id}', '${p.titulo}')">Excluir</button>
+  if (!listaHTML) return;
+  
+  const podeConverter = NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel) || estado.usuarioAtual?.nivel === 'oficineiro';
+  
+  listaHTML.innerHTML = estado.planejamentos.filter(p => !p.realizada).map(p => `
+    <div style="background:#fff; border:1px solid #e2e8f0; border-left:4px solid ${p.reverte ? '#10b981' : '#3b82f6'}; padding:16px; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+        <div style="flex:1;">
+          <h4 style="color:#1e2a4a; margin-bottom:4px;">${p.titulo}</h4>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:0.85rem; color:#6b7280; margin-bottom:6px;">
+            <span>📅 ${new Date(p.data).toLocaleDateString('pt-BR')}</span>
+            <span>🕐 ${p.periodo}</span>
+            ${p.reverte ? '<span style="color:#10b981;">✅ Reverte em benefício social</span>' : ''}
+          </div>
+          ${p.descricao ? `<p style="color:#475569; font-size:0.9rem; margin-bottom:6px;">${p.descricao}</p>` : ''}
+          ${p.materiais ? `<p style="font-size:0.8rem; color:#6b7280;"><strong>Materiais:</strong> ${p.materiais}</p>` : ''}
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          ${podeConverter ? `<button class="btn-sm btn-sm-success" onclick="converterPlanejamentoEmOficina('${p.id}')">🔄 Converter</button>` : ''}
+          <button class="btn-sm btn-sm-danger" onclick="abrirModalExclusao('planejamento', '${p.id}', '${p.titulo}')">🗑️</button>
+        </div>
       </div>
-    `).join('');
-  }
+    </div>
+  `).join('') || '<p style="color:#6b7280; text-align:center; padding:20px;">Nenhum planejamento salvo.</p>';
 }
 
-// ================================================================
-// EVENT LISTENERS E INICIALIZAÇÃO
-// ================================================================
-document.addEventListener('DOMContentLoaded', () => {
-  injetarHTMLDinamico();
-
-  document.getElementById('loginBtn')?.addEventListener('click', fazerLogin);
-  document.getElementById('loginSenha')?.addEventListener('keypress', e => { if (e.key === 'Enter') fazerLogin(); });
+// ============================================================
+// RELATÓRIO DE REVERTÊNCIA
+// ============================================================
+window.abrirRelatorioRevertencia = function() {
+  const ofs = estado.oficinas.filter(o => o.reverte);
+  let html = `<html><head><title>Relatório de Revertência</title><style>
+    body{font-family:'Segoe UI',Arial,sans-serif; padding:30px; background:#f0f4f8;}
+    .container{max-width:900px; margin:0 auto; background:white; border-radius:12px; padding:30px; box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+    h1{color:#2c3e66; border-bottom:3px solid #10b981; padding-bottom:10px;}
+    table{width:100%; border-collapse:collapse; margin-top:15px;}
+    th{background:#f1f5f9; color:#1e293b; font-weight:600; padding:10px 12px; text-align:left; border-bottom:2px solid #e2e8f0;}
+    td{padding:8px 12px; border-bottom:1px solid #f1f5f9;}
+    .badge{display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; background:#10b981; color:white;}
+    .total{background:#ecfdf5; padding:15px; border-radius:8px; margin-top:20px; border:1px solid #10b981;}
+  </style></head><body>
+  <div class="container">
+    <h1>🌱 Relatório de Oficinas Revertidas em Benefício Social</h1>
+    <p style="color:#6b7280; margin:10px 0;">Oficinas que geraram benefício direto à sociedade.</p>
+    <p style="color:#6b7280; font-size:0.9rem;">Total: <strong>${ofs.length}</strong> oficinas revertidas</p>`;
   
-  document.getElementById('logoutBtn')?.addEventListener('click', deslogarSistema);
-
-  const cadastroLink = document.getElementById('mostrarCadastroBtn');
-  if (cadastroLink) {
-    cadastroLink.addEventListener('click', (e) => {
-      e.preventDefault(); document.getElementById('telaLogin').style.display = 'none'; document.getElementById('telaCadastro').style.display = 'block';
+  if (ofs.length > 0) {
+    html += `<table>
+      <thead><tr><th>Data</th><th>Período</th><th>Conteúdo</th><th>Participantes</th></tr></thead>
+      <tbody>`;
+    ofs.forEach(o => {
+      const jovens = o.jovensIds.map(id => estado.jovens.find(j=>j.id===id)?.['NOME']).filter(Boolean).join(', ');
+      html += `<tr>
+        <td>${new Date(o.data).toLocaleDateString('pt-BR')}</td>
+        <td>${o.periodo || '-'}</td>
+        <td>${o.conteudo}</td>
+        <td>${jovens || 'Nenhum'}</td>
+      </tr>`;
     });
+    html += `</tbody></table>`;
+    
+    const todosJovens = new Set();
+    ofs.forEach(o => o.jovensIds.forEach(id => todosJovens.add(id)));
+    html += `<div class="total"><strong>📊 Jovens beneficiados:</strong> ${todosJovens.size} jovens únicos</div>`;
+  } else {
+    html += `<p style="color:#6b7280;">Nenhuma oficina revertida encontrada.</p>`;
   }
   
-  document.getElementById('voltarLoginBtn')?.addEventListener('click', () => {
-    document.getElementById('telaCadastro').style.display = 'none'; document.getElementById('telaLogin').style.display = 'block';
-  });
-  
-  document.getElementById('cadastrarBtn')?.addEventListener('click', cadastrarUsuario);
+  html += `<div style="margin-top:20px; text-align:center; color:#94a3b8; font-size:0.8rem;">Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+  </div></body></html>`;
+  const win = window.open('','_blank');
+  if (win) { win.document.write(html); win.document.close(); }
+}
 
-  document.getElementById('salvarBtn')?.addEventListener('click', salvarJovem);
-  document.getElementById('importarExcelBtn')?.addEventListener('click', importarPlanilha);
-  document.getElementById('limparFormBtn')?.addEventListener('click', limparFormulario);
-
-  document.getElementById('btnPontoDigital')?.addEventListener('click', registrarPontoDigital);
-  document.getElementById('exportarExcelBtn')?.addEventListener('click', exportarExcel);
-  document.getElementById('registroManualBtn')?.addEventListener('click', abrirRegistroManual);
-  document.getElementById('manualSalvar')?.addEventListener('click', salvarRegistroManual);
-
-  document.getElementById('salvarOficinaBtn')?.addEventListener('click', salvarOficina);
-  
-  document.getElementById('btnAlterarLogo')?.addEventListener('click', function() { document.getElementById('modalAlterarLogo').style.display = 'flex'; });
-  document.getElementById('btnAlterarSenha')?.addEventListener('click', function() { document.getElementById('modalAlterarSenha').style.display = 'flex'; });
-
-  verificarLoginLocal();
-  renderizarCamposFormulario();
-});
-
-// ================================================================
-// RELATÓRIOS, OBSERVAÇÕES E ACOMPANHAMENTO INDIVIDUAL
-// ================================================================
-
-window.renderizarRelatorios = function() {
+// ============================================================
+// RELATÓRIOS
+// ============================================================
+function renderizarRelatorios() {
   const tbody1 = document.querySelector('#tabelaProjecao tbody');
   if (tbody1) {
     const agora = new Date();
     const HORAS_POR_QUINZENA = 8; 
     let saldos = estado.jovens
-      .filter(j => j['MEDIDA'] && j['MEDIDA'] !== 'Liberação' && j['MEDIDA'] !== 'LA' && j.status !== 'suspenso')
+      .filter(j => j['MEDIDA'] && j['MEDIDA'] !== 'Liberação' && j['MEDIDA'] !== 'LA' && j.status !== 'suspenso' && j.status !== 'descumprimento' && j.status !== 'concluído')
       .map(j => {
         const horasTotal = parseNum(j['HORAS']);
         const horasFeitas = (j.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
@@ -1662,7 +2125,7 @@ window.renderizarRelatorios = function() {
   const tbody2 = document.querySelector('#tabelaAniversariantes tbody');
   if (tbody2) {
     const agora = new Date(); const anoAtual = agora.getFullYear(); const mesAtual = agora.getMonth();
-    const aniversariantes = estado.jovens.filter(j => j['MEDIDA'] !== 'Liberação').map(j => {
+    const aniversariantes = estado.jovens.filter(j => j['MEDIDA'] !== 'Liberação' && j.status !== 'concluído').map(j => {
       const nascStr = j['NASC.']; if (!nascStr) return null; const nasc = new Date(nascStr); if (isNaN(nasc.getTime())) return null;
       const mesNasc = nasc.getMonth(); const diaNasc = nasc.getDate() + 1;
       let mesTarget = mesNasc; let anoTarget = anoAtual; if (mesNasc < mesAtual || (mesNasc === mesAtual && diaNasc < agora.getDate())) anoTarget = anoAtual + 1;
@@ -1673,16 +2136,508 @@ window.renderizarRelatorios = function() {
   }
 }
 
-window.renderizarAcompanhamento = function() {
-  const agora = new Date(); const tabela7 = document.getElementById('tabela7dias'); const tabela14 = document.getElementById('tabela14dias');
-  const semComparecimento = estado.jovens.filter(j => { if (j['MEDIDA'] === 'Liberação' || j.status === 'suspenso') return false; const hist = j.historicoFrequencia || []; if (hist.length === 0) return true; const ultimo = new Date(Math.max(...hist.map(h => new Date(h.data)))); return Math.floor((agora - ultimo) / (1000 * 60 * 60 * 24)) >= 7; });
-  const sem7 = semComparecimento.filter(j => { const hist = j.historicoFrequencia || []; if (hist.length === 0) return true; return Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) < 14; });
-  const sem14 = semComparecimento.filter(j => { const hist = j.historicoFrequencia || []; if (hist.length === 0) return true; return Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) >= 14; });
-  
-  if (tabela7) tabela7.innerHTML = sem7.map(j => { const hist = j.historicoFrequencia || []; const ultimo = hist.length > 0 ? new Date(Math.max(...hist.map(h => new Date(h.data)))).toLocaleDateString('pt-BR') : 'Nunca'; const dias = hist.length > 0 ? Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) : '?'; return `<tr><td>${j['NOME'] || '-'}</td><td>${ultimo}</td><td>${dias}</td><td><button onclick="abrirFichaModal('${j.id}')" class="btn-acao btn-ficha">📋</button></td></tr>`; }).join('');
-  if (tabela14) tabela14.innerHTML = sem14.map(j => { const hist = j.historicoFrequencia || []; const ultimo = hist.length > 0 ? new Date(Math.max(...hist.map(h => new Date(h.data)))).toLocaleDateString('pt-BR') : 'Nunca'; const dias = hist.length > 0 ? Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) : '?'; return `<tr><td>${j['NOME'] || '-'}</td><td>${ultimo}</td><td>${dias}</td><td><button onclick="abrirFichaModal('${j.id}')" class="btn-acao btn-ficha">📋</button></td></tr>`; }).join('');
+// ============================================================
+// AÇÕES LA – ABA ESPECÍFICA
+// ============================================================
+function renderizarAcoesLA() {
+    const lista = document.getElementById('listaAcoesLA');
+    const select = document.getElementById('laSelectJovem');
+    if (!lista || !select) return;
+
+    const jovensLA = estado.jovens.filter(j => j['MEDIDA'] === 'LA');
+    select.innerHTML = '<option value="">Selecione</option>' + jovensLA.map(j => `<option value="${j.id}">${j['NOME'] || 'Sem nome'}</option>`).join('');
+
+    const jovemId = select.value;
+    let acoes = [];
+    if (jovemId) {
+        const j = estado.jovens.find(x => x.id === jovemId);
+        if (j) acoes = j.acoesLA || [];
+    } else {
+        estado.jovens.forEach(j => {
+            if (j['MEDIDA'] === 'LA') {
+                (j.acoesLA || []).forEach(a => {
+                    acoes.push({ ...a, jovemNome: j['NOME'] || 'Sem nome', jovemId: j.id });
+                });
+            }
+        });
+    }
+    lista.innerHTML = acoes.map(a => `
+        <div style="background:#f8fafc; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center; border-left:4px solid ${a.realizado ? '#10b981' : '#f59e0b'};">
+            <div>
+                <div><strong>${a.texto}</strong></div>
+                <div style="font-size:0.8rem; color:#64748b;">
+                    ${a.jovemNome ? `Jovem: ${a.jovemNome} - ` : ''}
+                    Vence: ${a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : 'Sem prazo'}
+                    ${a.realizado ? '✅ Cumprido' : '⏳ Pendente'}
+                </div>
+            </div>
+            <div>
+                <button class="btn-sm btn-sm-success" onclick="toggleAcaoLaGeral('${a.jovemId || jovemId}', ${a.id})">
+                    ${a.realizado ? 'Desmarcar' : 'Marcar Feito'}
+                </button>
+                <button class="btn-sm btn-sm-danger" onclick="removerAcaoLaGeral('${a.jovemId || jovemId}', ${a.id})">🗑️</button>
+            </div>
+        </div>
+    `).join('') || '<p style="color:#6b7280;">Nenhuma ação cadastrada.</p>';
 }
 
+window.adicionarAcaoLA = async function() {
+    const jovemId = document.getElementById('laSelectJovem').value;
+    const acaoTexto = document.getElementById('laAcaoInput').value.trim();
+    const prazo = document.getElementById('laPrazoInput').value;
+    if (!jovemId) return alert('Selecione um jovem.');
+    if (!acaoTexto) return alert('Digite a ação.');
+    if (!prazo) return alert('Defina a data de vencimento.');
+
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) return alert('Jovem não encontrado.');
+    jovem.acoesLA = jovem.acoesLA || [];
+    jovem.acoesLA.push({
+        id: Date.now(),
+        texto: acaoTexto,
+        realizado: false,
+        data: new Date().toISOString(),
+        prazo: prazo
+    });
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        document.getElementById('laAcaoInput').value = '';
+        document.getElementById('laPrazoInput').value = '';
+        renderizarAcoesLA();
+        listarMetasLAProximas();
+        alert('Ação adicionada!');
+    } catch (err) { alert('Erro: ' + err.message); }
+};
+
+window.toggleAcaoLaGeral = async function(jovemId, acaoId) {
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) return alert('Jovem não encontrado.');
+    const acao = jovem.acoesLA.find(a => a.id === acaoId);
+    if (!acao) return alert('Ação não encontrada.');
+    acao.realizado = !acao.realizado;
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        renderizarAcoesLA();
+        listarMetasLAProximas();
+    } catch (err) { alert('Erro: ' + err.message); }
+};
+
+window.removerAcaoLaGeral = async function(jovemId, acaoId) {
+    if (!confirm('Remover esta ação?')) return;
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) return alert('Jovem não encontrado.');
+    jovem.acoesLA = jovem.acoesLA.filter(a => a.id !== acaoId);
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        renderizarAcoesLA();
+        listarMetasLAProximas();
+    } catch (err) { alert('Erro: ' + err.message); }
+};
+
+// ============================================================
+// USUÁRIOS E APROVAÇÕES
+// ============================================================
+async function cadastrarUsuario() {
+  const nome = document.getElementById('cadastroNome').value.trim();
+  const email = document.getElementById('cadastroEmail').value.trim();
+  const senha = document.getElementById('cadastroSenha').value.trim();
+  const senha2 = document.getElementById('cadastroSenhaConfirm').value.trim();
+  const nivel = document.getElementById('cadastroNivel').value;
+  
+  if (!nome || !email || !senha) return alert('Preencha todos os campos obrigatórios.');
+  if (senha !== senha2) return alert('As senhas não coincidem.');
+  if (senha.length < 6) return alert('Senha deve ter no mínimo 6 caracteres.');
+
+  try {
+    const user = { id: 'usr_' + Date.now(), nome, email, senha, nivel, status: 'pendente', cpf: '' };
+    await upstash('SET', `user:${user.id}`, JSON.stringify(user));
+    await upstash('SADD', 'users:all', user.id);
+    document.getElementById('cadastroSucesso').style.display = 'block';
+    document.getElementById('cadastroSucesso').textContent = 'Cadastro enviado! Aguarde aprovação.';
+    ['cadastroNome','cadastroEmail','cadastroSenha','cadastroSenhaConfirm'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+  } catch (err) { document.getElementById('cadastroErro').textContent = 'Erro: ' + err.message; }
+}
+
+let userParaVincular = null;
+
+function renderizarPendentes() {
+  const tbody = document.getElementById('listaPendentes');
+  if (!tbody) return;
+  const pendentes = estado.usuarios.filter(u => u.status !== 'ativo');
+  tbody.innerHTML = pendentes.map(u => `
+    <tr>
+      <td>${u.nome || '-'}</td><td>${u.email || '-'}</td><td>${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel || '-'}</td>
+      <td>
+        ${NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel) ? `
+          <button onclick="aprovarUsuario('${u.id}', '${u.nivel}')" class="btn-sm btn-sm-success">✅ Aprovar</button>
+          <button onclick="abrirModalExclusao('usuario', '${u.id}', '${u.nome}')" class="btn-sm btn-sm-danger">🗑️ Rejeitar</button>
+        ` : '<span style="color:#6b7280;">Aguardando aprovação</span>'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+window.aprovarUsuario = async function(id, nivel) {
+  const user = estado.usuarios.find(u => u.id === id);
+  if (!user) return;
+
+  if (nivel === 'jovem') {
+    userParaVincular = user;
+    const select = document.getElementById('selectVincularJovem');
+    select.innerHTML = '<option value="">Selecione o Jovem...</option>' + 
+      estado.jovens.map(j => `<option value="${j['CPF'] || j.id}">${j['NOME'] || j['REFERENCIA']} (CPF: ${j['CPF'] || 'Não informado'})</option>`).join('');
+    document.getElementById('modalVincularJovem').style.display = 'flex';
+  } else {
+    user.status = 'ativo';
+    try {
+      await upstash('SET', `user:${user.id}`, JSON.stringify(user));
+      await carregarTodosDados();
+      alert('✅ Usuário aprovado com sucesso!');
+    } catch (err) { alert('Erro: ' + err.message); }
+  }
+}
+
+function fecharModalVincular() {
+  document.getElementById('modalVincularJovem').style.display = 'none';
+  userParaVincular = null;
+}
+
+async function salvarVinculoJovem() {
+  const cpfOuId = document.getElementById('selectVincularJovem').value;
+  if (!cpfOuId) return alert('Selecione um jovem.');
+  
+  userParaVincular.cpf = cpfOuId; 
+  userParaVincular.status = 'ativo';
+  
+  try {
+    await upstash('SET', `user:${userParaVincular.id}`, JSON.stringify(userParaVincular));
+    fecharModalVincular();
+    await carregarTodosDados();
+    alert('✅ Jovem vinculado e aprovado com sucesso!');
+  } catch (err) { alert('Erro: ' + err.message); }
+}
+
+// ============================================================
+// ALTERAR NÍVEL DE ACESSO DE USUÁRIO
+// ============================================================
+window.alterarNivelUsuario = async function(userId, novoNivel) {
+    if (!['gestor', 'desenvolvedor'].includes(estado.usuarioAtual?.nivel)) {
+        alert('❌ Você não tem permissão para alterar níveis de acesso.');
+        return;
+    }
+    const user = estado.usuarios.find(u => u.id === userId);
+    if (!user) { alert('Usuário não encontrado.'); return; }
+    if (user.id === estado.usuarioAtual.id) { alert('❌ Você não pode alterar seu próprio nível de acesso.'); return; }
+    if (user.nivel === 'desenvolvedor' && estado.usuarioAtual.nivel !== 'desenvolvedor') {
+        alert('❌ Apenas desenvolvedores podem alterar o nível de outro desenvolvedor.');
+        return;
+    }
+    if (!confirm(`Tem certeza que deseja alterar o nível de ${user.nome} de "${user.nivel}" para "${novoNivel}"?`)) return;
+    const nivelAnterior = user.nivel;
+    user.nivel = novoNivel;
+    try {
+        await upstash('SET', `user:${user.id}`, JSON.stringify(user));
+        await carregarTodosDados();
+        alert(`✅ Nível de acesso alterado com sucesso!\n${user.nome}: ${nivelAnterior} → ${novoNivel}`);
+    } catch (err) { alert('Erro ao alterar nível: ' + err.message); }
+};
+
+// ============================================================
+// RENDERIZAR USUÁRIOS
+// ============================================================
+function renderizarUsuarios() {
+  const tbody = document.getElementById('listaUsuarios');
+  if (!tbody) return;
+  
+  const usuarioAtual = estado.usuarioAtual;
+  if (!usuarioAtual) return;
+  
+  const podeConfigurarHorarios = ['gestor', 'desenvolvedor', 'admin'].includes(usuarioAtual.nivel);
+  const podeAlterarNivel = ['gestor', 'desenvolvedor', 'admin'].includes(usuarioAtual.nivel);
+  
+  const usuariosAtivos = estado.usuarios.filter(u => u.status === 'ativo');
+  
+  if (usuariosAtivos.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#6b7280;">Nenhum usuário ativo encontrado.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = usuariosAtivos.map(u => {
+    const horarioInfo = u.horariosConfigurados ? '✅ Com horário' : '❌ Sem horário';
+    const isDesenvolvedor = u.nivel === 'desenvolvedor' || u.nivel === 'admin';
+    const isProprioUsuario = u.id === usuarioAtual.id;
+    
+    let botoesHorarios = '';
+    if (podeConfigurarHorarios) {
+      if (isProprioUsuario) {
+        botoesHorarios = `<button onclick="abrirModalHorarios('${u.id}')" class="btn-sm btn-sm-primary">👤 Meu Horário</button>`;
+      } else if (isDesenvolvedor) {
+        botoesHorarios = `<span style="font-size:0.65rem; color:#10b981;">🔓 Acesso irrestrito</span>`;
+      } else {
+        botoesHorarios = `<button onclick="abrirModalHorarios('${u.id}')" class="btn-sm btn-sm-warning">⏱️ Horários</button>`;
+      }
+    }
+    
+    let botoesNivel = '';
+    if (podeAlterarNivel && !isProprioUsuario && !isDesenvolvedor) {
+      const niveis = ['gestor', 'tecnico', 'oficineiro', 'autoridade', 'jovem'];
+      botoesNivel = `
+        <select onchange="alterarNivelUsuario('${u.id}', this.value)" style="padding:2px 6px; font-size:0.7rem; border:1px solid #d1d9e6; border-radius:4px;">
+          <option value="">Alterar Nível</option>
+          ${niveis.map(n => `<option value="${n}" ${u.nivel === n ? 'selected' : ''}>${NIVEIS_ACESSO[n]?.nome || n}</option>`).join('')}
+        </select>
+      `;
+    }
+    
+    const podeExcluir = NIVEIS_COM_STATUS.includes(usuarioAtual.nivel) && !isProprioUsuario;
+    const botaoExcluir = podeExcluir ? `<button onclick="abrirModalExclusao('usuario', '${u.id}', '${u.nome}')" class="btn-sm btn-sm-danger">🗑️</button>` : '';
+    
+    return `
+    <tr>
+      <td>${u.nome || '-'}</td>
+      <td>${u.email || '-'}</td>
+      <td>${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel || '-'} ${isDesenvolvedor ? ' 🛡️' : ''}</td>
+      <td><span style="color:#10b981;">${u.status}</span> ${u.horariosConfigurados ? `<span style="font-size:0.65rem; color:#6b7280; margin-left:5px; display:block;">${horarioInfo}</span>` : ''}</td>
+      <td style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+        ${botoesHorarios}
+        ${botoesNivel}
+        ${botaoExcluir}
+      </td>
+    </tr>
+  `}).join('');
+}
+
+// ============================================================
+// HORÁRIOS DE ACESSO - CONFIGURAÇÃO
+// ============================================================
+window.abrirModalHorarios = function(id) {
+  const u = estado.usuarios.find(x => x.id === id);
+  if (!u) { alert('Usuário não encontrado.'); return; }
+  estado.usuarioEdicaoHorario = u;
+  document.getElementById('nomeUserHorario').textContent = u.nome;
+  
+  const dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
+  const cfg = u.horarios || {};
+  
+  document.getElementById('gridHorarios').innerHTML = `
+    <div style="background:#f0fdf4; padding:10px; border-radius:8px; margin-bottom:12px; border:1px solid #86efac;">
+      <strong>👤 Configurando: ${u.nome}</strong>
+      <span style="margin-left:10px; font-size:0.8rem; color:#6b7280;">(${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel})</span>
+    </div>
+    <label style="font-weight:600; display:block; margin-bottom:8px;">
+      <input type="checkbox" id="horariosAtivosGlobais" ${u.horariosConfigurados ? 'checked' : ''}> 
+      Limitar Acesso por Horário
+    </label>
+    <div id="diasContainer" style="display:${u.horariosConfigurados ? 'block' : 'none'}; margin-top:10px;">
+      ${dias.map(d => `
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px; flex-wrap:wrap; background:#f8fafc; padding:6px 10px; border-radius:6px;">
+          <input type="checkbox" id="chk_${d}" ${cfg[d]?.ativo ? 'checked' : ''}>
+          <span style="width:70px; text-transform:capitalize; font-weight:500;">${d}</span>
+          <input type="time" id="ini_${d}" value="${cfg[d]?.inicio || '08:00'}" style="padding:4px 8px; border:1px solid #d1d9e6; border-radius:4px;">
+          <span>até</span>
+          <input type="time" id="fim_${d}" value="${cfg[d]?.fim || '17:00'}" style="padding:4px 8px; border:1px solid #d1d9e6; border-radius:4px;">
+        </div>
+      `).join('')}
+    </div>
+    <p style="font-size:0.75rem; color:#6b7280; margin-top:8px;">* O usuário só poderá acessar nos dias e horários configurados.</p>
+    <p style="font-size:0.75rem; color:#10b981; margin-top:4px;">* Desenvolvedores têm acesso irrestrito independente da configuração.</p>
+    ${u.nivel === 'desenvolvedor' || u.nivel === 'admin' ? `<p style="font-size:0.75rem; color:#f59e0b; margin-top:4px;">⚠️ Este usuário é desenvolvedor e tem acesso irrestrito.</p>` : ''}
+  `;
+  
+  document.getElementById('horariosAtivosGlobais').onchange = (e) => {
+    document.getElementById('diasContainer').style.display = e.target.checked ? 'block' : 'none';
+  };
+  
+  document.getElementById('modalHorarios').style.display = 'flex';
+}
+
+window.salvarHorariosUsuario = async function() {
+  const u = estado.usuarioEdicaoHorario;
+  if (!u) return;
+  
+  u.horariosConfigurados = document.getElementById('horariosAtivosGlobais').checked;
+  u.horarios = {};
+  ['segunda','terca','quarta','quinta','sexta'].forEach(d => {
+    u.horarios[d] = {
+      ativo: document.getElementById(`chk_${d}`).checked,
+      inicio: document.getElementById(`ini_${d}`).value,
+      fim: document.getElementById(`fim_${d}`).value
+    };
+  });
+  
+  try {
+    await upstash('SET', `user:${u.id}`, JSON.stringify(u));
+    document.getElementById('modalHorarios').style.display = 'none';
+    alert('✅ Horários de acesso salvos com sucesso!');
+    await carregarTodosDados();
+  } catch (err) {
+    alert('Erro ao salvar horários: ' + err.message);
+  }
+}
+
+async function salvarNovoUsuario() {
+  const nivel = document.getElementById('userNivel').value;
+  if (nivel === 'desenvolvedor') return alert('Não é possível cadastrar Desenvolvedor.');
+
+  const user = {
+    id: 'usr_' + Date.now(),
+    nome: document.getElementById('userNome').value.trim(),
+    email: document.getElementById('userEmail').value.trim(),
+    senha: document.getElementById('userSenha').value.trim(),
+    nivel,
+    status: 'ativo'
+  };
+  if (!user.nome || !user.email || !user.senha) return alert('Preencha todos os campos.');
+  try {
+    await upstash('SET', `user:${user.id}`, JSON.stringify(user));
+    await upstash('SADD', 'users:all', user.id);
+    estado.usuarios.push(user);
+    renderizarUsuarios();
+    ['userNome','userEmail','userSenha'].forEach(id => document.getElementById(id).value = '');
+  } catch (err) { alert('Erro: ' + err.message); }
+}
+
+// ============================================================
+// MENSAGENS
+// ============================================================
+function renderizarMensagens() {
+  const div = document.getElementById('listaMensagens');
+  if (!div) return;
+  
+  const destinatario = document.getElementById('msgDestinatario');
+  if (destinatario) {
+    const usuariosAtivos = estado.usuarios.filter(u => u.status === 'ativo' && u.id !== estado.usuarioAtual?.id);
+    const autoridades = usuariosAtivos.filter(u => u.nivel === 'autoridade' || u.nivel === 'gestor');
+    destinatario.innerHTML = '<option value="">Selecione um destinatário...</option>' + 
+      autoridades.map(u => `<option value="${u.id}">${u.nome} (${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel})</option>`).join('');
+  }
+  
+  const mensagens = estado.mensagens
+    .filter(m => m.para === estado.usuarioAtual?.id || m.de === estado.usuarioAtual?.id)
+    .sort((a, b) => new Date(b.data) - new Date(a.data));
+  
+  div.innerHTML = mensagens.length > 0 ? mensagens.map(m => {
+    const remetente = estado.usuarios.find(u => u.id === m.de);
+    const isParaMim = m.para === estado.usuarioAtual?.id;
+    return `
+      <div style="background:${isParaMim ? '#eff6ff' : '#f8fafc'}; border-radius:8px; padding:12px; margin-bottom:8px; border-left:4px solid ${isParaMim ? '#3b82f6' : '#6c757d'};">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div>
+            <strong>${remetente?.nome || 'Sistema'}</strong>
+            <span style="font-size:0.7rem; color:#6b7280; margin-left:8px;">${new Date(m.data).toLocaleString('pt-BR')}</span>
+          </div>
+          <span style="font-size:0.7rem; color:#6b7280;">${isParaMim ? '📩 Recebida' : '📤 Enviada'}</span>
+        </div>
+        <div style="font-weight:500; margin-top:4px;">${m.assunto}</div>
+        <div style="color:#475569; margin-top:4px;">${m.texto}</div>
+        ${m.anexos ? `<div style="font-size:0.7rem; color:#6b7280; margin-top:4px;">📎 ${m.anexos.length} anexo(s)</div>` : ''}
+      </div>
+    `;
+  }).join('') : '<p style="color:#6b7280; text-align:center; padding:20px;">Nenhuma mensagem encontrada.</p>';
+}
+
+async function enviarMensagem() {
+  const para = document.getElementById('msgDestinatario').value;
+  const assunto = document.getElementById('msgAssunto').value.trim();
+  const texto = document.getElementById('msgTexto').value.trim();
+  const anexos = document.getElementById('msgAnexos');
+  
+  if (!para) return alert('Selecione um destinatário.');
+  if (!assunto) return alert('Digite um assunto.');
+  if (!texto) return alert('Digite a mensagem.');
+  
+  const msg = {
+    id: 'msg_' + Date.now(),
+    de: estado.usuarioAtual.id,
+    para: para,
+    assunto: assunto,
+    texto: texto,
+    data: new Date().toISOString(),
+    lida: false
+  };
+  
+  try {
+    await upstash('SET', `mensagem:${msg.id}`, JSON.stringify(msg));
+    await upstash('SADD', 'mensagens:all', msg.id);
+    estado.mensagens.push(msg);
+    
+    document.getElementById('msgAssunto').value = '';
+    document.getElementById('msgTexto').value = '';
+    if (anexos) anexos.value = '';
+    
+    renderizarMensagens();
+    alert('✅ Mensagem enviada com sucesso!');
+  } catch (err) {
+    alert('Erro ao enviar mensagem: ' + err.message);
+  }
+}
+
+// ============================================================
+// EXCLUSÃO EM 2 PASSOS
+// ============================================================
+window.abrirModalExclusao = function(tipo, id, nome) {
+  estado.exclusaoPendente = { tipo, id };
+  document.getElementById('textoConfirmExclusao').textContent = `Você está prestes a apagar permanentemente os registros de: ${nome}`;
+  document.getElementById('modalConfirmExclusao').style.display = 'flex';
+}
+
+window.executarExclusao = async function() {
+  if (!estado.exclusaoPendente) return;
+  const { tipo, id } = estado.exclusaoPendente;
+  try {
+    if (tipo === 'jovem') {
+      await upstash('DEL', `jovem:${id}`); await upstash('SREM', 'jovens:all', id);
+      estado.jovens = estado.jovens.filter(j => j.id !== id);
+    } else if (tipo === 'usuario') {
+      await upstash('DEL', `user:${id}`); await upstash('SREM', 'users:all', id);
+      estado.usuarios = estado.usuarios.filter(u => u.id !== id);
+    } else if (tipo === 'oficina') {
+      await upstash('DEL', `oficina:${id}`); await upstash('SREM', 'oficinas:all', id);
+      estado.oficinas = estado.oficinas.filter(o => o.id !== id);
+    } else if (tipo === 'planejamento') {
+      await upstash('DEL', `planejamento:${id}`); await upstash('SREM', 'planejamentos:all', id);
+      estado.planejamentos = estado.planejamentos.filter(p => p.id !== id);
+    } else if (tipo === 'profissional') {
+      await upstash('DEL', `profissional:${id}`); await upstash('SREM', 'profissionais:all', id);
+      estado.profissionais = estado.profissionais.filter(p => p.id !== id);
+    }
+    document.getElementById('modalConfirmExclusao').style.display = 'none';
+    await carregarTodosDados();
+    alert('✅ Registro excluído com sucesso!');
+  } catch (err) { alert('Erro ao excluir: ' + err.message); }
+}
+
+// ============================================================
+// LOGO PERSONALIZADO
+// ============================================================
+async function carregarLogo() {
+  try {
+    const logoBase64 = await upstash('GET', 'config:logo');
+    if (logoBase64) {
+      document.getElementById('logoImg').src = logoBase64;
+      const logoLogin = document.getElementById('logoLogin');
+      if (logoLogin) { logoLogin.src = logoBase64; logoLogin.style.display = 'block'; }
+    }
+  } catch (e) { console.error('Erro ao carregar logo', e); }
+}
+function fecharModalLogo() { document.getElementById('modalAlterarLogo').style.display = 'none'; }
+async function salvarLogo() {
+  const fileInput = document.getElementById('novaLogoInput');
+  if (!fileInput.files[0]) return alert('Selecione uma imagem.');
+  try {
+    const base64 = await fileToBase64(fileInput.files[0]);
+    await upstash('SET', 'config:logo', base64);
+    document.getElementById('logoImg').src = base64;
+    alert('Logo atualizado com sucesso!');
+    fecharModalLogo();
+  } catch (err) { alert('Erro ao salvar logo: ' + err.message); }
+}
+
+// ============================================================
+// FUNÇÕES DE IMPRESSÃO, DOCUMENTOS E OBSERVAÇÕES
+// ============================================================
 window.carregarFichaIndividual = function() {
   const id = document.getElementById('selectJovemAcomp').value;
   const container = document.getElementById('fichaIndividual');
@@ -1696,7 +2651,7 @@ window.carregarFichaIndividual = function() {
   let acoesLAHTML = '';
   if (jovem['MEDIDA'] === 'LA') {
     const acoes = jovem.acoesLA || []; const profs = estado.usuarios.filter(u => u.nivel === 'tecnico' || u.nivel === 'gestor');
-    acoesLAHTML = `<h3 style="margin-top:20px; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">Acompanhamento LA</h3><div style="margin-bottom:15px;"><label style="font-weight:bold;">Técnico Responsável:</label><select onchange="vincularProfissionalLA('${jovem.id}', this.value)" style="padding:5px; border-radius:5px;"><option value="">Não atribuído</option>${profs.map(p => `<option value="${p.id}" ${jovem.profissionalLA === p.id ? 'selected' : ''}>${p.nome}</option>`).join('')}</select></div><ul style="list-style:none; padding:0;">${acoes.map(a => `<li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; margin-bottom:5px; display:flex; justify-content:space-between;"><span>${a.texto}</span><button class="btn btn-${a.realizado ? 'success' : 'secondary'}" onclick="toggleAcaoLATab('${jovem.id}', ${a.id})" style="padding:4px 8px; font-size:0.8rem;">${a.realizado ? '✅ Feito' : 'Marcar Feito'}</button></li>`).join('')}</ul>`;
+    acoesLAHTML = `<h3 style="margin-top:20px; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">Acompanhamento LA</h3><div style="margin-bottom:15px;"><label style="font-weight:bold;">Técnico Responsável:</label><select onchange="vincularProfissionalLA('${jovem.id}', this.value)" style="padding:5px; border-radius:5px;"><option value="">Não atribuído</option>${profs.map(p => `<option value="${p.id}" ${jovem.profissionalLA === p.id ? 'selected' : ''}>${p.nome}</option>`).join('')}</select></div><ul style="list-style:none; padding:0;">${acoes.map(a => `<li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; margin-bottom:5px; display:flex; justify-content:space-between;"><span>${a.texto}</span><button class="btn-sm btn-sm-primary" onclick="toggleAcaoLATab('${jovem.id}', ${a.id})">${a.realizado ? '✅ Feito' : 'Marcar Feito'}</button></li>`).join('')}</ul>`;
   }
 
   const dadosDiv = document.getElementById('fichaDadosPessoais'); if (dadosDiv) dadosDiv.innerHTML = `<div class="ficha-grid">${CAMPOS.map(([key, label]) => `<div class="ficha-campo"><strong>${label}:</strong> ${jovem[key] || '-'}</div>`).join('')}<div class="ficha-campo"><strong>ID Digital:</strong> ${jovem['ID_DIGITAL'] || '-'}</div></div>${acoesLAHTML}`;
@@ -1705,7 +2660,7 @@ window.carregarFichaIndividual = function() {
   
   const ofDiv = document.getElementById('fichaOficinas'); if (ofDiv) { const oficinasParticipadas = estado.oficinas.filter(o => (o.jovensIds || []).includes(jovem.id)); ofDiv.innerHTML = oficinasParticipadas.length > 0 ? `<table style="margin-top:12px; width:100%;"><thead><tr><th>Data</th><th>Conteúdo</th><th>Benefício Social</th></tr></thead><tbody>${oficinasParticipadas.map(o => `<tr><td>${new Date(o.data).toLocaleDateString('pt-BR')}</td><td>${o.conteudo}</td><td>${o.reverte ? '✅ Sim' : 'Não'}</td></tr>`).join('')}</tbody></table>` : '<p style="color:#6b7280;">Nenhuma oficina registrada.</p>'; }
   
-  const docDiv = document.getElementById('fichaDocumentos'); if (docDiv) { const docs = jovem.documentos || []; docDiv.innerHTML = docs.length > 0 ? docs.map((d, i) => `<div class="doc-item"><span>📄 ${d.nome} (${d.tipo})</span><div>${d.base64 ? `<a href="${d.base64}" download="${d.nome}" class="btn-acao btn-edit" style="text-decoration:none;">📥 Baixar</a>` : ''}<button onclick="removerDocumento('${id}', ${i})" class="btn-acao btn-danger">🗑️</button></div></div>`).join('') : '<p style="color:#6b7280;">Nenhum documento anexado.</p>'; }
+  const docDiv = document.getElementById('fichaDocumentos'); if (docDiv) { const docs = jovem.documentos || []; docDiv.innerHTML = docs.length > 0 ? docs.map((d, i) => `<div class="doc-item"><span>📄 ${d.nome} (${d.tipo})</span><div>${d.base64 ? `<a href="${d.base64}" download="${d.nome}" class="btn-sm btn-sm-primary" style="text-decoration:none;">📥 Baixar</a>` : ''}<button onclick="removerDocumento('${id}', ${i})" class="btn-sm btn-sm-danger">🗑️</button></div></div>`).join('') : '<p style="color:#6b7280;">Nenhum documento anexado.</p>'; }
   
   const obsDiv = document.getElementById('fichaObservacoes'); if (obsDiv) { const obs = jovem.observacoes || []; obsDiv.innerHTML = obs.length > 0 ? obs.map(o => `<div class="obs-item"><strong>${o.profissional || 'Sistema'}</strong> - <small>${new Date(o.data).toLocaleDateString('pt-BR')} ${new Date(o.data).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</small><p>${o.texto}</p></div>`).join('') : '<p style="color:#6b7280;">Nenhuma observação registrada.</p>'; }
   
@@ -1723,3 +2678,287 @@ window.salvarObsAcomp = async function() {
   jovem.observacoes = jovem.observacoes || []; jovem.observacoes.push({ data: new Date().toISOString(), profissional: estado.usuarioAtual?.nome || 'Sistema', texto });
   try { await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem)); document.getElementById('obsAcompTexto').value = ''; carregarFichaIndividual(); alert('Observação salva!'); } catch (err) { alert('Erro: ' + err.message); }
 }
+
+window.imprimirFichaIndividual = function() {
+    const id = document.getElementById('selectJovemAcomp').value;
+    if (!id) { alert('Selecione um jovem primeiro.'); return; }
+    const jovem = estado.jovens.find(j => j.id === id);
+    if (!jovem) { alert('Jovem não encontrado.'); return; }
+    
+    const win = window.open('', '_blank');
+    if (!win) { alert('Por favor, permita pop-ups para imprimir a ficha.'); return; }
+    
+    const logoImg = document.getElementById('logoImg');
+    let logoBase64 = '';
+    if (logoImg && logoImg.src && logoImg.src.startsWith('data:image')) {
+        logoBase64 = logoImg.src;
+    }
+    
+    let html = `
+    <!DOCTYPE html>
+    <html>
+    <head><title>Ficha Individual</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; padding: 40px; background: white; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2c3e66; padding-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .header-logo { max-height: 80px; max-width: 150px; object-fit: contain; }
+        .header h1 { color: #2c3e66; font-size: 22px; }
+        .section { margin-bottom: 20px; }
+        .section h2 { color: #2c3e66; font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+        .field { padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
+        .field strong { font-size: 11px; text-transform: uppercase; color: #6b7280; display: block; }
+        .field span { font-size: 13px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+        th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e9edf2; }
+        th { background: #f1f5f9; font-weight: 600; }
+        @media print { body { padding: 20px; } }
+    </style>
+    </head>
+    <body>
+        <div class="header">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="header-logo">` : ''}
+            <div>
+                <h1>📋 Ficha Individual</h1>
+                <p style="color:#6b7280;">${jovem['NOME'] || 'Sem nome'}</p>
+                <p style="color:#94a3b8; font-size:12px;">${new Date().toLocaleDateString('pt-BR')}</p>
+            </div>
+        </div>
+        <div class="section">
+            <h2>Dados Pessoais</h2>
+            <div class="grid">
+    `;
+    CAMPOS.forEach(([key, label]) => {
+        const valor = jovem[key] || '-';
+        html += `<div class="field"><strong>${label}</strong><span>${valor}</span></div>`;
+    });
+    html += `<div class="field"><strong>ID Digital</strong><span>${jovem['ID_DIGITAL'] || '-'}</span></div>`;
+    html += `</div></div>`;
+    
+    if (jovem['MEDIDA'] === 'LA') {
+        const acoes = jovem.acoesLA || [];
+        html += `<div class="section"><h2>Ações LA</h2>`;
+        acoes.forEach(a => {
+            html += `<div style="padding:6px; background:${a.realizado ? '#d1fae5' : '#f8fafc'}; margin-bottom:4px; border-radius:4px;"><span>${a.texto}</span> - <span style="color:${a.realizado ? '#065f46' : '#92400e'};">${a.realizado ? '✅ Cumprido' : '⏳ Pendente'}</span> <span style="font-size:0.7rem; color:#6b7280;">Vence: ${a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : 'Sem prazo'}</span></div>`;
+        });
+        html += `</div>`;
+    }
+    
+    const hist = jovem.historicoFrequencia || [];
+    const totalHoras = hist.reduce((s, h) => s + parseFloat(h.horas || 0), 0);
+    html += `<div class="section"><h2>Frequência</h2><p>Total: ${totalHoras.toFixed(1)}h | Saldo: ${calcularSaldo(jovem)}h</p>`;
+    if (hist.length > 0) {
+        html += `<table><thead><tr><th>Tipo</th><th>Data</th><th>Horas</th></tr></thead><tbody>`;
+        hist.forEach(h => {
+            html += `<tr><td>${h.tipo === 'saida' ? 'Saída' : 'Entrada'}</td><td>${new Date(h.data).toLocaleDateString('pt-BR')}</td><td>${h.tipo === 'saida' ? '-' : (h.horas || 0) + 'h'}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+    }
+    html += `</div></body></html>`;
+    
+    win.document.write(html);
+    win.document.close();
+};
+
+window.removerDocumento = async function(jovemId, index) {
+    if (!confirm('Tem certeza que deseja remover este documento?')) return;
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) return;
+    jovem.documentos = jovem.documentos || [];
+    jovem.documentos.splice(index, 1);
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        carregarFichaIndividual();
+        alert('Documento removido com sucesso!');
+    } catch (err) {
+        alert('Erro ao remover documento: ' + err.message);
+    }
+};
+
+window.adicionarDocumento = function() {
+    document.getElementById('modalDocumento').style.display = 'flex';
+    document.getElementById('docNome').value = '';
+    document.getElementById('docTipo').value = 'pdf';
+    document.getElementById('docArquivo').value = '';
+};
+
+window.fecharModalDocumento = function() {
+    document.getElementById('modalDocumento').style.display = 'none';
+};
+
+window.salvarDocumento = async function() {
+    const jovemId = window._jovemDocAtual;
+    if (!jovemId) { alert('Selecione um jovem primeiro.'); return; }
+    const nome = document.getElementById('docNome').value.trim();
+    const tipo = document.getElementById('docTipo').value;
+    const arquivo = document.getElementById('docArquivo').files[0];
+    if (!nome) { alert('Digite o nome do documento.'); return; }
+    if (!arquivo) { alert('Selecione um arquivo.'); return; }
+    try {
+        const base64 = await fileToBase64(arquivo);
+        const jovem = estado.jovens.find(j => j.id === jovemId);
+        if (!jovem) { alert('Jovem não encontrado.'); return; }
+        jovem.documentos = jovem.documentos || [];
+        jovem.documentos.push({ nome, tipo, base64, data: new Date().toISOString() });
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        fecharModalDocumento();
+        carregarFichaIndividual();
+        alert('Documento adicionado com sucesso!');
+    } catch (err) {
+        alert('Erro ao salvar documento: ' + err.message);
+    }
+};
+
+// ============================================================
+// EDIÇÃO DE JOVEM
+// ============================================================
+window.editarJovem = function(id) {
+    if (!id) { alert('ID do jovem não fornecido.'); return; }
+    const j = estado.jovens.find(x => x.id === id);
+    if (!j) { alert('Jovem não encontrado.'); return; }
+    
+    window._editarId = id;
+    
+    CAMPOS.forEach(([key]) => { 
+        const el = document.getElementById(`campo_${key}`); 
+        if (el) el.value = j[key] || ''; 
+    });
+    
+    const digitalEl = document.getElementById('campo_ID_DIGITAL');
+    if (digitalEl) digitalEl.value = j['ID_DIGITAL'] || '';
+    
+    acoesLATemporarias = j.acoesLA || [];
+    toggleAcoesLA();
+    atualizarListaAcoesLAForm();
+    
+    navigateTo('pageCadastro');
+    alert(`✏️ Editando jovem: ${j['NOME'] || 'Sem nome'}`);
+};
+
+// ============================================================
+// EXIBIR AVISO DE OBSERVAÇÕES (7 e 14 dias)
+// ============================================================
+function exibirAvisoObservacoes() {
+  const agora = new Date();
+  let html7 = '', html14 = '';
+  let tem7 = false, tem14 = false;
+  
+  estado.jovens.forEach(j => {
+    if (j.status === 'concluído' || j.status === 'suspenso' || j['MEDIDA'] === 'Liberação') return;
+    const hist = j.historicoFrequencia || [];
+    let diffDias = 999;
+    if (hist.length > 0) {
+      const ultimo = new Date(Math.max(...hist.map(h => new Date(h.data))));
+      diffDias = Math.floor((agora - ultimo) / (1000 * 60 * 60 * 24));
+    }
+    
+    const li = `<li><strong>${j['NOME']}</strong> - Último: ${hist.length > 0 ? new Date(Math.max(...hist.map(h => new Date(h.data)))).toLocaleDateString('pt-BR') : 'Nunca'} (${diffDias} dias)</li>`;
+    if (diffDias >= 14) { html14 += li; tem14 = true; }
+    else if (diffDias >= 7) { html7 += li; tem7 = true; }
+  });
+
+  if (tem7 || tem14) {
+    // Mostra um alerta simples ou pode ser um modal
+    console.log('Aviso: Jovens com 7+ ou 14+ dias sem comparecimento.');
+  }
+}
+
+// ============================================================
+// POLLING E INICIALIZAÇÃO
+// ============================================================
+function iniciarPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    pollingInterval = setInterval(async () => {
+        if (estado.usuarioAtual && estado.usuarioAtual.nivel !== 'jovem') {
+            try {
+                await carregarTodosDados();
+            } catch (e) {
+                console.error('Erro no polling:', e);
+            }
+        }
+    }, 60000);
+}
+
+// ============================================================
+// EVENT LISTENERS E INICIALIZAÇÃO
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btnMeusHorarios')?.addEventListener('click', function() {
+    if (estado.usuarioAtual) {
+      abrirModalHorarios(estado.usuarioAtual.id);
+    }
+  });
+
+  document.getElementById('loginBtn')?.addEventListener('click', fazerLogin);
+  document.getElementById('loginSenha')?.addEventListener('keypress', e => { if (e.key === 'Enter') fazerLogin(); });
+  
+  document.getElementById('logoutBtn')?.addEventListener('click', deslogarSistema);
+
+  const cadastroLink = document.getElementById('mostrarCadastroBtn');
+  if (cadastroLink) {
+    cadastroLink.addEventListener('click', (e) => {
+      e.preventDefault(); document.getElementById('telaLogin').style.display = 'none'; document.getElementById('telaCadastro').style.display = 'block';
+    });
+  }
+  
+  document.getElementById('voltarLoginBtn')?.addEventListener('click', () => {
+    document.getElementById('telaCadastro').style.display = 'none'; document.getElementById('telaLogin').style.display = 'flex';
+  });
+  
+  document.getElementById('cadastrarBtn')?.addEventListener('click', cadastrarUsuario);
+
+  document.getElementById('salvarBtn')?.addEventListener('click', salvarJovem);
+  document.getElementById('importarExcelBtn')?.addEventListener('click', importarPlanilha);
+  document.getElementById('limparFormBtn')?.addEventListener('click', limparFormulario);
+
+  document.getElementById('btnPontoDigital')?.addEventListener('click', registrarPontoDigital);
+  document.getElementById('exportarExcelBtn')?.addEventListener('click', exportarExcel);
+  document.getElementById('registroManualBtn')?.addEventListener('click', abrirRegistroManual);
+  document.getElementById('manualSalvar')?.addEventListener('click', salvarRegistroManual);
+
+  document.getElementById('salvarOficinaBtn')?.addEventListener('click', salvarOficina);
+  
+  document.getElementById('btnAlterarLogo')?.addEventListener('click', function() { document.getElementById('modalAlterarLogo').style.display = 'flex'; });
+  document.getElementById('btnAlterarSenha')?.addEventListener('click', function() { document.getElementById('modalAlterarSenha').style.display = 'flex'; });
+  
+  document.getElementById('salvarProfissionalBtn')?.addEventListener('click', salvarProfissional);
+  document.getElementById('userSalvarBtn')?.addEventListener('click', salvarNovoUsuario);
+
+  document.querySelectorAll('#filtrosFrequencia select, #filtrosFrequencia input').forEach(el => {
+    el?.addEventListener('change', carregarLista);
+    el?.addEventListener('input', carregarLista);
+  });
+
+  document.getElementById('buscaFrequencia')?.addEventListener('input', function() {
+    const filtroNome = document.getElementById('filtroNome');
+    if (filtroNome) {
+      filtroNome.value = this.value;
+      carregarLista();
+    }
+  });
+
+  // Botões do header
+  document.getElementById('btnNovoJovemHeader')?.addEventListener('click', () => navigateTo('pageCadastro'));
+  document.getElementById('btnRegistrarPontoHeader')?.addEventListener('click', () => navigateTo('pageLista'));
+
+  // Navegação do menu lateral
+  document.querySelectorAll('.menu-item').forEach(item => {
+    item.addEventListener('click', function() {
+      const pageId = this.dataset.page;
+      if (pageId) navigateTo(pageId);
+    });
+  });
+
+  renderizarCamposFormulario();
+  verificarLoginLocal();
+});
+
+function verificarLoginLocal() {
+  const emailLogado = localStorage.getItem('usuarioLogado');
+  if (emailLogado) {
+    document.getElementById('loginEmail').value = emailLogado;
+  }
+}
+
+console.log('Sistema v2.0 carregado com sucesso!');
