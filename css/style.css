@@ -1,6 +1,6 @@
 /* ============================================================
    SISTEMA DE CONTROLE DE MEDIDAS SOCIOEDUCATIVAS v2.0
-   ESTILOS COMPLETOS – REMODELADOS
+   ESTILOS COMPLETOS – REMODELADOS COM CORREÇÃO DE LOGIN
    ============================================================ */
 
 * {
@@ -12,8 +12,61 @@
 
 body {
     background: #f0f4f8;
-    display: flex;
     min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ===== TELA DE LOGIN (ocupa a tela toda) ===== */
+#telaLogin {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #f0f4f8;
+    padding: 20px;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 99999;
+    transition: opacity 0.3s ease;
+}
+
+#telaLogin.hidden {
+    display: none !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ===== TELA DE CADASTRO ===== */
+#telaCadastro {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #f0f4f8;
+    z-index: 99999;
+    justify-content: center;
+    align-items: center;
+}
+
+#telaCadastro.visible {
+    display: flex;
+}
+
+/* ===== CONTEÚDO PRINCIPAL (oculto inicialmente) ===== */
+.main-content {
+    margin-left: 260px;
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.main-content.visible {
+    display: flex;
 }
 
 /* ===== SIDEBAR ===== */
@@ -125,15 +178,6 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     font-size: 0.7rem;
     color: #64748b;
-}
-
-/* ===== MAIN CONTENT ===== */
-.main-content {
-    margin-left: 260px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
 }
 
 /* ===== HEADER ===== */
@@ -366,6 +410,68 @@ body {
     }
 }
 
+/* ===== LOGIN BOX ===== */
+.login-box {
+    background: white;
+    padding: 40px;
+    border-radius: 28px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+.login-box h2 {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-box .btn {
+    width: 100%;
+    justify-content: center;
+}
+
+.login-erro {
+    color: #dc3545;
+    text-align: center;
+    margin-top: 10px;
+    font-size: 0.9rem;
+}
+
+.logo-login-img {
+    display: block;
+    margin: 0 auto 16px auto;
+    max-height: 100px;
+    max-width: 160px;
+    width: auto;
+    object-fit: contain;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.status-online {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #10b981;
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
 /* ===== CARDS ===== */
 .cards-grid {
     display: grid;
@@ -431,20 +537,6 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 24px;
     margin: 24px 0;
-}
-
-.grafico-placeholder {
-    background: white;
-    border-radius: 16px;
-    padding: 20px;
-    border: 1px solid #e9edf2;
-    text-align: center;
-    color: #94a3b8;
-    height: 200px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.9rem;
 }
 
 canvas {
@@ -818,78 +910,6 @@ tr:hover {
     max-width: 300px;
     border: 1px solid #d1d9e6;
     border-radius: 10px;
-}
-
-/* ===== LOGIN ===== */
-#telaLogin {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    background: #f0f4f8;
-    padding: 20px;
-    width: 100%;
-}
-
-.login-box {
-    background: white;
-    padding: 40px;
-    border-radius: 28px;
-    max-width: 400px;
-    width: 100%;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-}
-
-.login-box h2 {
-    text-align: center;
-    margin-bottom: 30px;
-}
-
-.login-box .btn {
-    width: 100%;
-    justify-content: center;
-}
-
-.login-erro {
-    color: #dc3545;
-    text-align: center;
-    margin-top: 10px;
-    font-size: 0.9rem;
-}
-
-.logo-login-img {
-    display: block;
-    margin: 0 auto 16px auto;
-    max-height: 100px;
-    max-width: 160px;
-    width: auto;
-    object-fit: contain;
-    background: #ffffff;
-    border-radius: 12px;
-    padding: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.status-online {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #10b981;
-    margin-right: 8px;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.5;
-    }
-    100% {
-        opacity: 1;
-    }
 }
 
 /* ===== MODAIS ===== */
