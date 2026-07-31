@@ -17,84 +17,127 @@
 <!-- OVERLAY MOBILE -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-<!-- ===== MENU LATERAL ===== -->
-<aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-scale-balanced"></i>
-        <div>
-            <span>Sistema Socioeducativo</span>
-            <small>Controle de Medidas</small>
+<!-- ===== TELA DE LOGIN ===== -->
+<div id="telaLogin">
+    <div class="login-box">
+        <img id="logoLogin" class="logo-login-img" src="" alt="Logo" style="display:none;">
+        <h2>🔐 Sistema de Controle</h2>
+        <p style="text-align:center; color:#6b7280; margin-bottom:20px;">
+            <span class="status-online"></span> Conectado à nuvem
+        </p>
+        <div class="campo"><label>E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com"></div>
+        <div class="campo"><label>Senha</label><input type="password" id="loginSenha" placeholder="••••••••"></div>
+        <button id="loginBtn" class="btn-primary" style="width:100%; justify-content:center;">Entrar</button>
+        <div id="loginErro" class="login-erro"></div>
+        <div style="text-align:center; margin-top:20px;">
+            <a href="#" id="mostrarCadastroBtn" style="color:#2563EB; text-decoration:none; font-weight:600;">📝 Solicitar Cadastro</a>
         </div>
     </div>
-    <nav class="sidebar-menu" id="menuContainer">
-        <div class="menu-category">Navegação</div>
-        <button class="menu-item active" data-page="pageDashboard" onclick="navigateTo('pageDashboard')">
-            <i class="fas fa-chart-pie"></i> Dashboard
-        </button>
+</div>
 
-        <div class="menu-category">Jovens</div>
-        <button class="menu-item" data-page="pageCadastro" onclick="navigateTo('pageCadastro')">
-            <i class="fas fa-user-plus"></i> Cadastrar / Editar
-        </button>
-        <button class="menu-item" data-page="pageLista" onclick="navigateTo('pageLista')">
-            <i class="fas fa-list-ul"></i> Lista Geral
-        </button>
-        <button class="menu-item" data-page="pageAcompInd" onclick="navigateTo('pageAcompInd')">
-            <i class="fas fa-user-circle"></i> Acompanhamento Individual
-        </button>
-        <button class="menu-item" data-page="pageObservacoes" onclick="navigateTo('pageObservacoes')">
-            <i class="fas fa-eye"></i> Observações
-        </button>
-
-        <div class="menu-category">Medidas &amp; Oficinas</div>
-        <button class="menu-item" data-page="pageOficinas" onclick="navigateTo('pageOficinas')">
-            <i class="fas fa-tools"></i> Oficinas Realizadas
-        </button>
-        <button class="menu-item" data-page="pagePlanejamento" onclick="navigateTo('pagePlanejamento')">
-            <i class="fas fa-calendar-plus"></i> Planejamento
-        </button>
-        <button class="menu-item" data-page="pageRelatorios" onclick="navigateTo('pageRelatorios')">
-            <i class="fas fa-file-alt"></i> Relatórios
-        </button>
-
-        <div class="menu-category">Liberdade Assistida</div>
-        <button class="menu-item" data-page="pageLA" onclick="navigateTo('pageLA')">
-            <i class="fas fa-handshake"></i> Ações LA
-        </button>
-
-        <div class="menu-category">Administração</div>
-        <button class="menu-item" data-page="pageUsuarios" onclick="navigateTo('pageUsuarios')">
-            <i class="fas fa-users-cog"></i> Gerenciar Usuários
-        </button>
-        <button class="menu-item" data-page="pagePendentes" onclick="navigateTo('pagePendentes')">
-            <i class="fas fa-user-clock"></i> Solicitações Pendentes
-        </button>
-        <button class="menu-item" data-page="pageMensagens" onclick="navigateTo('pageMensagens')">
-            <i class="fas fa-envelope"></i> Mensagens
-        </button>
-
-        <div class="menu-category">Equipe</div>
-        <button class="menu-item" data-page="pageProfissionais" onclick="navigateTo('pageProfissionais')">
-            <i class="fas fa-user-md"></i> Profissionais
-        </button>
-
-        <div class="menu-category">Configurações</div>
-        <button class="menu-item" data-page="pageConfig" onclick="navigateTo('pageConfig')">
-            <i class="fas fa-cog"></i> Configurações
-        </button>
-
-        <!-- Jovem (oculto por padrão) -->
-        <button class="menu-item" data-page="pageDashboardJovem" onclick="navigateTo('pageDashboardJovem')" style="display:none;">
-            <i class="fas fa-user"></i> Minhas Ações
-        </button>
-    </nav>
-    <div class="sidebar-footer">
-        <i class="fas fa-circle" style="color: #10b981; font-size: 0.5rem;"></i> Online • v2.0
+<!-- ===== TELA DE CADASTRO ===== -->
+<div id="telaCadastro">
+    <div class="login-box" style="margin:20px auto;">
+        <h2>📝 Solicitar Cadastro</h2>
+        <p style="text-align:center; color:#6b7280; margin-bottom:20px;">Seu cadastro passará por aprovação.</p>
+        <div class="campo"><label>Nome Completo</label><input type="text" id="cadastroNome" placeholder="Seu nome completo"></div>
+        <div class="campo"><label>E-mail</label><input type="email" id="cadastroEmail" placeholder="seu@email.com"></div>
+        <div class="campo"><label>Senha</label><input type="password" id="cadastroSenha" placeholder="••••••••"></div>
+        <div class="campo"><label>Confirmar Senha</label><input type="password" id="cadastroSenhaConfirm" placeholder="••••••••"></div>
+        <div class="campo"><label>Nível de Acesso</label>
+            <select id="cadastroNivel">
+                <option value="oficineiro">Oficineiro</option>
+                <option value="tecnico">Técnico</option>
+                <option value="gestor">Gestor</option>
+                <option value="autoridade">Autoridade Jurídica</option>
+                <option value="jovem">Jovem</option>
+            </select>
+        </div>
+        <button id="cadastrarBtn" class="btn-primary" style="width:100%; justify-content:center; margin-top:10px;">Enviar Solicitação</button>
+        <button id="voltarLoginBtn" class="btn-secondary" style="width:100%; justify-content:center; margin-top:10px;">Voltar para Login</button>
+        <div id="cadastroErro" class="login-erro"></div>
+        <div id="cadastroSucesso" style="color:#10b981; text-align:center; margin-top:10px; display:none;"></div>
     </div>
-</aside>
+</div>
 
 <!-- ===== CONTEÚDO PRINCIPAL ===== -->
 <div class="main-content">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-scale-balanced"></i>
+            <div>
+                <span>Sistema Socioeducativo</span>
+                <small>Controle de Medidas</small>
+            </div>
+        </div>
+        <nav class="sidebar-menu" id="menuContainer">
+            <div class="menu-category">Navegação</div>
+            <button class="menu-item active" data-page="pageDashboard" onclick="navigateTo('pageDashboard')">
+                <i class="fas fa-chart-pie"></i> Dashboard
+            </button>
+
+            <div class="menu-category">Jovens</div>
+            <button class="menu-item" data-page="pageCadastro" onclick="navigateTo('pageCadastro')">
+                <i class="fas fa-user-plus"></i> Cadastrar / Editar
+            </button>
+            <button class="menu-item" data-page="pageLista" onclick="navigateTo('pageLista')">
+                <i class="fas fa-list-ul"></i> Lista Geral
+            </button>
+            <button class="menu-item" data-page="pageAcompInd" onclick="navigateTo('pageAcompInd')">
+                <i class="fas fa-user-circle"></i> Acompanhamento Individual
+            </button>
+            <button class="menu-item" data-page="pageObservacoes" onclick="navigateTo('pageObservacoes')">
+                <i class="fas fa-eye"></i> Observações
+            </button>
+
+            <div class="menu-category">Medidas &amp; Oficinas</div>
+            <button class="menu-item" data-page="pageOficinas" onclick="navigateTo('pageOficinas')">
+                <i class="fas fa-tools"></i> Oficinas Realizadas
+            </button>
+            <button class="menu-item" data-page="pagePlanejamento" onclick="navigateTo('pagePlanejamento')">
+                <i class="fas fa-calendar-plus"></i> Planejamento
+            </button>
+            <button class="menu-item" data-page="pageRelatorios" onclick="navigateTo('pageRelatorios')">
+                <i class="fas fa-file-alt"></i> Relatórios
+            </button>
+
+            <div class="menu-category">Liberdade Assistida</div>
+            <button class="menu-item" data-page="pageLA" onclick="navigateTo('pageLA')">
+                <i class="fas fa-handshake"></i> Ações LA
+            </button>
+
+            <div class="menu-category">Administração</div>
+            <button class="menu-item" data-page="pageUsuarios" onclick="navigateTo('pageUsuarios')">
+                <i class="fas fa-users-cog"></i> Gerenciar Usuários
+            </button>
+            <button class="menu-item" data-page="pagePendentes" onclick="navigateTo('pagePendentes')">
+                <i class="fas fa-user-clock"></i> Solicitações Pendentes
+            </button>
+            <button class="menu-item" data-page="pageMensagens" onclick="navigateTo('pageMensagens')">
+                <i class="fas fa-envelope"></i> Mensagens
+            </button>
+
+            <div class="menu-category">Equipe</div>
+            <button class="menu-item" data-page="pageProfissionais" onclick="navigateTo('pageProfissionais')">
+                <i class="fas fa-user-md"></i> Profissionais
+            </button>
+
+            <div class="menu-category">Configurações</div>
+            <button class="menu-item" data-page="pageConfig" onclick="navigateTo('pageConfig')">
+                <i class="fas fa-cog"></i> Configurações
+            </button>
+
+            <!-- Jovem (oculto por padrão) -->
+            <button class="menu-item" data-page="pageDashboardJovem" onclick="navigateTo('pageDashboardJovem')" style="display:none;">
+                <i class="fas fa-user"></i> Minhas Ações
+            </button>
+        </nav>
+        <div class="sidebar-footer">
+            <i class="fas fa-circle" style="color: #10b981; font-size: 0.5rem;"></i> Online • v2.0
+        </div>
+    </aside>
 
     <!-- HEADER -->
     <header class="header">
@@ -247,13 +290,13 @@
     <div class="page" id="pageObservacoes">
         <h2 style="color: #1A2A4A; margin-bottom: 20px;"><i class="fas fa-eye" style="color: #2563EB;"></i> Observações</h2>
         <p style="color:#6b7280; margin-bottom:15px;">Visualize jovens sem comparecimento recente e metas LA próximas ao vencimento.</p>
-        
+
         <div style="background:#f0f9ff; border-radius:16px; padding:20px; border:1px solid #b6d4fe; margin-bottom:24px;">
             <h3 style="color:#1A2A4A; margin-bottom:12px;">⏳ Metas LA com Vencimento Próximo (≤ 7 dias)</h3>
             <div id="listaMetasLAProximas"></div>
         </div>
 
-        <div class="painel-duplo" style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+        <div class="painel-duplo">
             <div class="card card-aviso" style="border-left-color:#f59e0b;">
                 <h3>🕒 7 dias sem comparecimento</h3>
                 <div class="table-wrapper" style="margin:0;"><table><thead><tr><th>Jovem</th><th>Último</th><th>Dias</th><th>Ação</th></tr></thead><tbody id="tabela7dias"></tbody></table></div>
@@ -325,7 +368,7 @@
     <!-- Relatórios -->
     <div class="page" id="pageRelatorios">
         <h2 style="color: #1A2A4A; margin-bottom: 20px;"><i class="fas fa-file-alt" style="color: #2563EB;"></i> Relatórios</h2>
-        <div class="painel-duplo" style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+        <div class="painel-duplo">
             <div class="card">
                 <h3>📈 Projeção Quinzenal (Próximos 3 Meses)</h3>
                 <p style="font-size:0.8rem; color:#6b7280; margin-bottom:10px;">Estimativa baseada em 4h/semana por jovem ativo</p>
@@ -465,55 +508,14 @@
         <div id="jovemFrequencia" style="margin-top:20px;"></div>
     </div>
 
+    <!-- FOOTER -->
     <footer style="text-align:center; padding:20px; color:#94a3b8; font-size:0.75rem; border-top:1px solid #e2e8f0;">
         Sistema de Controle de Medidas Socioeducativas • v2.0 • Dados sincronizados na nuvem
     </footer>
 </div>
 
-<!-- ===== TELA DE LOGIN ===== -->
-<div id="telaLogin">
-    <div class="login-box">
-        <img id="logoLogin" class="logo-login-img" src="" alt="Logo" style="display:none;">
-        <h2>🔐 Sistema de Controle</h2>
-        <p style="text-align:center; color:#6b7280; margin-bottom:20px;">
-            <span class="status-online"></span> Conectado à nuvem
-        </p>
-        <div class="campo"><label>E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com"></div>
-        <div class="campo"><label>Senha</label><input type="password" id="loginSenha" placeholder="••••••••"></div>
-        <button id="loginBtn" class="btn-primary" style="width:100%; justify-content:center;">Entrar</button>
-        <div id="loginErro" class="login-erro"></div>
-        <div style="text-align:center; margin-top:20px;">
-            <a href="#" id="mostrarCadastroBtn" style="color:#2563EB; text-decoration:none; font-weight:600;">📝 Solicitar Cadastro</a>
-        </div>
-    </div>
-</div>
-
-<!-- ===== TELA DE CADASTRO ===== -->
-<div id="telaCadastro" style="display:none;">
-    <div class="login-box" style="margin:20px auto;">
-        <h2>📝 Solicitar Cadastro</h2>
-        <p style="text-align:center; color:#6b7280; margin-bottom:20px;">Seu cadastro passará por aprovação.</p>
-        <div class="campo"><label>Nome Completo</label><input type="text" id="cadastroNome" placeholder="Seu nome completo"></div>
-        <div class="campo"><label>E-mail</label><input type="email" id="cadastroEmail" placeholder="seu@email.com"></div>
-        <div class="campo"><label>Senha</label><input type="password" id="cadastroSenha" placeholder="••••••••"></div>
-        <div class="campo"><label>Confirmar Senha</label><input type="password" id="cadastroSenhaConfirm" placeholder="••••••••"></div>
-        <div class="campo"><label>Nível de Acesso</label>
-            <select id="cadastroNivel">
-                <option value="oficineiro">Oficineiro</option>
-                <option value="tecnico">Técnico</option>
-                <option value="gestor">Gestor</option>
-                <option value="autoridade">Autoridade Jurídica</option>
-                <option value="jovem">Jovem</option>
-            </select>
-        </div>
-        <button id="cadastrarBtn" class="btn-primary" style="width:100%; justify-content:center; margin-top:10px;">Enviar Solicitação</button>
-        <button id="voltarLoginBtn" class="btn-secondary" style="width:100%; justify-content:center; margin-top:10px;">Voltar para Login</button>
-        <div id="cadastroErro" class="login-erro"></div>
-        <div id="cadastroSucesso" style="color:#10b981; text-align:center; margin-top:10px; display:none;"></div>
-    </div>
-</div>
-
 <!-- ===== MODAIS ===== -->
+
 <!-- Modal Observação -->
 <div class="modal-overlay" id="modalObservacao">
     <div class="modal-box">
@@ -618,7 +620,7 @@
     </div>
 </div>
 
-<!-- Modal Alterar Senha (embutido na página Config, mas mantido para compatibilidade) -->
+<!-- Modal Alterar Senha (embutido na página Config, mantido para compatibilidade) -->
 <div class="modal-overlay" id="modalAlterarSenha" style="display:none;">
     <div class="modal-box">
         <h2>🔑 Alterar Senha</h2>
