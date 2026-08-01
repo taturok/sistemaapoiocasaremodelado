@@ -678,7 +678,6 @@ function fecharModalAcoesLote() {
     document.getElementById('modalAcoesLote').style.display = 'none';
 }
 
-// Monitorar mudança no select de ação em lote
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('loteAcaoSelect')?.addEventListener('change', function() {
         const statusDiv = document.getElementById('loteOpcoesStatus');
@@ -842,7 +841,6 @@ function carregarLista() {
             }
         }
 
-        // Select para alterar status manual (substitui os botões suspender/reativar)
         let botoesStatus = '';
         if (podeAlterarStatus && j._statusRender !== 'concluído' && j['MEDIDA'] !== 'Liberação') {
             const opcoes = ['ativo', 'suspenso', 'descumprimento', 'concluído'];
@@ -888,7 +886,6 @@ function carregarLista() {
         </tr>`;
     }).join('');
 
-    // Atualizar estado dos checkboxes na barra de seleção
     document.getElementById('selecionarTodos').checked = false;
     atualizarBarraSelecao();
 }
@@ -955,7 +952,7 @@ function calcularSaldo(jovem) {
 }
 
 // ============================================================
-// STATUS - ALTERAÇÃO MANUAL (SUBSTITUI SUSPENDER/REATIVAR)
+// STATUS - ALTERAÇÃO MANUAL
 // ============================================================
 window.editarJovem = function(id) {
     if (!id) {
@@ -2110,7 +2107,6 @@ window.executarExclusao = async function() {
             await upstash('DEL', `jovem:${id}`);
             await upstash('SREM', 'jovens:all', id);
             estado.jovens = estado.jovens.filter(j => j.id !== id);
-            // Remove da seleção em lote também
             estado.selecionadosLote.delete(id);
         } else if (tipo === 'usuario') {
             await upstash('DEL', `user:${id}`);
@@ -2138,7 +2134,7 @@ window.executarExclusao = async function() {
 };
 
 // ============================================================
-// CONFIGURAÇÕES - SENHA E LOGO
+// CONFIGURAÇÕES - SENHA E LOGO (CORRIGIDO)
 // ============================================================
 async function salvarNovaSenha() {
     const s1 = document.getElementById('novaSenhaInput').value;
@@ -2160,16 +2156,18 @@ async function carregarLogo() {
     try {
         const logoBase64 = await upstash('GET', 'config:logo');
         if (logoBase64) {
-            // Cabeçalho
-            const logoImg = document.getElementById('logoImg');
+            // Cabeçalho - tenta diferentes seletores
+            const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
             if (logoImg) logoImg.src = logoBase64;
+            
             // Login
             const logoLogin = document.getElementById('logoLogin');
             if (logoLogin) {
                 logoLogin.src = logoBase64;
                 logoLogin.style.display = 'block';
             }
-            // Guarda para impressão (será usado na ficha)
+            
+            // Guarda para impressão
             window._logoBase64 = logoBase64;
         }
     } catch (e) {
@@ -2179,23 +2177,48 @@ async function carregarLogo() {
 
 async function salvarLogo() {
     const fileInput = document.getElementById('novaLogoInput');
-    if (!fileInput.files[0]) return alert('Selecione uma imagem.');
+    if (!fileInput || !fileInput.files[0]) {
+        // Tenta o input alternativo
+        const fileInputAlt = document.getElementById('novaLogoInputAlt');
+        if (fileInputAlt && fileInputAlt.files[0]) {
+            try {
+                const base64 = await fileToBase64(fileInputAlt.files[0]);
+                await upstash('SET', 'config:logo', base64);
+                atualizarLogoInterface(base64);
+                alert('Logo atualizado com sucesso!');
+                fileInputAlt.value = '';
+                return;
+            } catch (err) {
+                alert('Erro ao salvar logo: ' + err.message);
+                return;
+            }
+        }
+        return alert('Selecione uma imagem.');
+    }
+    
     try {
         const base64 = await fileToBase64(fileInput.files[0]);
         await upstash('SET', 'config:logo', base64);
-        // Atualiza na interface
-        document.getElementById('logoImg').src = base64;
-        const logoLogin = document.getElementById('logoLogin');
-        if (logoLogin) {
-            logoLogin.src = base64;
-            logoLogin.style.display = 'block';
-        }
-        window._logoBase64 = base64;
+        atualizarLogoInterface(base64);
         alert('Logo atualizado com sucesso!');
         fileInput.value = '';
     } catch (err) {
         alert('Erro ao salvar logo: ' + err.message);
     }
+}
+
+function atualizarLogoInterface(base64) {
+    // Atualiza todos os elementos de logo
+    const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
+    if (logoImg) logoImg.src = base64;
+    
+    const logoLogin = document.getElementById('logoLogin');
+    if (logoLogin) {
+        logoLogin.src = base64;
+        logoLogin.style.display = 'block';
+    }
+    
+    window._logoBase64 = base64;
 }
 
 // ============================================================
@@ -2570,10 +2593,9 @@ window.imprimirFichaIndividual = function() {
     const win = window.open('', '_blank');
     if (!win) { alert('Por favor, permita pop-ups para imprimir a ficha.'); return; }
 
-    // Usa o logo salvo globalmente
     let logoBase64 = window._logoBase64 || '';
     if (!logoBase64) {
-        const logoImg = document.getElementById('logoImg');
+        const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
         if (logoImg && logoImg.src && logoImg.src.startsWith('data:image')) {
             logoBase64 = logoImg.src;
         }
@@ -2662,7 +2684,6 @@ window.imprimirFichaIndividual = function() {
 // EXPORTAR EXCEL (COM TODOS OS CAMPOS DA PLANILHA + STATUS)
 // ============================================================
 function exportarExcel() {
-    // Todos os campos da planilha original
     const camposPlanilha = [
         'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA', 'MEDIDA',
         'MESES', 'HORAS', 'PROTETIVA', 'NASC.', 'MÊS ANIVERSARIO', 'NATURALIDADE',
@@ -2672,7 +2693,6 @@ function exportarExcel() {
         'USO DE SPA?', 'QUAL?', 'PREFERE NOME SOCIAL?', 'QUAL NOME SOCIAL?'
     ];
 
-    // Mapeamento dos campos para os cabeçalhos da planilha
     const headerMap = {
         'REFERENCIA': 'REFERENCIA',
         'NOME': 'NOME',
@@ -2711,19 +2731,14 @@ function exportarExcel() {
         'QUAL NOME SOCIAL?': 'QUAL NOME SOCIAL?'
     };
 
-    // Adiciona campo Status (que não existe na planilha original)
     const data = estado.jovens.map(j => {
         const row = {};
-        // Campos da planilha
         camposPlanilha.forEach(campo => {
             const header = headerMap[campo] || campo;
-            // Tenta encontrar o valor no jovem usando a chave correspondente
             const chave = Object.keys(j).find(k => k === campo || k === header);
             row[header] = chave ? (j[chave] || '') : '';
         });
-        // Adiciona o campo STATUS (novo)
         row['STATUS'] = j.status || 'ativo';
-        // Adiciona o campo ID_DIGITAL (se existir)
         if (j['ID_DIGITAL']) {
             row['ID_DIGITAL'] = j['ID_DIGITAL'];
         }
@@ -2734,7 +2749,6 @@ function exportarExcel() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Jovens');
 
-    // Ajusta largura das colunas
     const colWidths = [];
     const headers = Object.keys(data[0] || {});
     headers.forEach(h => {
@@ -2751,7 +2765,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA
+// IMPORTAR PLANILHA (CORRIGIDO - USA NOME COMO PRINCIPAL)
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -2771,8 +2785,10 @@ async function importarPlanilha() {
             const ws = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
 
+            // Mapeamento de colunas
             const colMap = {};
             const headers = Object.keys(rows[0] || {});
+            
             headers.forEach(h => {
                 const hNorm = h.toUpperCase().replace(/\s/g, '').replace(/[ÀÁÂÃÄÅ]/g, 'A').replace(/[ÈÉÊË]/g, 'E').replace(/[ÌÍÎÏ]/g, 'I').replace(/[ÒÓÔÕÖ]/g, 'O').replace(/[ÙÚÛÜ]/g, 'U').replace(/Ç/g, 'C');
                 for (const [key] of CAMPOS) {
@@ -2784,38 +2800,107 @@ async function importarPlanilha() {
                 }
                 if (hNorm.includes('ID') && hNorm.includes('DIGITAL')) colMap['ID_DIGITAL'] = h;
                 if (hNorm === 'REFERENCIA' || hNorm.includes('REFERENCIA')) colMap['REFERENCIA'] = h;
+                // Identifica coluna de NOME
+                if (hNorm.includes('NOME') || hNorm === 'NOME' || hNorm.includes('NOM')) {
+                    colMap['NOME'] = h;
+                }
             });
 
-            const colNome = colMap['NOME'] || 'NOME';
+            // Encontra a coluna de NOME
+            let colNome = colMap['NOME'] || 'NOME';
+            // Se não encontrou, tenta encontrar por similaridade
+            if (!headers.find(h => h === colNome)) {
+                for (const h of headers) {
+                    const hNorm = h.toUpperCase().replace(/\s/g, '');
+                    if (hNorm.includes('NOME') || hNorm === 'NOME' || hNorm.includes('NOM')) {
+                        colNome = h;
+                        break;
+                    }
+                }
+            }
+
             let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
 
             for (const row of rows) {
                 try {
-                    const nome = row[colNome] || '';
-                    if (!nome || nome === 'undefined' || nome === '') { ignorados++; continue; }
+                    // OBTÉM O NOME - principal identificador
+                    let nome = '';
+                    if (colNome && row[colNome] !== undefined && row[colNome] !== '') {
+                        nome = String(row[colNome] || '').trim();
+                    }
+                    // Se não encontrou nome, tenta qualquer coluna que pareça ser nome
+                    if (!nome) {
+                        for (const h of headers) {
+                            const val = String(row[h] || '').trim();
+                            if (val && val.length > 2 && !val.includes('REFERENCIA') && !val.includes('CÓDIGOS') && !val.includes('NOVOS') && !val.includes('REGULAR') && !val.includes('IRREGULAR') && !val.includes('DESCUMPRIMENTO') && !val.includes('MEDIDA')) {
+                                // Verifica se parece um nome (não é apenas números ou data)
+                                const isDate = /^\d{2}\/\d{2}\/\d{4}/.test(val);
+                                const isNumber = /^\d+$/.test(val.replace(/[.,]/g, ''));
+                                if (!isDate && !isNumber && val.length > 2) {
+                                    nome = val;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!nome || nome === 'undefined' || nome === '') { 
+                        ignorados++; 
+                        continue; 
+                    }
+
+                    // Pula linhas que não são jovens (cabeçalhos, etc)
                     const nomeUpper = nome.toUpperCase().trim();
-                    if (nomeUpper.includes('NOVOS ADOLESCENTES') || nomeUpper.includes('REGULAR') || nomeUpper.includes('IRREGULAR') || nomeUpper.includes('EM DESCUMPRIMENTO') || nomeUpper.includes('CÓDIGOS FAMILIARES') || nomeUpper.includes('PACTUAÇÃO') || nomeUpper.includes('MEDIDA FINALIZADA')) { ignorados++; continue; }
+                    if (nomeUpper.includes('NOVOS ADOLESCENTES') || 
+                        nomeUpper.includes('REGULAR') || 
+                        nomeUpper.includes('IRREGULAR') || 
+                        nomeUpper.includes('EM DESCUMPRIMENTO') ||
+                        nomeUpper.includes('CÓDIGOS FAMILIARES') ||
+                        nomeUpper.includes('PACTUAÇÃO') ||
+                        nomeUpper.includes('MEDIDA FINALIZADA') ||
+                        nomeUpper.includes('PRESENÇA') ||
+                        nomeUpper.includes('AUSENCIA') ||
+                        nomeUpper.includes('JUSTIFICADO') ||
+                        nomeUpper.includes('DESC') ||
+                        nomeUpper.includes('TERÇA') ||
+                        nomeUpper.includes('QUINTA') ||
+                        nomeUpper.includes('SÁBADO') ||
+                        nomeUpper.includes('PACTUAÇÃO PIA')) {
+                        ignorados++;
+                        continue;
+                    }
 
-                    const medida = row[colMap['MEDIDA']] || row['MEDIDA'] || '';
-                    if (!medida && !nome) { ignorados++; continue; }
-
-                    const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
+                    // Busca jovem existente pelo NOME (principal)
                     let jovemExistente = null;
-                    if (cpfPlanilha && cpfPlanilha.length >= 11) {
-                        jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
-                    }
+                    
+                    // Primeiro tenta por NOME exato
+                    const nomeExato = nome.toUpperCase().trim();
+                    jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nomeExato);
+                    
+                    // Se não encontrou, tenta por CPF
                     if (!jovemExistente) {
-                        jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nome.toUpperCase().trim());
+                        const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
+                        if (cpfPlanilha && cpfPlanilha.length >= 11) {
+                            jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
+                        }
                     }
+                    
+                    // Se ainda não encontrou, tenta por similaridade de nome
                     if (!jovemExistente) {
-                        const nomeBusca = nome.toUpperCase().trim();
                         jovemExistente = estado.jovens.find(j => {
                             const jNome = (j['NOME'] || '').toUpperCase().trim();
-                            return jNome === nomeBusca || jNome.includes(nomeBusca) || nomeBusca.includes(jNome);
+                            // Verifica se um nome contém o outro ou se são muito similares
+                            return jNome === nomeExato || 
+                                   jNome.includes(nomeExato) || 
+                                   nomeExato.includes(jNome) ||
+                                   (nomeExato.length > 5 && jNome.length > 5 && 
+                                    (nomeExato.includes(jNome.substring(0, 5)) || 
+                                     jNome.includes(nomeExato.substring(0, 5))));
                         });
                     }
 
                     if (jovemExistente) {
+                        // ATUALIZA JOVEM EXISTENTE
                         const jovemId = jovemExistente.id;
                         const historicoFrequencia = jovemExistente.historicoFrequencia || [];
                         const observacoes = jovemExistente.observacoes || [];
@@ -2832,16 +2917,22 @@ async function importarPlanilha() {
                             acoesLA: acoesLA,
                             status: jovemExistente.status || 'ativo'
                         };
+                        
+                        // Preenche todos os campos
                         CAMPOS.forEach(([key]) => {
                             const colName = colMap[key];
                             let valor = '';
+                            
+                            // Tenta encontrar o valor na linha
                             if (colName && row[colName] !== undefined && row[colName] !== '') {
                                 valor = String(row[colName] || '').trim();
                             } else if (row[key] !== undefined && row[key] !== '') {
                                 valor = String(row[key] || '').trim();
-                            } else if (jovemExistente[key] !== undefined) {
+                            } else if (jovemExistente[key] !== undefined && jovemExistente[key] !== '') {
                                 valor = jovemExistente[key];
                             }
+                            
+                            // Processa valores especiais
                             if (key === 'GÊNERO' && valor) {
                                 if (valor.toUpperCase().includes('MASC')) valor = 'M';
                                 else if (valor.toUpperCase().includes('FEM')) valor = 'F';
@@ -2853,16 +2944,25 @@ async function importarPlanilha() {
                             if (key === 'IDADE' && valor) {
                                 valor = parseInt(valor) || 0;
                             }
+                            
                             jovemAtualizado[key] = valor;
                         });
+                        
                         jovemAtualizado['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || jovemExistente['ID_DIGITAL'] || '').trim();
                         jovemAtualizado['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || jovemExistente['REFERENCIA'] || '').trim();
+                        
+                        // Garante que o NOME seja mantido
+                        if (nome) jovemAtualizado['NOME'] = nome;
 
                         await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
                         const index = estado.jovens.findIndex(j => j.id === jovemId);
-                        if (index !== -1) { estado.jovens[index] = jovemAtualizado; }
+                        if (index !== -1) {
+                            estado.jovens[index] = jovemAtualizado;
+                        }
                         atualizados++;
+                        
                     } else {
+                        // CRIA NOVO JOVEM
                         const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                         const novoJovem = {
                             id: novoId,
@@ -2872,14 +2972,18 @@ async function importarPlanilha() {
                             documentos: [],
                             acoesLA: []
                         };
+                        
+                        // Preenche todos os campos
                         CAMPOS.forEach(([key]) => {
                             const colName = colMap[key];
                             let valor = '';
+                            
                             if (colName && row[colName] !== undefined && row[colName] !== '') {
                                 valor = String(row[colName] || '').trim();
                             } else if (row[key] !== undefined && row[key] !== '') {
                                 valor = String(row[key] || '').trim();
                             }
+                            
                             if (key === 'GÊNERO' && valor) {
                                 if (valor.toUpperCase().includes('MASC')) valor = 'M';
                                 else if (valor.toUpperCase().includes('FEM')) valor = 'F';
@@ -2891,32 +2995,42 @@ async function importarPlanilha() {
                             if (key === 'IDADE' && valor) {
                                 valor = parseInt(valor) || 0;
                             }
+                            
                             novoJovem[key] = valor;
                         });
+                        
                         novoJovem['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || '').trim();
                         novoJovem['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || '').trim();
+                        novoJovem['NOME'] = nome;
 
                         if (novoJovem['NOME']) {
                             await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
                             await upstash('SADD', 'jovens:all', novoId);
                             estado.jovens.push(novoJovem);
                             importados++;
-                        } else { ignorados++; }
+                        } else {
+                            ignorados++;
+                        }
                     }
+                    
                 } catch (rowError) {
                     console.error('Erro ao processar linha:', rowError);
                     erros++;
                 }
             }
+            
             await carregarTodosDados();
+            
             let mensagem = `✅ Importação concluída!`;
             if (importados > 0) mensagem += ` ${importados} novos adicionados.`;
             if (atualizados > 0) mensagem += ` ${atualizados} atualizados.`;
             if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas.`;
             if (erros > 0) mensagem += ` ⚠️ ${erros} erros.`;
+            
             statusDiv.style.background = '#d1fae5';
             statusDiv.style.color = '#065f46';
             statusDiv.textContent = mensagem;
+            
         } catch (err) {
             statusDiv.style.background = '#fee2e2';
             statusDiv.style.color = '#991b1b';
@@ -3056,8 +3170,9 @@ function salvarNovaSenhaAlt() {
 
 function salvarLogoAlt() {
     const fileInput = document.getElementById('novaLogoInputAlt');
-    if (!fileInput.files[0]) return alert('Selecione uma imagem.');
-    salvarLogo();
+    if (fileInput && fileInput.files[0]) {
+        salvarLogo();
+    }
 }
 
 function injetarHTMLDinamico() {}
