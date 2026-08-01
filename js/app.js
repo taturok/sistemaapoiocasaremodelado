@@ -61,10 +61,12 @@ let estado = {
     exclusaoPendente: null,
     suspensaoPendente: null,
     usuarioEdicaoHorario: null,
-    acoesLATemporarias: []
+    acoesLATemporarias: [],
+    selecionadosLote: new Set()
 };
 let intervaloCronometro = null;
 let pollingInterval = null;
+let _jovemDocAtual = null;
 
 // ============================================================
 // UPSTASH HELPERS
@@ -231,10 +233,7 @@ async function fazerLogin() {
         localStorage.setItem('usuarioLogado', user.email);
         localStorage.setItem('nivelUsuario', user.nivel);
 
-        // OCULTA A TELA DE LOGIN
         document.getElementById('telaLogin').classList.add('hidden');
-        
-        // MOSTRA A DASHBOARD
         const mainContent = document.querySelector('.main-content');
         mainContent.classList.add('visible');
         mainContent.style.display = 'flex';
@@ -267,12 +266,10 @@ function deslogarSistema() {
     localStorage.removeItem('usuarioLogado');
     localStorage.removeItem('nivelUsuario');
 
-    // OCULTA A DASHBOARD
     const mainContent = document.querySelector('.main-content');
     mainContent.classList.remove('visible');
     mainContent.style.display = 'none';
 
-    // MOSTRA A TELA DE LOGIN
     const telaLogin = document.getElementById('telaLogin');
     telaLogin.classList.remove('hidden');
     telaLogin.style.display = 'flex';
@@ -423,9 +420,7 @@ function renderizarDashboard() {
 }
 
 function renderizarGraficos() {
-    // Gráficos com Chart.js - mantido do original
     try {
-        // Destruir gráficos existentes
         Object.values(estado.graficos).forEach(c => {
             if (c && c.destroy) c.destroy();
         });
@@ -436,7 +431,6 @@ function renderizarGraficos() {
             return parseFloat(calcularSaldo(j)) > 0 || j['MEDIDA'] === 'LA';
         });
 
-        // Gráfico de Medidas
         const medidas = {};
         ativos.forEach(j => {
             const m = j['MEDIDA'] || 'Não informada';
@@ -454,7 +448,6 @@ function renderizarGraficos() {
             });
         }
 
-        // Gráfico de Gênero
         const generos = { M: 0, F: 0, NB: 0 };
         estado.jovens.forEach(j => {
             const g = j['GÊNERO'] || 'M';
@@ -472,7 +465,6 @@ function renderizarGraficos() {
             });
         }
 
-        // Gráfico de Idade
         const idades = { '12-15': 0, '16-18': 0, '19+': 0 };
         estado.jovens.forEach(j => {
             const idade = parseInt(j['IDADE']) || 0;
@@ -492,7 +484,6 @@ function renderizarGraficos() {
             });
         }
 
-        // Gráfico de Revertência
         const reverte = estado.oficinas.filter(o => o.reverte).length;
         const naoReverte = estado.oficinas.length - reverte;
         const ctx5 = document.getElementById('graficoReverte')?.getContext('2d');
@@ -525,7 +516,6 @@ function renderizarCamposFormulario() {
         return `<div class="campo"><label>${label}</label><input type="${type}" id="campo_${key}"></div>`;
     }).join('');
 
-    // Adiciona container para ações LA após o grid
     const containerAcoes = document.getElementById('containerAcoesLA');
     if (containerAcoes) {
         containerAcoes.style.display = 'none';
@@ -540,7 +530,6 @@ window.toggleAcoesLA = function() {
     }
 }
 
-// Ações LA no formulário
 window.adicionarAcaoLAForm = function() {
     const input = document.getElementById('novaAcaoLAInput');
     const prazoInput = document.getElementById('novaAcaoPrazoInput');
@@ -623,6 +612,162 @@ function limparFormulario() {
 }
 
 // ============================================================
+// SELEÇÃO EM LOTE
+// ============================================================
+function toggleSelecionarTodos() {
+    const checkboxes = document.querySelectorAll('#listaCorpo input[type="checkbox"]');
+    const selecionarTodos = document.getElementById('selecionarTodos');
+    checkboxes.forEach(cb => {
+        cb.checked = selecionarTodos.checked;
+        if (selecionarTodos.checked) {
+            estado.selecionadosLote.add(cb.dataset.id);
+        } else {
+            estado.selecionadosLote.delete(cb.dataset.id);
+        }
+    });
+    atualizarBarraSelecao();
+}
+
+function toggleSelecionarJovem(id) {
+    const cb = document.querySelector(`#listaCorpo input[data-id="${id}"]`);
+    if (!cb) return;
+    if (cb.checked) {
+        estado.selecionadosLote.add(id);
+    } else {
+        estado.selecionadosLote.delete(id);
+    }
+    atualizarBarraSelecao();
+}
+
+function atualizarBarraSelecao() {
+    const barra = document.getElementById('barraSelecaoLote');
+    const contador = document.getElementById('contadorSelecionados');
+    const btnAcoes = document.getElementById('btnAcoesLote');
+    const total = estado.selecionadosLote.size;
+
+    if (total > 0) {
+        barra.style.display = 'flex';
+        btnAcoes.style.display = 'inline-flex';
+        contador.textContent = total;
+    } else {
+        barra.style.display = 'none';
+        btnAcoes.style.display = 'none';
+    }
+}
+
+function desmarcarTodos() {
+    estado.selecionadosLote.clear();
+    document.querySelectorAll('#listaCorpo input[type="checkbox"]').forEach(cb => cb.checked = false);
+    document.getElementById('selecionarTodos').checked = false;
+    atualizarBarraSelecao();
+}
+
+function abrirModalAcoesLote() {
+    if (estado.selecionadosLote.size === 0) {
+        alert('Selecione pelo menos um jovem.');
+        return;
+    }
+    document.getElementById('loteContadorSelecionados').textContent = estado.selecionadosLote.size;
+    document.getElementById('loteAcaoSelect').value = '';
+    document.getElementById('loteOpcoesStatus').style.display = 'none';
+    document.getElementById('loteMotivoSuspensao').style.display = 'none';
+    document.getElementById('modalAcoesLote').style.display = 'flex';
+}
+
+function fecharModalAcoesLote() {
+    document.getElementById('modalAcoesLote').style.display = 'none';
+}
+
+// Monitorar mudança no select de ação em lote
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('loteAcaoSelect')?.addEventListener('change', function() {
+        const statusDiv = document.getElementById('loteOpcoesStatus');
+        if (this.value === 'alterar_status') {
+            statusDiv.style.display = 'block';
+        } else {
+            statusDiv.style.display = 'none';
+        }
+    });
+
+    document.getElementById('loteNovoStatus')?.addEventListener('change', function() {
+        const motivoDiv = document.getElementById('loteMotivoSuspensao');
+        motivoDiv.style.display = this.value === 'suspenso' ? 'block' : 'none';
+    });
+});
+
+async function executarAcaoLote() {
+    const acao = document.getElementById('loteAcaoSelect').value;
+    if (!acao) return alert('Selecione uma ação.');
+
+    const ids = Array.from(estado.selecionadosLote);
+    const jovens = estado.jovens.filter(j => ids.includes(j.id));
+
+    if (acao === 'excluir') {
+        if (!confirm(`Tem certeza que deseja excluir PERMANENTEMENTE ${jovens.length} jovens?`)) return;
+        try {
+            for (const j of jovens) {
+                await upstash('DEL', `jovem:${j.id}`);
+                await upstash('SREM', 'jovens:all', j.id);
+            }
+            estado.jovens = estado.jovens.filter(j => !ids.includes(j.id));
+            desmarcarTodos();
+            fecharModalAcoesLote();
+            await carregarTodosDados();
+            alert(`✅ ${jovens.length} jovens excluídos com sucesso!`);
+        } catch (err) {
+            alert('Erro ao excluir: ' + err.message);
+        }
+        return;
+    }
+
+    if (acao === 'alterar_status') {
+        const novoStatus = document.getElementById('loteNovoStatus').value;
+        if (!novoStatus) return alert('Selecione o novo status.');
+
+        let motivo = '';
+        if (novoStatus === 'suspenso') {
+            motivo = document.getElementById('loteMotivoInput').value.trim();
+            if (!motivo) return alert('Informe o motivo da suspensão.');
+        }
+
+        if (!confirm(`Tem certeza que deseja alterar o status de ${jovens.length} jovens para "${novoStatus.toUpperCase()}"?`)) return;
+
+        try {
+            for (const j of jovens) {
+                j.status = novoStatus;
+                if (novoStatus === 'suspenso') {
+                    j.motivoSuspensao = motivo;
+                    j.dataSuspensao = new Date().toISOString();
+                    j.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
+                } else if (novoStatus === 'descumprimento') {
+                    j.dataDescumprimento = new Date().toISOString();
+                } else if (novoStatus === 'ativo') {
+                    j.motivoSuspensao = '';
+                    j.dataSuspensao = '';
+                    j.dataDescumprimento = '';
+                }
+                if (!j.observacoes) j.observacoes = [];
+                j.observacoes.push({
+                    data: new Date().toISOString(),
+                    profissional: estado.usuarioAtual?.nome || 'Sistema',
+                    texto: `📌 Status alterado em lote para "${novoStatus.toUpperCase()}"${motivo ? ' - Motivo: ' + motivo : ''}`
+                });
+                await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
+            }
+            desmarcarTodos();
+            fecharModalAcoesLote();
+            await carregarTodosDados();
+            alert(`✅ Status de ${jovens.length} jovens alterado para "${novoStatus.toUpperCase()}" com sucesso!`);
+        } catch (err) {
+            alert('Erro ao alterar status: ' + err.message);
+        }
+        return;
+    }
+
+    alert('Ação não reconhecida.');
+}
+
+// ============================================================
 // LISTA GERAL E FILTROS
 // ============================================================
 function carregarLista() {
@@ -637,7 +782,6 @@ function carregarLista() {
     const fIdade = document.getElementById('filtroIdade')?.value;
 
     let lista = estado.jovens.filter(j => {
-        // Definir Status Renderizado
         if (j.status === 'suspenso') j._statusRender = 'suspenso';
         else if (j.status === 'descumprimento') j._statusRender = 'descumprimento';
         else if (j.status === 'concluído') j._statusRender = 'concluído';
@@ -646,7 +790,6 @@ function carregarLista() {
             j._statusRender = j.status || 'ativo';
         }
 
-        // Aplicar Filtros
         if (fNome && !(j['NOME'] || '').toLowerCase().includes(fNome) && !(j['ID_DIGITAL'] || '').includes(fNome)) return false;
         if (fMedida && j['MEDIDA'] !== fMedida) return false;
         if (fStatus && j._statusRender !== fStatus) return false;
@@ -699,26 +842,11 @@ function carregarLista() {
             }
         }
 
-        // Botões de Status
+        // Select para alterar status manual (substitui os botões suspender/reativar)
         let botoesStatus = '';
         if (podeAlterarStatus && j._statusRender !== 'concluído' && j['MEDIDA'] !== 'Liberação') {
-            if (j._statusRender === 'suspenso') {
-                botoesStatus = `<button onclick="reativarJovem('${j.id}')" class="btn-sm btn-sm-success">✅ Reativar</button>`;
-            } else if (j._statusRender === 'descumprimento') {
-                botoesStatus = `
-                    <button onclick="reativarJovem('${j.id}')" class="btn-sm btn-sm-success">✅ Reativar</button>
-                    <button onclick="abrirModalSuspensao('${j.id}', '${j['NOME']}')" class="btn-sm btn-sm-danger">🔴 Suspender</button>
-                `;
-            } else {
-                botoesStatus = `<button onclick="abrirModalSuspensao('${j.id}', '${j['NOME']}')" class="btn-sm btn-sm-danger">🔴 Suspender</button>`;
-            }
-        }
-
-        // Select para alterar status manual
-        let botoesAlterarStatus = '';
-        if (podeAlterarStatus && j._statusRender !== 'concluído' && j['MEDIDA'] !== 'Liberação') {
             const opcoes = ['ativo', 'suspenso', 'descumprimento', 'concluído'];
-            botoesAlterarStatus = `
+            botoesStatus = `
                 <select onchange="alterarStatusManual('${j.id}', this.value)" style="padding:2px 6px; font-size:0.7rem; border:1px solid #d1d9e6; border-radius:4px; background:white;">
                     <option value="">Status</option>
                     ${opcoes.map(s => `<option value="${s}" ${j._statusRender === s ? 'selected' : ''}>${s.toUpperCase()}</option>`).join('')}
@@ -733,13 +861,15 @@ function carregarLista() {
             motivoStatus = `<span style="font-size:0.75rem; color:#991b1b;">14+ dias sem comparecer</span>`;
         }
 
-        // Botão de ponto
         let botaoPonto = '';
         if (podeRegistrarPonto) {
             botaoPonto = `<button onclick="registrarPontoNaLinha('${j.id}')" class="btn-sm ${temEntradaAberta ? 'btn-sm-warning' : 'btn-sm-success'}">${temEntradaAberta ? '🚪 Saída' : '🚪 Entrada'}</button>`;
         }
 
+        const isSelecionado = estado.selecionadosLote.has(j.id);
+
         return `<tr>
+            <td><input type="checkbox" data-id="${j.id}" ${isSelecionado ? 'checked' : ''} onchange="toggleSelecionarJovem('${j.id}')"></td>
             <td>${j['NOME'] || j['REFERENCIA'] || '-'}</td>
             <td>${j['ID_DIGITAL'] || '-'}</td>
             <td>${j['IDADE'] || '-'}</td>
@@ -750,20 +880,23 @@ function carregarLista() {
             <td>${ultimo}</td>
             <td style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
                 ${botaoPonto}
-                <button onclick="editarJovem('${j.id}')" class="btn-sm btn-sm-primary">✏️</button>
-                <button onclick="abrirFichaModal('${j.id}')" class="btn-sm btn-sm-info">📋</button>
+                <button onclick="editarJovem('${j.id}')" class="btn-sm btn-sm-primary"><i class="fas fa-edit"></i></button>
+                <button onclick="abrirFichaModal('${j.id}')" class="btn-sm btn-sm-info"><i class="fas fa-file-alt"></i></button>
                 ${botoesStatus}
-                ${botoesAlterarStatus}
-                <button onclick="abrirModalExclusao('jovem', '${j.id}', '${j['NOME']}')" class="btn-sm btn-sm-danger">🗑️</button>
+                <button onclick="abrirModalExclusao('jovem', '${j.id}', '${j['NOME']}')" class="btn-sm btn-sm-danger"><i class="fas fa-trash"></i></button>
             </td>
         </tr>`;
     }).join('');
+
+    // Atualizar estado dos checkboxes na barra de seleção
+    document.getElementById('selecionarTodos').checked = false;
+    atualizarBarraSelecao();
 }
 
 function atualizarContadorLista(total) {
     let contadorContainer = document.getElementById('contadorContainer');
     if (!contadorContainer) {
-        const tabelaWrapper = document.querySelector('#tab2 .tabela-wrapper') || document.querySelector('.table-wrapper');
+        const tabelaWrapper = document.querySelector('#pageLista .table-wrapper');
         if (tabelaWrapper) {
             contadorContainer = document.createElement('div');
             contadorContainer.id = 'contadorContainer';
@@ -822,7 +955,7 @@ function calcularSaldo(jovem) {
 }
 
 // ============================================================
-// STATUS - SUSPENSÃO, REATIVAÇÃO E DESCUMPRIMENTO MANUAL
+// STATUS - ALTERAÇÃO MANUAL (SUBSTITUI SUSPENDER/REATIVAR)
 // ============================================================
 window.editarJovem = function(id) {
     if (!id) {
@@ -896,62 +1029,6 @@ window.alterarStatusManual = async function(jovemId, novoStatus) {
         alert(`✅ Status alterado para "${novoStatus.toUpperCase()}" com sucesso!`);
     } catch (err) {
         alert('Erro ao alterar status: ' + err.message);
-    }
-};
-
-window.abrirModalSuspensao = function(jovemId, jovemNome) {
-    estado.suspensaoPendente = jovemId;
-    document.getElementById('nomeJovemSuspensao').textContent = jovemNome;
-    document.getElementById('motivoSuspensaoInput').value = '';
-    document.getElementById('modalSuspensao').style.display = 'flex';
-};
-
-window.salvarSuspensao = async function() {
-    const motivo = document.getElementById('motivoSuspensaoInput').value.trim();
-    if (!motivo) return alert('É obrigatório informar o motivo da suspensão.');
-    const jovem = estado.jovens.find(j => j.id === estado.suspensaoPendente);
-    if (!jovem) return;
-    jovem.status = 'suspenso';
-    jovem.motivoSuspensao = motivo;
-    jovem.dataSuspensao = new Date().toISOString();
-    jovem.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
-    if (!jovem.observacoes) jovem.observacoes = [];
-    jovem.observacoes.push({
-        data: new Date().toISOString(),
-        profissional: jovem.suspensoPor,
-        texto: `🔴 Jovem suspenso por: ${motivo}`
-    });
-    try {
-        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-        document.getElementById('modalSuspensao').style.display = 'none';
-        await carregarTodosDados();
-        alert('✅ Jovem suspenso com sucesso!');
-    } catch (e) {
-        alert('Erro ao suspender: ' + e.message);
-    }
-};
-
-window.reativarJovem = async function(id) {
-    if (!confirm('Tem certeza que deseja reativar este jovem?')) return;
-    const jovem = estado.jovens.find(j => j.id === id);
-    if (!jovem) return;
-    const statusAnterior = jovem.status;
-    jovem.status = 'ativo';
-    jovem.motivoSuspensao = '';
-    jovem.dataSuspensao = '';
-    jovem.dataDescumprimento = '';
-    if (!jovem.observacoes) jovem.observacoes = [];
-    jovem.observacoes.push({
-        data: new Date().toISOString(),
-        profissional: estado.usuarioAtual?.nome || 'Sistema',
-        texto: `✅ Jovem reativado (estava em ${statusAnterior === 'suspenso' ? 'suspensão' : 'descumprimento'})`
-    });
-    try {
-        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-        await carregarTodosDados();
-        alert('✅ Jovem reativado com sucesso!');
-    } catch (err) {
-        alert('Erro ao reativar: ' + err.message);
     }
 };
 
@@ -1189,7 +1266,6 @@ window.registrarPontoNaLinha = async function(jovemId) {
     if (jovem.status === 'suspenso') return alert('❌ Jovem está suspenso.');
     if (jovem.status === 'concluído') return alert('❌ Jovem já concluiu a medida.');
 
-    // Se estiver em descumprimento, reativa automaticamente
     if (jovem.status === 'descumprimento') {
         jovem.status = 'ativo';
         jovem.dataDescumprimento = '';
@@ -2034,6 +2110,8 @@ window.executarExclusao = async function() {
             await upstash('DEL', `jovem:${id}`);
             await upstash('SREM', 'jovens:all', id);
             estado.jovens = estado.jovens.filter(j => j.id !== id);
+            // Remove da seleção em lote também
+            estado.selecionadosLote.delete(id);
         } else if (tipo === 'usuario') {
             await upstash('DEL', `user:${id}`);
             await upstash('SREM', 'users:all', id);
@@ -2082,10 +2160,17 @@ async function carregarLogo() {
     try {
         const logoBase64 = await upstash('GET', 'config:logo');
         if (logoBase64) {
-            document.getElementById('logoImg').src = logoBase64;
+            // Cabeçalho
+            const logoImg = document.getElementById('logoImg');
+            if (logoImg) logoImg.src = logoBase64;
+            // Login
             const logoLogin = document.getElementById('logoLogin');
-            if (logoLogin) { logoLogin.src = logoBase64;
-                logoLogin.style.display = 'block'; }
+            if (logoLogin) {
+                logoLogin.src = logoBase64;
+                logoLogin.style.display = 'block';
+            }
+            // Guarda para impressão (será usado na ficha)
+            window._logoBase64 = logoBase64;
         }
     } catch (e) {
         console.error('Erro ao carregar logo', e);
@@ -2098,8 +2183,16 @@ async function salvarLogo() {
     try {
         const base64 = await fileToBase64(fileInput.files[0]);
         await upstash('SET', 'config:logo', base64);
+        // Atualiza na interface
         document.getElementById('logoImg').src = base64;
+        const logoLogin = document.getElementById('logoLogin');
+        if (logoLogin) {
+            logoLogin.src = base64;
+            logoLogin.style.display = 'block';
+        }
+        window._logoBase64 = base64;
         alert('Logo atualizado com sucesso!');
+        fileInput.value = '';
     } catch (err) {
         alert('Erro ao salvar logo: ' + err.message);
     }
@@ -2291,7 +2384,7 @@ window.carregarFichaIndividual = function() {
             '<p style="color:#6b7280;">Nenhuma observação registrada.</p>';
     }
 
-    window._jovemDocAtual = jovem.id;
+    _jovemDocAtual = jovem.id;
 };
 
 window.toggleAcaoLA = async function(jovemId, acaoId) {
@@ -2364,7 +2457,7 @@ window.fecharModalDocumento = function() {
 };
 
 window.salvarDocumento = async function() {
-    const jovemId = window._jovemDocAtual;
+    const jovemId = _jovemDocAtual;
     if (!jovemId) { alert('Selecione um jovem primeiro.'); return; }
     const nome = document.getElementById('docNome').value.trim();
     const tipo = document.getElementById('docTipo').value;
@@ -2466,6 +2559,9 @@ window.abrirFichaModal = function(id) {
     modalFicha.style.display = 'flex';
 };
 
+// ============================================================
+// IMPRIMIR FICHA INDIVIDUAL (COM LOGO)
+// ============================================================
 window.imprimirFichaIndividual = function() {
     const id = document.getElementById('selectJovemAcomp').value;
     if (!id) { alert('Selecione um jovem primeiro.'); return; }
@@ -2473,32 +2569,44 @@ window.imprimirFichaIndividual = function() {
     if (!jovem) { alert('Jovem não encontrado.'); return; }
     const win = window.open('', '_blank');
     if (!win) { alert('Por favor, permita pop-ups para imprimir a ficha.'); return; }
-    const logoImg = document.getElementById('logoImg');
-    let logoBase64 = '';
-    if (logoImg && logoImg.src && logoImg.src.startsWith('data:image')) {
-        logoBase64 = logoImg.src;
+
+    // Usa o logo salvo globalmente
+    let logoBase64 = window._logoBase64 || '';
+    if (!logoBase64) {
+        const logoImg = document.getElementById('logoImg');
+        if (logoImg && logoImg.src && logoImg.src.startsWith('data:image')) {
+            logoBase64 = logoImg.src;
+        }
     }
+
     let html = `
     <!DOCTYPE html>
     <html>
-    <head><title>Ficha Individual</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; padding: 40px; background: white; }
-        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2c3e66; padding-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
-        .header-logo { max-height: 80px; max-width: 150px; object-fit: contain; }
-        .header h1 { color: #2c3e66; font-size: 22px; }
-        .section { margin-bottom: 20px; }
-        .section h2 { color: #2c3e66; font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
-        .field { padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
-        .field strong { font-size: 11px; text-transform: uppercase; color: #6b7280; display: block; }
-        .field span { font-size: 13px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
-        th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e9edf2; }
-        th { background: #f1f5f9; font-weight: 600; }
-        @media print { body { padding: 20px; } }
-    </style>
+    <head>
+        <title>Ficha Individual - ${jovem['NOME'] || 'Sem nome'}</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; padding: 40px; background: white; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #2c3e66; padding-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+            .header-logo { max-height: 80px; max-width: 150px; object-fit: contain; }
+            .header h1 { color: #2c3e66; font-size: 22px; }
+            .section { margin-bottom: 20px; }
+            .section h2 { color: #2c3e66; font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+            .field { padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
+            .field strong { font-size: 11px; text-transform: uppercase; color: #6b7280; display: block; }
+            .field span { font-size: 13px; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+            th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e9edf2; }
+            th { background: #f1f5f9; font-weight: 600; }
+            .status-badge { display: inline-block; padding: 2px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+            .status-ativo { background: #d1fae5; color: #065f46; }
+            .status-suspenso { background: #fce7f3; color: #be185d; }
+            .status-descumprimento { background: #fee2e2; color: #991b1b; }
+            .status-concluido { background: #d1fae5; color: #065f46; }
+            .status-liberado { background: #e5e7eb; color: #374151; }
+            @media print { body { padding: 20px; } }
+        </style>
     </head>
     <body>
         <div class="header">
@@ -2507,6 +2615,11 @@ window.imprimirFichaIndividual = function() {
                 <h1>📋 Ficha Individual</h1>
                 <p style="color:#6b7280;">${jovem['NOME'] || 'Sem nome'}</p>
                 <p style="color:#94a3b8; font-size:12px;">${new Date().toLocaleDateString('pt-BR')}</p>
+                <p style="font-size:12px; margin-top:4px;">
+                    <span class="status-badge status-${jovem.status === 'suspenso' ? 'suspenso' : jovem.status === 'descumprimento' ? 'descumprimento' : jovem.status === 'concluído' ? 'concluido' : jovem['MEDIDA'] === 'Liberação' ? 'liberado' : 'ativo'}">
+                        ${(jovem.status || 'ativo').toUpperCase()}
+                    </span>
+                </p>
             </div>
         </div>
         <div class="section">
@@ -2519,6 +2632,7 @@ window.imprimirFichaIndividual = function() {
     });
     html += `<div class="field"><strong>ID Digital</strong><span>${jovem['ID_DIGITAL'] || '-'}</span></div>`;
     html += `</div></div>`;
+
     if (jovem['MEDIDA'] === 'LA') {
         const acoes = jovem.acoesLA || [];
         html += `<div class="section"><h2>Ações LA</h2>`;
@@ -2527,6 +2641,7 @@ window.imprimirFichaIndividual = function() {
         });
         html += `</div>`;
     }
+
     const hist = jovem.historicoFrequencia || [];
     const totalHoras = hist.reduce((s, h) => s + parseFloat(h.horas || 0), 0);
     html += `<div class="section"><h2>Frequência</h2><p>Total: ${totalHoras.toFixed(1)}h | Saldo: ${calcularSaldo(jovem)}h</p>`;
@@ -2538,9 +2653,102 @@ window.imprimirFichaIndividual = function() {
         html += `</tbody></table>`;
     }
     html += `</div></body></html>`;
+
     win.document.write(html);
     win.document.close();
 };
+
+// ============================================================
+// EXPORTAR EXCEL (COM TODOS OS CAMPOS DA PLANILHA + STATUS)
+// ============================================================
+function exportarExcel() {
+    // Todos os campos da planilha original
+    const camposPlanilha = [
+        'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA', 'MEDIDA',
+        'MESES', 'HORAS', 'PROTETIVA', 'NASC.', 'MÊS ANIVERSARIO', 'NATURALIDADE',
+        'IDADE', 'GÊNERO', 'COR', 'COMPOSIÇÃO FAMILIAR', 'RENDA', 'BENEFICIO',
+        'PAA', 'ENDEREÇO', 'BAIRRO', 'TELEFONE', 'CRAS', 'UBS', 'CPF',
+        'ESTUDA?', 'SÉRIE', 'ESCOLA', 'TRABALHA?', 'FUNÇÃO', 'VINCULO', 'REDE',
+        'USO DE SPA?', 'QUAL?', 'PREFERE NOME SOCIAL?', 'QUAL NOME SOCIAL?'
+    ];
+
+    // Mapeamento dos campos para os cabeçalhos da planilha
+    const headerMap = {
+        'REFERENCIA': 'REFERENCIA',
+        'NOME': 'NOME',
+        'NOME DO RESPONSÁVEL': 'NOME DO RESPONSÁVEL',
+        'REINCIDÊNCIA': 'REINCIDÊNCIA',
+        'MEDIDA': 'MEDIDA',
+        'MESES': 'MESES',
+        'HORAS': 'HORAS',
+        'PROTETIVA': 'PROTETIVA',
+        'NASC.': 'NASC.',
+        'MÊS ANIVERSARIO': 'MÊS ANIVERSARIO',
+        'NATURALIDADE': 'NATURALIDADE',
+        'IDADE': 'IDADE',
+        'GÊNERO': 'GÊNERO',
+        'COR': 'COR',
+        'COMPOSIÇÃO FAMILIAR': 'COMPOSIÇÃO FAMILIAR',
+        'RENDA': 'RENDA',
+        'BENEFICIO': 'BENEFICIO',
+        'PAA': 'PAA',
+        'ENDEREÇO': 'ENDEREÇO',
+        'BAIRRO': 'BAIRRO',
+        'TELEFONE': 'TELEFONE',
+        'CRAS': 'CRAS',
+        'UBS': 'UBS',
+        'CPF': 'CPF',
+        'ESTUDA?': 'ESTUDA?',
+        'SÉRIE': 'SÉRIE',
+        'ESCOLA': 'ESCOLA',
+        'TRABALHA?': 'TRABALHA?',
+        'FUNÇÃO': 'FUNÇÃO',
+        'VINCULO': 'VÍNCULO',
+        'REDE': 'REDE',
+        'USO DE SPA?': 'USO DE SPA?',
+        'QUAL?': 'QUAL?',
+        'PREFERE NOME SOCIAL?': 'PREFERE NOME SOCIAL?',
+        'QUAL NOME SOCIAL?': 'QUAL NOME SOCIAL?'
+    };
+
+    // Adiciona campo Status (que não existe na planilha original)
+    const data = estado.jovens.map(j => {
+        const row = {};
+        // Campos da planilha
+        camposPlanilha.forEach(campo => {
+            const header = headerMap[campo] || campo;
+            // Tenta encontrar o valor no jovem usando a chave correspondente
+            const chave = Object.keys(j).find(k => k === campo || k === header);
+            row[header] = chave ? (j[chave] || '') : '';
+        });
+        // Adiciona o campo STATUS (novo)
+        row['STATUS'] = j.status || 'ativo';
+        // Adiciona o campo ID_DIGITAL (se existir)
+        if (j['ID_DIGITAL']) {
+            row['ID_DIGITAL'] = j['ID_DIGITAL'];
+        }
+        return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Jovens');
+
+    // Ajusta largura das colunas
+    const colWidths = [];
+    const headers = Object.keys(data[0] || {});
+    headers.forEach(h => {
+        let maxLen = h.length;
+        data.forEach(row => {
+            const val = String(row[h] || '');
+            if (val.length > maxLen) maxLen = val.length;
+        });
+        colWidths.push({ wch: Math.min(Math.max(maxLen + 2, 12), 40) });
+    });
+    ws['!cols'] = colWidths;
+
+    XLSX.writeFile(wb, `relatorio_jovens_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
 
 // ============================================================
 // IMPORTAR PLANILHA
@@ -2579,10 +2787,7 @@ async function importarPlanilha() {
             });
 
             const colNome = colMap['NOME'] || 'NOME';
-            let importados = 0,
-                atualizados = 0,
-                erros = 0,
-                ignorados = 0;
+            let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
 
             for (const row of rows) {
                 try {
@@ -2723,50 +2928,10 @@ async function importarPlanilha() {
 }
 
 // ============================================================
-// EXPORTAR EXCEL
-// ============================================================
-function exportarExcel() {
-    const data = estado.jovens.map(j => ({
-        Nome: j['NOME'] || j['REFERENCIA'],
-        Digital: j['ID_DIGITAL'],
-        Idade: j['IDADE'],
-        Medida: j['MEDIDA'],
-        Saldo: calcularSaldo(j),
-        Status: j.status || 'ativo',
-        Motivo: j.motivoSuspensao || '',
-        Frequências: (j.historicoFrequencia || []).length,
-        'Ações LA': (j.acoesLA || []).filter(a => a.realizado).length + '/' + (j.acoesLA || []).length
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Jovens');
-    XLSX.writeFile(wb, `relatorio_${new Date().toISOString().slice(0,10)}.xlsx`);
-}
-
-// ============================================================
 // AVISO DE OBSERVAÇÕES PARA GESTOR
 // ============================================================
 function exibirAvisoObservacoes() {
-    const agora = new Date();
-    let html7 = '',
-        html14 = '';
-    let tem7 = false,
-        tem14 = false;
-    estado.jovens.forEach(j => {
-        if (j.status === 'concluído' || j.status === 'suspenso' || j['MEDIDA'] === 'Liberação') return;
-        const hist = j.historicoFrequencia || [];
-        let diffDias = 999;
-        if (hist.length > 0) {
-            const ultimo = new Date(Math.max(...hist.map(h => new Date(h.data))));
-            diffDias = Math.floor((agora - ultimo) / (1000 * 60 * 60 * 24));
-        }
-        const li = `<li><strong>${j['NOME']}</strong> - Último: ${hist.length > 0 ? new Date(Math.max(...hist.map(h => new Date(h.data)))).toLocaleDateString('pt-BR') : 'Nunca'} (${diffDias} dias)</li>`;
-        if (diffDias >= 14) { html14 += li;
-            tem14 = true; } else if (diffDias >= 7) { html7 += li;
-            tem7 = true; }
-    });
-    // Não mostra mais o modal automaticamente - apenas para referência
-    // A lista já é exibida na aba Observações
+    // Apenas para referência - a lista já é exibida na aba Observações
 }
 
 // ============================================================
@@ -2881,7 +3046,6 @@ async function cadastrarUsuario() {
 // ============================================================
 // FUNÇÕES DE COMPATIBILIDADE PARA MODAIS ANTIGOS
 // ============================================================
-// Funções para modal de alterar senha (alternativo)
 function salvarNovaSenhaAlt() {
     const s1 = document.getElementById('novaSenhaInputAlt').value;
     const s2 = document.getElementById('confirmarNovaSenhaInputAlt').value;
@@ -2896,7 +3060,6 @@ function salvarLogoAlt() {
     salvarLogo();
 }
 
-// ============================================================
-// FUNÇÕES DE INJEÇÃO DINÂMICA (para compatibilidade)
-// ============================================================
 function injetarHTMLDinamico() {}
+
+console.log('Sistema Socioeducativo v2.0 carregado com sucesso!');
