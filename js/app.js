@@ -24,7 +24,7 @@ const NIVEIS_ACESSO = {
 const NIVEIS_COM_STATUS = ['desenvolvedor', 'admin', 'gestor', 'tecnico'];
 
 // ============================================================
-// CAMPOS DO FORMULÁRIO (baseados na planilha real)
+// CAMPOS DO FORMULÁRIO
 // ============================================================
 const CAMPOS = [
     ['REFERENCIA','REFERÊNCIA','text'],['NOME','NOME','text'],['NOME DO RESPONSÁVEL','RESPONSÁVEL','text'],
@@ -152,7 +152,6 @@ function navigateTo(pageId) {
     const activeItem = document.querySelector(`.menu-item[data-page="${pageId}"]`);
     if (activeItem) activeItem.classList.add('active');
 
-    // Ações ao carregar página
     if (pageId === 'pageObservacoes') { renderizarAcompanhamento(); listarMetasLAProximas(); }
     if (pageId === 'pageLista') { carregarLista(); }
     if (pageId === 'pageRelatorios') { renderizarRelatorios(); }
@@ -312,7 +311,6 @@ async function carregarTodosDados() {
                 }
             }
         }
-        // NÃO chama verificarDescumprimentoAutomatico (removido)
         atualizarInterfaceCompleta();
     } catch (err) {
         console.error('Erro ao carregar dados:', err);
@@ -2156,18 +2154,13 @@ async function carregarLogo() {
     try {
         const logoBase64 = await upstash('GET', 'config:logo');
         if (logoBase64) {
-            // Cabeçalho - tenta diferentes seletores
             const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
             if (logoImg) logoImg.src = logoBase64;
-            
-            // Login
             const logoLogin = document.getElementById('logoLogin');
             if (logoLogin) {
                 logoLogin.src = logoBase64;
                 logoLogin.style.display = 'block';
             }
-            
-            // Guarda para impressão
             window._logoBase64 = logoBase64;
         }
     } catch (e) {
@@ -2178,7 +2171,6 @@ async function carregarLogo() {
 async function salvarLogo() {
     const fileInput = document.getElementById('novaLogoInput');
     if (!fileInput || !fileInput.files[0]) {
-        // Tenta o input alternativo
         const fileInputAlt = document.getElementById('novaLogoInputAlt');
         if (fileInputAlt && fileInputAlt.files[0]) {
             try {
@@ -2208,16 +2200,13 @@ async function salvarLogo() {
 }
 
 function atualizarLogoInterface(base64) {
-    // Atualiza todos os elementos de logo
     const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
     if (logoImg) logoImg.src = base64;
-    
     const logoLogin = document.getElementById('logoLogin');
     if (logoLogin) {
         logoLogin.src = base64;
         logoLogin.style.display = 'block';
     }
-    
     window._logoBase64 = base64;
 }
 
@@ -2681,7 +2670,7 @@ window.imprimirFichaIndividual = function() {
 };
 
 // ============================================================
-// EXPORTAR EXCEL (COM TODOS OS CAMPOS DA PLANILHA + STATUS)
+// EXPORTAR EXCEL
 // ============================================================
 function exportarExcel() {
     const camposPlanilha = [
@@ -2765,7 +2754,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA (CORRIGIDO - USA NOME COMO PRINCIPAL)
+// IMPORTAR PLANILHA (CORRIGIDO - FILTRA MELHOR AS LINHAS)
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -2785,6 +2774,23 @@ async function importarPlanilha() {
             const ws = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
 
+            // PULA AS PRIMEIRAS LINHAS SE FOREM CABEÇALHOS
+            let startRow = 0;
+            for (let i = 0; i < Math.min(5, rows.length); i++) {
+                const row = rows[i];
+                const rowValues = Object.values(row).join(' ').toUpperCase();
+                if (rowValues.includes('REFERENCIA') || 
+                    rowValues.includes('NOME') || 
+                    rowValues.includes('MEDIDA') ||
+                    rowValues.includes('PACTUAÇÃO') ||
+                    rowValues.includes('SITUAÇÃO') ||
+                    rowValues.includes('MESES') ||
+                    rowValues.includes('HORAS') ||
+                    rowValues.includes('NASC')) {
+                    startRow = i + 1;
+                }
+            }
+
             // Mapeamento de colunas
             const colMap = {};
             const headers = Object.keys(rows[0] || {});
@@ -2800,15 +2806,22 @@ async function importarPlanilha() {
                 }
                 if (hNorm.includes('ID') && hNorm.includes('DIGITAL')) colMap['ID_DIGITAL'] = h;
                 if (hNorm === 'REFERENCIA' || hNorm.includes('REFERENCIA')) colMap['REFERENCIA'] = h;
-                // Identifica coluna de NOME
                 if (hNorm.includes('NOME') || hNorm === 'NOME' || hNorm.includes('NOM')) {
                     colMap['NOME'] = h;
                 }
+                if (hNorm.includes('CPF')) colMap['CPF'] = h;
+                if (hNorm.includes('NASC')) colMap['NASC.'] = h;
+                if (hNorm.includes('IDADE')) colMap['IDADE'] = h;
+                if (hNorm.includes('GÊNERO') || hNorm.includes('GENERO')) colMap['GÊNERO'] = h;
+                if (hNorm.includes('MEDIDA')) colMap['MEDIDA'] = h;
+                if (hNorm.includes('HORAS')) colMap['HORAS'] = h;
+                if (hNorm.includes('TELEFONE')) colMap['TELEFONE'] = h;
+                if (hNorm.includes('ENDEREÇO') || hNorm.includes('ENDERECO')) colMap['ENDEREÇO'] = h;
+                if (hNorm.includes('BAIRRO')) colMap['BAIRRO'] = h;
             });
 
             // Encontra a coluna de NOME
             let colNome = colMap['NOME'] || 'NOME';
-            // Se não encontrou, tenta encontrar por similaridade
             if (!headers.find(h => h === colNome)) {
                 for (const h of headers) {
                     const hNorm = h.toUpperCase().replace(/\s/g, '');
@@ -2819,24 +2832,49 @@ async function importarPlanilha() {
                 }
             }
 
+            // Encontra a coluna de MEDIDA
+            let colMedida = colMap['MEDIDA'] || 'MEDIDA';
+            if (!headers.find(h => h === colMedida)) {
+                for (const h of headers) {
+                    const hNorm = h.toUpperCase().replace(/\s/g, '');
+                    if (hNorm.includes('MEDIDA') || hNorm.includes('MED')) {
+                        colMedida = h;
+                        break;
+                    }
+                }
+            }
+
             let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
 
-            for (const row of rows) {
+            // LISTA DE PALAVRAS QUE INDICAM QUE A LINHA NÃO É UM JOVEM
+            const palavrasIgnorar = [
+                'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
+                'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
+                'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TERÇA', 'QUINTA', 'SÁBADO',
+                'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
+                'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
+                'TER', 'QUIN', 'SÁB', 'PRESENÇA', 'AUSENCIA', 'JUSTIFICADO'
+            ];
+
+            // Processa as linhas a partir da linha de início
+            for (let i = startRow; i < rows.length; i++) {
                 try {
-                    // OBTÉM O NOME - principal identificador
+                    const row = rows[i];
+                    
+                    // OBTÉM O NOME
                     let nome = '';
                     if (colNome && row[colNome] !== undefined && row[colNome] !== '') {
                         nome = String(row[colNome] || '').trim();
                     }
-                    // Se não encontrou nome, tenta qualquer coluna que pareça ser nome
-                    if (!nome) {
+                    
+                    if (!nome || nome === 'undefined' || nome === '') {
                         for (const h of headers) {
                             const val = String(row[h] || '').trim();
-                            if (val && val.length > 2 && !val.includes('REFERENCIA') && !val.includes('CÓDIGOS') && !val.includes('NOVOS') && !val.includes('REGULAR') && !val.includes('IRREGULAR') && !val.includes('DESCUMPRIMENTO') && !val.includes('MEDIDA')) {
-                                // Verifica se parece um nome (não é apenas números ou data)
-                                const isDate = /^\d{2}\/\d{2}\/\d{4}/.test(val);
+                            if (val && val.length > 2) {
+                                const isDate = /^\d{2}\/\d{2}\/\d{4}/.test(val) || /^\d{4}-\d{2}-\d{2}/.test(val);
                                 const isNumber = /^\d+$/.test(val.replace(/[.,]/g, ''));
-                                if (!isDate && !isNumber && val.length > 2) {
+                                const isIgnorar = palavrasIgnorar.some(p => val.toUpperCase().includes(p));
+                                if (!isDate && !isNumber && !isIgnorar && val.length > 2) {
                                     nome = val;
                                     break;
                                 }
@@ -2849,35 +2887,27 @@ async function importarPlanilha() {
                         continue; 
                     }
 
-                    // Pula linhas que não são jovens (cabeçalhos, etc)
                     const nomeUpper = nome.toUpperCase().trim();
-                    if (nomeUpper.includes('NOVOS ADOLESCENTES') || 
-                        nomeUpper.includes('REGULAR') || 
-                        nomeUpper.includes('IRREGULAR') || 
-                        nomeUpper.includes('EM DESCUMPRIMENTO') ||
-                        nomeUpper.includes('CÓDIGOS FAMILIARES') ||
-                        nomeUpper.includes('PACTUAÇÃO') ||
-                        nomeUpper.includes('MEDIDA FINALIZADA') ||
-                        nomeUpper.includes('PRESENÇA') ||
-                        nomeUpper.includes('AUSENCIA') ||
-                        nomeUpper.includes('JUSTIFICADO') ||
-                        nomeUpper.includes('DESC') ||
-                        nomeUpper.includes('TERÇA') ||
-                        nomeUpper.includes('QUINTA') ||
-                        nomeUpper.includes('SÁBADO') ||
-                        nomeUpper.includes('PACTUAÇÃO PIA')) {
+                    let deveIgnorar = false;
+                    for (const palavra of palavrasIgnorar) {
+                        if (nomeUpper.includes(palavra)) {
+                            deveIgnorar = true;
+                            break;
+                        }
+                    }
+                    
+                    const temMedida = colMedida && row[colMedida] && String(row[colMedida]).trim() !== '';
+                    
+                    if (deveIgnorar || (!temMedida && nome.length < 3)) {
                         ignorados++;
                         continue;
                     }
 
-                    // Busca jovem existente pelo NOME (principal)
+                    // Busca jovem existente pelo NOME
                     let jovemExistente = null;
-                    
-                    // Primeiro tenta por NOME exato
                     const nomeExato = nome.toUpperCase().trim();
                     jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nomeExato);
                     
-                    // Se não encontrou, tenta por CPF
                     if (!jovemExistente) {
                         const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
                         if (cpfPlanilha && cpfPlanilha.length >= 11) {
@@ -2885,22 +2915,19 @@ async function importarPlanilha() {
                         }
                     }
                     
-                    // Se ainda não encontrou, tenta por similaridade de nome
-                    if (!jovemExistente) {
+                    if (!jovemExistente && nome.length > 3) {
+                        const palavrasNome = nomeExato.split(' ');
                         jovemExistente = estado.jovens.find(j => {
                             const jNome = (j['NOME'] || '').toUpperCase().trim();
-                            // Verifica se um nome contém o outro ou se são muito similares
-                            return jNome === nomeExato || 
-                                   jNome.includes(nomeExato) || 
-                                   nomeExato.includes(jNome) ||
-                                   (nomeExato.length > 5 && jNome.length > 5 && 
-                                    (nomeExato.includes(jNome.substring(0, 5)) || 
-                                     jNome.includes(nomeExato.substring(0, 5))));
+                            let matchCount = 0;
+                            for (const p of palavrasNome) {
+                                if (p.length > 2 && jNome.includes(p)) matchCount++;
+                            }
+                            return matchCount >= 2 || jNome === nomeExato || jNome.includes(nomeExato) || nomeExato.includes(jNome);
                         });
                     }
 
                     if (jovemExistente) {
-                        // ATUALIZA JOVEM EXISTENTE
                         const jovemId = jovemExistente.id;
                         const historicoFrequencia = jovemExistente.historicoFrequencia || [];
                         const observacoes = jovemExistente.observacoes || [];
@@ -2918,12 +2945,10 @@ async function importarPlanilha() {
                             status: jovemExistente.status || 'ativo'
                         };
                         
-                        // Preenche todos os campos
                         CAMPOS.forEach(([key]) => {
                             const colName = colMap[key];
                             let valor = '';
                             
-                            // Tenta encontrar o valor na linha
                             if (colName && row[colName] !== undefined && row[colName] !== '') {
                                 valor = String(row[colName] || '').trim();
                             } else if (row[key] !== undefined && row[key] !== '') {
@@ -2932,7 +2957,6 @@ async function importarPlanilha() {
                                 valor = jovemExistente[key];
                             }
                             
-                            // Processa valores especiais
                             if (key === 'GÊNERO' && valor) {
                                 if (valor.toUpperCase().includes('MASC')) valor = 'M';
                                 else if (valor.toUpperCase().includes('FEM')) valor = 'F';
@@ -2950,8 +2974,6 @@ async function importarPlanilha() {
                         
                         jovemAtualizado['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || jovemExistente['ID_DIGITAL'] || '').trim();
                         jovemAtualizado['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || jovemExistente['REFERENCIA'] || '').trim();
-                        
-                        // Garante que o NOME seja mantido
                         if (nome) jovemAtualizado['NOME'] = nome;
 
                         await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
@@ -2962,7 +2984,6 @@ async function importarPlanilha() {
                         atualizados++;
                         
                     } else {
-                        // CRIA NOVO JOVEM
                         const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                         const novoJovem = {
                             id: novoId,
@@ -2973,7 +2994,6 @@ async function importarPlanilha() {
                             acoesLA: []
                         };
                         
-                        // Preenche todos os campos
                         CAMPOS.forEach(([key]) => {
                             const colName = colMap[key];
                             let valor = '';
@@ -3044,9 +3064,7 @@ async function importarPlanilha() {
 // ============================================================
 // AVISO DE OBSERVAÇÕES PARA GESTOR
 // ============================================================
-function exibirAvisoObservacoes() {
-    // Apenas para referência - a lista já é exibida na aba Observações
-}
+function exibirAvisoObservacoes() {}
 
 // ============================================================
 // POLLING
@@ -3068,7 +3086,6 @@ function iniciarPolling() {
 // INICIALIZAÇÃO
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
-    // Login
     document.getElementById('loginBtn').addEventListener('click', fazerLogin);
     document.getElementById('loginSenha').addEventListener('keypress', e => { if (e.key === 'Enter') fazerLogin(); });
     document.getElementById('logoutBtn').addEventListener('click', deslogarSistema);
@@ -3082,32 +3099,19 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('telaLogin').style.display = 'flex';
     });
     document.getElementById('cadastrarBtn').addEventListener('click', cadastrarUsuario);
-
-    // Formulário Jovem
     document.getElementById('salvarBtn').addEventListener('click', salvarJovem);
     document.getElementById('importarExcelBtn').addEventListener('click', importarPlanilha);
     document.getElementById('limparFormBtn').addEventListener('click', limparFormulario);
-
-    // Lista
     document.getElementById('btnPontoDigital').addEventListener('click', registrarPontoDigital);
     document.getElementById('exportarExcelBtn').addEventListener('click', exportarExcel);
     document.getElementById('registroManualBtn').addEventListener('click', abrirRegistroManual);
     document.getElementById('manualSalvar').addEventListener('click', salvarRegistroManual);
-
-    // Oficinas
     document.getElementById('salvarOficinaBtn').addEventListener('click', salvarOficina);
-
-    // Profissionais
     document.getElementById('salvarProfissionalBtn').addEventListener('click', salvarProfissional);
-
-    // Usuários
     document.getElementById('userSalvarBtn').addEventListener('click', salvarNovoUsuario);
-
-    // Header actions
     document.getElementById('btnNovoJovemHeader').addEventListener('click', () => navigateTo('pageCadastro'));
     document.getElementById('btnRegistrarPontoHeader').addEventListener('click', () => navigateTo('pageLista'));
 
-    // Filtros
     document.querySelectorAll('#filtrosFrequencia select, #filtrosFrequencia input').forEach(el => {
         el?.addEventListener('change', carregarLista);
         el?.addEventListener('input', carregarLista);
@@ -3158,7 +3162,7 @@ async function cadastrarUsuario() {
 }
 
 // ============================================================
-// FUNÇÕES DE COMPATIBILIDADE PARA MODAIS ANTIGOS
+// FUNÇÕES DE COMPATIBILIDADE
 // ============================================================
 function salvarNovaSenhaAlt() {
     const s1 = document.getElementById('novaSenhaInputAlt').value;
