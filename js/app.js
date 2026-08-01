@@ -2754,7 +2754,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA (CORRIGIDO - FILTRA MELHOR AS LINHAS)
+// IMPORTAR PLANILHA (CORRIGIDO - BASEADO NA LÓGICA ORIGINAL)
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -2774,24 +2774,7 @@ async function importarPlanilha() {
             const ws = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
 
-            // PULA AS PRIMEIRAS LINHAS SE FOREM CABEÇALHOS
-            let startRow = 0;
-            for (let i = 0; i < Math.min(5, rows.length); i++) {
-                const row = rows[i];
-                const rowValues = Object.values(row).join(' ').toUpperCase();
-                if (rowValues.includes('REFERENCIA') || 
-                    rowValues.includes('NOME') || 
-                    rowValues.includes('MEDIDA') ||
-                    rowValues.includes('PACTUAÇÃO') ||
-                    rowValues.includes('SITUAÇÃO') ||
-                    rowValues.includes('MESES') ||
-                    rowValues.includes('HORAS') ||
-                    rowValues.includes('NASC')) {
-                    startRow = i + 1;
-                }
-            }
-
-            // Mapeamento de colunas
+            // Mapeamento de colunas (igual ao original)
             const colMap = {};
             const headers = Object.keys(rows[0] || {});
             
@@ -2809,18 +2792,9 @@ async function importarPlanilha() {
                 if (hNorm.includes('NOME') || hNorm === 'NOME' || hNorm.includes('NOM')) {
                     colMap['NOME'] = h;
                 }
-                if (hNorm.includes('CPF')) colMap['CPF'] = h;
-                if (hNorm.includes('NASC')) colMap['NASC.'] = h;
-                if (hNorm.includes('IDADE')) colMap['IDADE'] = h;
-                if (hNorm.includes('GÊNERO') || hNorm.includes('GENERO')) colMap['GÊNERO'] = h;
-                if (hNorm.includes('MEDIDA')) colMap['MEDIDA'] = h;
-                if (hNorm.includes('HORAS')) colMap['HORAS'] = h;
-                if (hNorm.includes('TELEFONE')) colMap['TELEFONE'] = h;
-                if (hNorm.includes('ENDEREÇO') || hNorm.includes('ENDERECO')) colMap['ENDEREÇO'] = h;
-                if (hNorm.includes('BAIRRO')) colMap['BAIRRO'] = h;
             });
 
-            // Encontra a coluna de NOME
+            // Encontra a coluna de NOME (prioriza)
             let colNome = colMap['NOME'] || 'NOME';
             if (!headers.find(h => h === colNome)) {
                 for (const h of headers) {
@@ -2832,36 +2806,11 @@ async function importarPlanilha() {
                 }
             }
 
-            // Encontra a coluna de MEDIDA
-            let colMedida = colMap['MEDIDA'] || 'MEDIDA';
-            if (!headers.find(h => h === colMedida)) {
-                for (const h of headers) {
-                    const hNorm = h.toUpperCase().replace(/\s/g, '');
-                    if (hNorm.includes('MEDIDA') || hNorm.includes('MED')) {
-                        colMedida = h;
-                        break;
-                    }
-                }
-            }
-
             let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
 
-            // LISTA DE PALAVRAS QUE INDICAM QUE A LINHA NÃO É UM JOVEM
-            const palavrasIgnorar = [
-                'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
-                'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
-                'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TERÇA', 'QUINTA', 'SÁBADO',
-                'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
-                'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
-                'TER', 'QUIN', 'SÁB', 'PRESENÇA', 'AUSENCIA', 'JUSTIFICADO'
-            ];
-
-            // Processa as linhas a partir da linha de início
-            for (let i = startRow; i < rows.length; i++) {
+            for (const row of rows) {
                 try {
-                    const row = rows[i];
-                    
-                    // OBTÉM O NOME
+                    // OBTÉM O NOME - prioridade máxima
                     let nome = '';
                     if (colNome && row[colNome] !== undefined && row[colNome] !== '') {
                         nome = String(row[colNome] || '').trim();
@@ -2870,11 +2819,9 @@ async function importarPlanilha() {
                     if (!nome || nome === 'undefined' || nome === '') {
                         for (const h of headers) {
                             const val = String(row[h] || '').trim();
-                            if (val && val.length > 2) {
-                                const isDate = /^\d{2}\/\d{2}\/\d{4}/.test(val) || /^\d{4}-\d{2}-\d{2}/.test(val);
-                                const isNumber = /^\d+$/.test(val.replace(/[.,]/g, ''));
-                                const isIgnorar = palavrasIgnorar.some(p => val.toUpperCase().includes(p));
-                                if (!isDate && !isNumber && !isIgnorar && val.length > 2) {
+                            if (val && val.length > 2 && !val.includes('/') && !val.match(/^\d+$/)) {
+                                const hNorm = h.toUpperCase().replace(/\s/g, '');
+                                if (hNorm.includes('NOME') || hNorm.includes('NOM') || hNorm === 'NOME') {
                                     nome = val;
                                     break;
                                 }
@@ -2882,48 +2829,58 @@ async function importarPlanilha() {
                         }
                     }
 
-                    if (!nome || nome === 'undefined' || nome === '') { 
-                        ignorados++; 
-                        continue; 
-                    }
-
-                    const nomeUpper = nome.toUpperCase().trim();
-                    let deveIgnorar = false;
-                    for (const palavra of palavrasIgnorar) {
-                        if (nomeUpper.includes(palavra)) {
-                            deveIgnorar = true;
-                            break;
-                        }
-                    }
-                    
-                    const temMedida = colMedida && row[colMedida] && String(row[colMedida]).trim() !== '';
-                    
-                    if (deveIgnorar || (!temMedida && nome.length < 3)) {
+                    if (!nome || nome === 'undefined' || nome === '') {
                         ignorados++;
                         continue;
                     }
 
-                    // Busca jovem existente pelo NOME
+                    const nomeUpper = nome.toUpperCase().trim();
+                    if (nomeUpper.includes('NOVOS ADOLESCENTES') ||
+                        nomeUpper.includes('REGULAR') ||
+                        nomeUpper.includes('IRREGULAR') ||
+                        nomeUpper.includes('EM DESCUMPRIMENTO') ||
+                        nomeUpper.includes('CÓDIGOS FAMILIARES') ||
+                        nomeUpper.includes('PACTUAÇÃO') ||
+                        nomeUpper.includes('MEDIDA FINALIZADA') ||
+                        nomeUpper.includes('PRESENÇA') ||
+                        nomeUpper.includes('AUSENCIA') ||
+                        nomeUpper.includes('JUSTIFICADO') ||
+                        nomeUpper.includes('DESC') ||
+                        nomeUpper.includes('TERÇA') ||
+                        nomeUpper.includes('QUINTA') ||
+                        nomeUpper.includes('SÁBADO') ||
+                        nomeUpper.includes('PACTUAÇÃO PIA') ||
+                        nomeUpper === 'REFERENCIA' ||
+                        nomeUpper === 'NOME' ||
+                        nomeUpper === 'MEDIDA' ||
+                        nomeUpper === 'MESES' ||
+                        nomeUpper === 'HORAS' ||
+                        nomeUpper === 'NASC.') {
+                        ignorados++;
+                        continue;
+                    }
+
+                    const medida = row[colMap['MEDIDA']] || row['MEDIDA'] || '';
+                    const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
+
+                    // Busca jovem existente primeiro por NOME
                     let jovemExistente = null;
                     const nomeExato = nome.toUpperCase().trim();
                     jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nomeExato);
                     
-                    if (!jovemExistente) {
-                        const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
-                        if (cpfPlanilha && cpfPlanilha.length >= 11) {
-                            jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
-                        }
+                    if (!jovemExistente && cpfPlanilha && cpfPlanilha.length >= 11) {
+                        jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
                     }
                     
-                    if (!jovemExistente && nome.length > 3) {
-                        const palavrasNome = nomeExato.split(' ');
+                    if (!jovemExistente) {
                         jovemExistente = estado.jovens.find(j => {
                             const jNome = (j['NOME'] || '').toUpperCase().trim();
-                            let matchCount = 0;
-                            for (const p of palavrasNome) {
-                                if (p.length > 2 && jNome.includes(p)) matchCount++;
-                            }
-                            return matchCount >= 2 || jNome === nomeExato || jNome.includes(nomeExato) || nomeExato.includes(jNome);
+                            return jNome === nomeExato || 
+                                   jNome.includes(nomeExato) || 
+                                   nomeExato.includes(jNome) ||
+                                   (nomeExato.length > 5 && jNome.length > 5 && 
+                                    (nomeExato.includes(jNome.substring(0, 5)) || 
+                                     jNome.includes(nomeExato.substring(0, 5))));
                         });
                     }
 
