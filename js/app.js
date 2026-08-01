@@ -2203,17 +2203,386 @@ window.imprimirFichaIndividual = function() {
 };
 
 // ============================================================
-// EXPORTAR EXCEL
+// EXPORTAR EXCEL (COMPLETO E FUNCIONAL)
 // ============================================================
 function exportarExcel() {
-    // ... código de exportação
+    // Todos os campos da planilha original
+    const camposPlanilha = [
+        'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA', 'MEDIDA',
+        'MESES', 'HORAS', 'PROTETIVA', 'NASC.', 'MÊS ANIVERSARIO', 'NATURALIDADE',
+        'IDADE', 'GÊNERO', 'COR', 'COMPOSIÇÃO FAMILIAR', 'RENDA', 'BENEFICIO',
+        'PAA', 'ENDEREÇO', 'BAIRRO', 'TELEFONE', 'CRAS', 'UBS', 'CPF',
+        'ESTUDA?', 'SÉRIE', 'ESCOLA', 'TRABALHA?', 'FUNÇÃO', 'VINCULO', 'REDE',
+        'USO DE SPA?', 'QUAL?', 'PREFERE NOME SOCIAL?', 'QUAL NOME SOCIAL?'
+    ];
+
+    const headerMap = {
+        'REFERENCIA': 'REFERENCIA',
+        'NOME': 'NOME',
+        'NOME DO RESPONSÁVEL': 'NOME DO RESPONSÁVEL',
+        'REINCIDÊNCIA': 'REINCIDÊNCIA',
+        'MEDIDA': 'MEDIDA',
+        'MESES': 'MESES',
+        'HORAS': 'HORAS',
+        'PROTETIVA': 'PROTETIVA',
+        'NASC.': 'NASC.',
+        'MÊS ANIVERSARIO': 'MÊS ANIVERSARIO',
+        'NATURALIDADE': 'NATURALIDADE',
+        'IDADE': 'IDADE',
+        'GÊNERO': 'GÊNERO',
+        'COR': 'COR',
+        'COMPOSIÇÃO FAMILIAR': 'COMPOSIÇÃO FAMILIAR',
+        'RENDA': 'RENDA',
+        'BENEFICIO': 'BENEFICIO',
+        'PAA': 'PAA',
+        'ENDEREÇO': 'ENDEREÇO',
+        'BAIRRO': 'BAIRRO',
+        'TELEFONE': 'TELEFONE',
+        'CRAS': 'CRAS',
+        'UBS': 'UBS',
+        'CPF': 'CPF',
+        'ESTUDA?': 'ESTUDA?',
+        'SÉRIE': 'SÉRIE',
+        'ESCOLA': 'ESCOLA',
+        'TRABALHA?': 'TRABALHA?',
+        'FUNÇÃO': 'FUNÇÃO',
+        'VINCULO': 'VÍNCULO',
+        'REDE': 'REDE',
+        'USO DE SPA?': 'USO DE SPA?',
+        'QUAL?': 'QUAL?',
+        'PREFERE NOME SOCIAL?': 'PREFERE NOME SOCIAL?',
+        'QUAL NOME SOCIAL?': 'QUAL NOME SOCIAL?'
+    };
+
+    // Adiciona campo Status e Horas Cumpridas
+    const data = estado.jovens.map(j => {
+        const row = {};
+        camposPlanilha.forEach(campo => {
+            const header = headerMap[campo] || campo;
+            const chave = Object.keys(j).find(k => k === campo || k === header);
+            row[header] = chave ? (j[chave] || '') : '';
+        });
+        row['STATUS'] = j.status || 'ativo';
+        row['HORAS_CUMPRIDAS'] = (j.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
+        row['SALDO'] = calcularSaldo(j);
+        if (j['ID_DIGITAL']) {
+            row['ID_DIGITAL'] = j['ID_DIGITAL'];
+        }
+        return row;
+    });
+
+    if (data.length === 0) {
+        alert('Não há dados para exportar.');
+        return;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Jovens');
+
+    // Ajusta largura das colunas
+    const colWidths = [];
+    const headers = Object.keys(data[0] || {});
+    headers.forEach(h => {
+        let maxLen = h.length;
+        data.forEach(row => {
+            const val = String(row[h] || '');
+            if (val.length > maxLen) maxLen = val.length;
+        });
+        colWidths.push({ wch: Math.min(Math.max(maxLen + 2, 12), 40) });
+    });
+    ws['!cols'] = colWidths;
+
+    XLSX.writeFile(wb, `relatorio_jovens_${new Date().toISOString().slice(0,10)}.xlsx`);
+    alert('✅ Planilha exportada com sucesso!');
 }
 
 // ============================================================
-// IMPORTAR PLANILHA
+// IMPORTAR PLANILHA (COMPLETO E FUNCIONAL)
 // ============================================================
 async function importarPlanilha() {
-    // ... código de importação
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const statusDiv = document.getElementById('statusImportacao');
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#fffbeb';
+        statusDiv.style.color = '#92400e';
+        statusDiv.textContent = '⏳ Processando planilha...';
+
+        try {
+            const data = await file.arrayBuffer();
+            const wb = XLSX.read(data, { cellStyles: true });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
+
+            // Mapeamento de colunas
+            const colMap = {};
+            const headers = Object.keys(rows[0] || {});
+            
+            headers.forEach(h => {
+                const hNorm = h.toUpperCase().replace(/\s/g, '').replace(/[ÀÁÂÃÄÅ]/g, 'A').replace(/[ÈÉÊË]/g, 'E').replace(/[ÌÍÎÏ]/g, 'I').replace(/[ÒÓÔÕÖ]/g, 'O').replace(/[ÙÚÛÜ]/g, 'U').replace(/Ç/g, 'C');
+                for (const [key] of CAMPOS) {
+                    const kNorm = key.toUpperCase().replace(/\s/g, '').replace(/[ÀÁÂÃÄÅ]/g, 'A').replace(/[ÈÉÊË]/g, 'E').replace(/[ÌÍÎÏ]/g, 'I').replace(/[ÒÓÔÕÖ]/g, 'O').replace(/[ÙÚÛÜ]/g, 'U').replace(/Ç/g, 'C');
+                    if (hNorm.includes(kNorm) || kNorm.includes(hNorm)) {
+                        colMap[key] = h;
+                        break;
+                    }
+                }
+                if (hNorm.includes('ID') && hNorm.includes('DIGITAL')) colMap['ID_DIGITAL'] = h;
+                if (hNorm === 'REFERENCIA' || hNorm.includes('REFERENCIA')) colMap['REFERENCIA'] = h;
+                if (hNorm.includes('NOME') || hNorm === 'NOME' || hNorm.includes('NOM')) {
+                    colMap['NOME'] = h;
+                }
+                if (hNorm.includes('CPF')) colMap['CPF'] = h;
+                if (hNorm.includes('NASC')) colMap['NASC.'] = h;
+                if (hNorm.includes('IDADE')) colMap['IDADE'] = h;
+                if (hNorm.includes('GÊNERO') || hNorm.includes('GENERO')) colMap['GÊNERO'] = h;
+                if (hNorm.includes('MEDIDA')) colMap['MEDIDA'] = h;
+                if (hNorm.includes('HORAS')) colMap['HORAS'] = h;
+                if (hNorm.includes('TELEFONE')) colMap['TELEFONE'] = h;
+                if (hNorm.includes('ENDEREÇO') || hNorm.includes('ENDERECO')) colMap['ENDEREÇO'] = h;
+                if (hNorm.includes('BAIRRO')) colMap['BAIRRO'] = h;
+            });
+
+            // Encontra a coluna de NOME
+            let colNome = colMap['NOME'] || 'NOME';
+            if (!headers.find(h => h === colNome)) {
+                for (const h of headers) {
+                    const hNorm = h.toUpperCase().replace(/\s/g, '');
+                    if (hNorm.includes('NOME') || hNorm === 'NOME' || hNorm.includes('NOM')) {
+                        colNome = h;
+                        break;
+                    }
+                }
+            }
+
+            let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
+
+            // Palavras que indicam que a linha não é um jovem
+            const palavrasIgnorar = [
+                'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
+                'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
+                'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TERÇA', 'QUINTA', 'SÁBADO',
+                'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
+                'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
+                'TER', 'QUIN', 'SÁB', 'REFERENCIA', 'NOME', 'MEDIDA', 'MESES', 'HORAS'
+            ];
+
+            for (const row of rows) {
+                try {
+                    // OBTÉM O NOME
+                    let nome = '';
+                    if (colNome && row[colNome] !== undefined && row[colNome] !== '') {
+                        nome = String(row[colNome] || '').trim();
+                    }
+                    
+                    // Se não encontrou nome, tenta qualquer coluna que pareça ser nome
+                    if (!nome || nome === 'undefined' || nome === '') {
+                        for (const h of headers) {
+                            const val = String(row[h] || '').trim();
+                            if (val && val.length > 2) {
+                                const isDate = /^\d{2}\/\d{2}\/\d{4}/.test(val) || /^\d{4}-\d{2}-\d{2}/.test(val);
+                                const isNumber = /^\d+$/.test(val.replace(/[.,]/g, ''));
+                                const isIgnorar = palavrasIgnorar.some(p => val.toUpperCase().includes(p));
+                                if (!isDate && !isNumber && !isIgnorar && val.length > 2) {
+                                    nome = val;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Se ainda não tem nome, pula
+                    if (!nome || nome === 'undefined' || nome === '') {
+                        ignorados++;
+                        continue;
+                    }
+
+                    const nomeUpper = nome.toUpperCase().trim();
+                    let deveIgnorar = false;
+                    for (const palavra of palavrasIgnorar) {
+                        if (nomeUpper.includes(palavra)) {
+                            deveIgnorar = true;
+                            break;
+                        }
+                    }
+                    
+                    if (deveIgnorar) {
+                        ignorados++;
+                        continue;
+                    }
+
+                    // Busca jovem existente pelo NOME
+                    let jovemExistente = null;
+                    const nomeExato = nome.toUpperCase().trim();
+                    
+                    // Tenta por NOME exato
+                    jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nomeExato);
+                    
+                    // Se não encontrou, tenta por CPF
+                    if (!jovemExistente) {
+                        const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
+                        if (cpfPlanilha && cpfPlanilha.length >= 11) {
+                            jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
+                        }
+                    }
+                    
+                    // Se ainda não encontrou, tenta por similaridade
+                    if (!jovemExistente && nome.length > 3) {
+                        jovemExistente = estado.jovens.find(j => {
+                            const jNome = (j['NOME'] || '').toUpperCase().trim();
+                            return jNome === nomeExato || 
+                                   jNome.includes(nomeExato) || 
+                                   nomeExato.includes(jNome) ||
+                                   (nomeExato.length > 5 && jNome.length > 5 && 
+                                    (nomeExato.includes(jNome.substring(0, 5)) || 
+                                     jNome.includes(nomeExato.substring(0, 5))));
+                        });
+                    }
+
+                    if (jovemExistente) {
+                        // ATUALIZA JOVEM EXISTENTE
+                        const jovemId = jovemExistente.id;
+                        const historicoFrequencia = jovemExistente.historicoFrequencia || [];
+                        const observacoes = jovemExistente.observacoes || [];
+                        const documentos = jovemExistente.documentos || [];
+                        const acoesLA = jovemExistente.acoesLA || [];
+                        const profissionalLA = jovemExistente.profissionalLA || '';
+
+                        const jovemAtualizado = {
+                            id: jovemId,
+                            profissionalLA: profissionalLA,
+                            historicoFrequencia: historicoFrequencia,
+                            observacoes: observacoes,
+                            documentos: documentos,
+                            acoesLA: acoesLA,
+                            status: jovemExistente.status || 'ativo'
+                        };
+                        
+                        CAMPOS.forEach(([key]) => {
+                            const colName = colMap[key];
+                            let valor = '';
+                            
+                            if (colName && row[colName] !== undefined && row[colName] !== '') {
+                                valor = String(row[colName] || '').trim();
+                            } else if (row[key] !== undefined && row[key] !== '') {
+                                valor = String(row[key] || '').trim();
+                            } else if (jovemExistente[key] !== undefined && jovemExistente[key] !== '') {
+                                valor = jovemExistente[key];
+                            }
+                            
+                            if (key === 'GÊNERO' && valor) {
+                                if (valor.toUpperCase().includes('MASC')) valor = 'M';
+                                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
+                                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
+                            }
+                            if ((key === 'HORAS' || key === 'MESES') && valor) {
+                                valor = parseFloat(String(valor).replace(',', '.')) || 0;
+                            }
+                            if (key === 'IDADE' && valor) {
+                                valor = parseInt(valor) || 0;
+                            }
+                            
+                            jovemAtualizado[key] = valor;
+                        });
+                        
+                        jovemAtualizado['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || jovemExistente['ID_DIGITAL'] || '').trim();
+                        jovemAtualizado['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || jovemExistente['REFERENCIA'] || '').trim();
+                        if (nome) jovemAtualizado['NOME'] = nome;
+
+                        await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
+                        const index = estado.jovens.findIndex(j => j.id === jovemId);
+                        if (index !== -1) {
+                            estado.jovens[index] = jovemAtualizado;
+                        }
+                        atualizados++;
+                        
+                    } else {
+                        // CRIA NOVO JOVEM
+                        const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                        const novoJovem = {
+                            id: novoId,
+                            status: 'ativo',
+                            historicoFrequencia: [],
+                            observacoes: [],
+                            documentos: [],
+                            acoesLA: []
+                        };
+                        
+                        CAMPOS.forEach(([key]) => {
+                            const colName = colMap[key];
+                            let valor = '';
+                            
+                            if (colName && row[colName] !== undefined && row[colName] !== '') {
+                                valor = String(row[colName] || '').trim();
+                            } else if (row[key] !== undefined && row[key] !== '') {
+                                valor = String(row[key] || '').trim();
+                            }
+                            
+                            if (key === 'GÊNERO' && valor) {
+                                if (valor.toUpperCase().includes('MASC')) valor = 'M';
+                                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
+                                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
+                            }
+                            if ((key === 'HORAS' || key === 'MESES') && valor) {
+                                valor = parseFloat(String(valor).replace(',', '.')) || 0;
+                            }
+                            if (key === 'IDADE' && valor) {
+                                valor = parseInt(valor) || 0;
+                            }
+                            
+                            novoJovem[key] = valor;
+                        });
+                        
+                        novoJovem['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || '').trim();
+                        novoJovem['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || '').trim();
+                        novoJovem['NOME'] = nome;
+
+                        if (novoJovem['NOME']) {
+                            await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
+                            await upstash('SADD', 'jovens:all', novoId);
+                            estado.jovens.push(novoJovem);
+                            importados++;
+                        } else {
+                            ignorados++;
+                        }
+                    }
+                    
+                } catch (rowError) {
+                    console.error('Erro ao processar linha:', rowError);
+                    erros++;
+                }
+            }
+            
+            await carregarTodosDados();
+            
+            let mensagem = `✅ Importação concluída!`;
+            if (importados > 0) mensagem += ` ${importados} novos adicionados.`;
+            if (atualizados > 0) mensagem += ` ${atualizados} atualizados.`;
+            if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas.`;
+            if (erros > 0) mensagem += ` ⚠️ ${erros} erros.`;
+            
+            statusDiv.style.background = '#d1fae5';
+            statusDiv.style.color = '#065f46';
+            statusDiv.textContent = mensagem;
+            
+            // Oculta o status após 10 segundos
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 10000);
+            
+        } catch (err) {
+            statusDiv.style.background = '#fee2e2';
+            statusDiv.style.color = '#991b1b';
+            statusDiv.textContent = '❌ Erro: ' + err.message;
+            console.error('Erro na importação:', err);
+        }
+    };
+    input.click();
 }
 
 // ============================================================
