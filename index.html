@@ -232,10 +232,33 @@
             <input type="text" id="buscaFrequencia" placeholder="🔍 Buscar rápido..." style="flex:1; padding:8px 16px; border:1px solid #d1d9e6; border-radius:40px;">
             <button id="exportarExcelBtn" class="btn-success"><i class="fas fa-file-excel"></i> Exportar</button>
             <button id="registroManualBtn" class="btn-secondary"><i class="fas fa-clock"></i> Registro Manual</button>
+            <!-- Ações em Lote -->
+            <button id="btnAcoesLote" class="btn-warning" onclick="abrirModalAcoesLote()" style="display:none;"><i class="fas fa-tasks"></i> Ações em Lote</button>
+        </div>
+        <!-- Barra de seleção em lote -->
+        <div id="barraSelecaoLote" style="display:none; background:#e8f0fe; padding:12px 20px; border-radius:12px; margin-bottom:16px; display:none; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+                <span id="contadorSelecionados">0</span> jovens selecionados
+                <button class="btn-sm btn-sm-outline" onclick="desmarcarTodos()" style="margin-left:10px;">Desmarcar todos</button>
+            </div>
+            <div>
+                <button class="btn-sm btn-sm-primary" onclick="abrirModalAcoesLote()"><i class="fas fa-tasks"></i> Ações em Lote</button>
+            </div>
         </div>
         <div class="table-wrapper">
             <table>
-                <thead><tr><th>Nome</th><th>ID Digital</th><th>Idade</th><th>Medida</th><th>Saldo (h)</th><th>Status</th><th>Motivo</th><th>Último</th><th>Ações</th></tr></thead>
+                <thead><tr>
+                    <th style="width:40px;"><input type="checkbox" id="selecionarTodos" onchange="toggleSelecionarTodos()"></th>
+                    <th>Nome</th>
+                    <th>ID Digital</th>
+                    <th>Idade</th>
+                    <th>Medida</th>
+                    <th>Saldo (h)</th>
+                    <th>Status</th>
+                    <th>Motivo</th>
+                    <th>Último</th>
+                    <th>Ações</th>
+                </tr></thead>
                 <tbody id="listaCorpo"></tbody>
             </table>
             <div id="contadorContainer"></div>
@@ -508,7 +531,6 @@
         <div id="jovemFrequencia" style="margin-top:20px;"></div>
     </div>
 
-    <!-- FOOTER -->
     <footer style="text-align:center; padding:20px; color:#94a3b8; font-size:0.75rem; border-top:1px solid #e2e8f0;">
         Sistema de Controle de Medidas Socioeducativas • v2.0 • Dados sincronizados na nuvem
     </footer>
@@ -620,6 +642,43 @@
     </div>
 </div>
 
+<!-- Modal Ações em Lote -->
+<div class="modal-overlay" id="modalAcoesLote">
+    <div class="modal-box" style="max-width:500px;">
+        <h2><i class="fas fa-tasks"></i> Ações em Lote</h2>
+        <p style="color:#6b7280; margin-bottom:15px;"><span id="loteContadorSelecionados">0</span> jovens selecionados</p>
+        <div class="campo" style="margin-bottom:16px;">
+            <label>Selecione a ação</label>
+            <select id="loteAcaoSelect">
+                <option value="">Selecione...</option>
+                <option value="alterar_status">Alterar Status</option>
+                <option value="excluir">Excluir Permanentemente</option>
+            </select>
+        </div>
+        <div id="loteOpcoesStatus" style="display:none;">
+            <div class="campo">
+                <label>Novo Status</label>
+                <select id="loteNovoStatus">
+                    <option value="ativo">Ativo</option>
+                    <option value="suspenso">Suspenso</option>
+                    <option value="descumprimento">Descumprimento</option>
+                    <option value="concluído">Concluído</option>
+                </select>
+            </div>
+            <div id="loteMotivoSuspensao" style="display:none;">
+                <div class="campo">
+                    <label>Motivo da Suspensão</label>
+                    <textarea id="loteMotivoInput" rows="2" placeholder="Motivo para suspensão..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="fecharModalAcoesLote()">Cancelar</button>
+            <button class="btn-danger" onclick="executarAcaoLote()" id="loteExecutarBtn">Executar</button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Alterar Senha (embutido na página Config, mantido para compatibilidade) -->
 <div class="modal-overlay" id="modalAlterarSenha" style="display:none;">
     <div class="modal-box">
@@ -629,18 +688,6 @@
         <div class="modal-actions">
             <button class="btn-secondary" onclick="document.getElementById('modalAlterarSenha').style.display='none'">Cancelar</button>
             <button class="btn-primary" onclick="salvarNovaSenhaAlt()">Salvar</button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Alterar Logo (idem) -->
-<div class="modal-overlay" id="modalAlterarLogo" style="display:none;">
-    <div class="modal-box">
-        <h2>🖼️ Alterar Logo</h2>
-        <div class="campo"><input type="file" id="novaLogoInputAlt" accept="image/*"></div>
-        <div class="modal-actions">
-            <button class="btn-secondary" onclick="document.getElementById('modalAlterarLogo').style.display='none'">Cancelar</button>
-            <button class="btn-primary" onclick="salvarLogoAlt()">Salvar</button>
         </div>
     </div>
 </div>
