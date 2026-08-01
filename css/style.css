@@ -477,6 +477,47 @@ body {
     color: #2563EB;
 }
 
+/* ===== RELATÓRIOS ===== */
+.relatorio-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px 20px;
+    border: 1px solid #e9edf2;
+    margin-bottom: 12px;
+}
+.relatorio-card h4 {
+    color: #1A2A4A;
+    margin-bottom: 10px;
+    font-size: 1rem;
+}
+.relatorio-card p {
+    margin: 4px 0;
+    color: #475569;
+    font-size: 0.9rem;
+}
+.relatorio-card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-top: 8px;
+}
+.relatorio-card th,
+.relatorio-card td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+}
+.relatorio-card th {
+    background: #f8fafc;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: #1e293b;
+}
+.relatorio-card .btn-sm {
+    margin-top: 10px;
+}
+
 /* ===== GRÁFICOS ===== */
 .graficos-grid {
     display: grid;
@@ -938,6 +979,38 @@ tr:hover {
     gap: 12px;
 }
 
+/* ===== PROFISSIONAIS ===== */
+.profissional-item {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid #2c3e66;
+}
+.profissional-item strong {
+    color: #1A2A4A;
+}
+
+/* ===== CONTADOR DE LISTA ===== */
+#contadorContainer {
+    padding: 10px 15px;
+    font-weight: 600;
+    color: #1e2a4a;
+    background: #f1f5f9;
+    border-radius: 0 0 12px 12px;
+    border-top: 1px solid #e2e8f0;
+}
+#contadorListaJovens {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 /* ===== RESPONSIVIDADE ===== */
 @media (max-width: 768px) {
     .sidebar {
@@ -975,6 +1048,16 @@ tr:hover {
     .filtros-bar select {
         width: 100%;
     }
+    .header-actions .user-badge span {
+        display: none;
+    }
+    .modal-box {
+        padding: 20px;
+        max-width: 95%;
+    }
+    .relatorio-grid {
+        grid-template-columns: 1fr !important;
+    }
 }
 
 @media (max-width: 480px) {
@@ -987,9 +1070,44 @@ tr:hover {
     .page {
         padding: 16px;
     }
-    .modal-box {
-        padding: 20px;
-        max-width: 95%;
+    .header-left .page-title {
+        font-size: 0.9rem;
+    }
+    .header-actions {
+        gap: 6px;
+    }
+    .btn-outline {
+        padding: 4px 12px;
+        font-size: 0.75rem;
+    }
+    .btn-primary {
+        padding: 4px 12px;
+        font-size: 0.75rem;
+    }
+    table {
+        font-size: 0.75rem;
+    }
+    th,
+    td {
+        padding: 6px 8px;
+    }
+    .filtros-bar {
+        padding: 12px;
+    }
+    .login-box {
+        padding: 24px;
+    }
+    .meta-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .oficina-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    #barraSelecaoLote {
+        flex-direction: column;
+        align-items: stretch;
     }
 }
 
@@ -1018,4 +1136,106 @@ tr:hover {
 }
 .w-100 {
     width: 100%;
+}
+
+/* ===== RELATÓRIO GRID ===== */
+.relatorio-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* ===== STATUS CORES ===== */
+.status-ativo {
+    background: #d1fae5;
+    color: #065f46;
+}
+.status-irregular {
+    background: #fef3c7;
+    color: #92400e;
+}
+.status-suspenso {
+    background: #fce7f3;
+    color: #be185d;
+}
+.status-descumprimento {
+    background: #fee2e2;
+    color: #991b1b;
+}
+.status-concluido {
+    background: #d1fae5;
+    color: #065f46;
+}
+.status-liberado {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+/* ===== ATENDIMENTOS ===== */
+.atendimento-item {
+    padding: 10px 14px;
+    background: #f8fafc;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid #2563EB;
+}
+.atendimento-item strong {
+    color: #1A2A4A;
+}
+.atendimento-item small {
+    color: #64748b;
+    font-size: 0.75rem;
+}
+.atendimento-item p {
+    margin-top: 4px;
+    color: #475569;
+    font-size: 0.9rem;
+}
+
+/* ===== IMPRESSÃO ===== */
+@media print {
+    .sidebar,
+    .header,
+    .tabs,
+    .btn,
+    .btn-sm,
+    .no-print,
+    footer,
+    .modal-overlay {
+        display: none !important;
+    }
+    .main-content {
+        margin-left: 0 !important;
+        display: block !important;
+    }
+    .page {
+        display: block !important;
+        padding: 20px !important;
+    }
+    .page.active {
+        display: block !important;
+    }
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #e2e8f0 !important;
+        break-inside: avoid;
+    }
+    table {
+        font-size: 10px !important;
+    }
+    th,
+    td {
+        padding: 4px 6px !important;
+    }
+    .header-logo {
+        max-height: 60px !important;
+    }
+    .relatorio-card {
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: none !important;
+    }
+    body {
+        background: white !important;
+        padding: 10px !important;
+    }
 }
