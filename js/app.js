@@ -56,6 +56,7 @@ let estado = {
     planejamentos: [],
     mensagens: [],
     atendimentos: [],
+    mesesDados: [],
     online: false,
     usuarioAtual: null,
     graficos: {},
@@ -437,6 +438,121 @@ function renderizarGraficos() {
 }
 
 // ============================================================
+// FUNÇÕES PARA ABAS MENSAIS
+// ============================================================
+function obterUltimoMesDisponivel() {
+    const meses = [
+        'JULHO2026', 'JUNHO2026', 'MAIO2026', 'ABRIL2026', 'MARÇO2026',
+        'FEVEREIRO2026', 'JANEIRO2026', 'DEZEMBRO2025', 'NOVEMBRO2025',
+        'OUTUBRO2025', 'SETEMBRO2025', 'AGOSTO2025', 'JULHO2025',
+        'JUNHO2025', 'MAIO2025', 'ABRIL2025', 'MARÇO2025',
+        'FEVEREIRO2025', 'JANEIRO2025'
+    ];
+    
+    if (estado.mesesDados && estado.mesesDados.length > 0) {
+        for (const mes of meses) {
+            const dados = estado.mesesDados.find(m => m.nome === mes);
+            if (dados) return dados;
+        }
+    }
+    
+    const agora = new Date();
+    const mesAtual = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+    return { nome: mesAtual, dados: null };
+}
+
+function buscarHorasCumpridasNoMes(jovemNome, mesDados) {
+    if (!mesDados || !mesDados.dados) return 0;
+    
+    const linha = mesDados.dados.find(row => {
+        const nome = row['B'] || row['NOME'] || '';
+        return nome.toUpperCase().trim() === jovemNome.toUpperCase().trim();
+    });
+    
+    if (linha) {
+        const cumpridas = parseFloat(linha['T']) || parseFloat(linha['Cumpridas']) || 0;
+        return cumpridas;
+    }
+    
+    return 0;
+}
+
+function buscarUltimaPresenca(jovemNome, mesesDados) {
+    if (!mesesDados || mesesDados.length === 0) return null;
+    
+    let ultimaData = null;
+    
+    for (const mes of mesesDados) {
+        if (!mes.dados) continue;
+        
+        const linha = mes.dados.find(row => {
+            const nome = row['B'] || row['NOME'] || '';
+            return nome.toUpperCase().trim() === jovemNome.toUpperCase().trim();
+        });
+        
+        if (!linha) continue;
+        
+        const colunas = Object.keys(linha);
+        for (const col of colunas) {
+            const valor = String(linha[col] || '').trim().toUpperCase();
+            if (valor === 'P' || valor === 'PRESENÇA') {
+                const cabecalho = mes.cabecalhos && mes.cabecalhos[col];
+                if (cabecalho) {
+                    const data = new Date(cabecalho);
+                    if (!isNaN(data.getTime())) {
+                        if (!ultimaData || data > ultimaData) {
+                            ultimaData = data;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return ultimaData;
+}
+
+function processarAbasMensais(wb) {
+    const mesesDados = [];
+    const mesesNomes = [
+        'JULHO2026', 'JUNHO2026', 'MAIO2026', 'ABRIL2026', 'MARÇO2026',
+        'FEVEREIRO2026', 'JANEIRO2026', 'DEZEMBRO2025', 'NOVEMBRO2025',
+        'OUTUBRO2025', 'SETEMBRO2025', 'AGOSTO2025', 'JULHO2025',
+        'JUNHO2025', 'MAIO2025', 'ABRIL2025', 'MARÇO2025',
+        'FEVEREIRO2025', 'JANEIRO2025'
+    ];
+
+    for (const nomeMes of mesesNomes) {
+        const sheet = wb.Sheets[nomeMes];
+        if (!sheet) continue;
+
+        const dados = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+        if (!dados || dados.length === 0) continue;
+
+        const cabecalhos = {};
+        const primeiraLinha = dados[0] || {};
+        const colunas = Object.keys(primeiraLinha);
+        
+        for (const col of colunas) {
+            const valor = String(primeiraLinha[col] || '').trim();
+            const data = new Date(valor);
+            if (!isNaN(data.getTime())) {
+                cabecalhos[col] = valor;
+            }
+        }
+
+        mesesDados.push({
+            nome: nomeMes,
+            dados: dados,
+            cabecalhos: cabecalhos
+        });
+    }
+
+    estado.mesesDados = mesesDados;
+    return mesesDados;
+}
+
+// ============================================================
 // FORMULÁRIO DE CADASTRO
 // ============================================================
 function renderizarCamposFormulario() {
@@ -701,7 +817,7 @@ async function executarAcaoLote() {
 }
 
 // ============================================================
-// LISTA GERAL E FILTROS
+// LISTA GERAL E FILTROS (COM DADOS DAS ABAS MENSAIS)
 // ============================================================
 function carregarLista() {
     const tbody = document.getElementById('listaCorpo');
@@ -714,71 +830,104 @@ function carregarLista() {
     const fGenero = document.getElementById('filtroGenero')?.value;
     const fIdade = document.getElementById('filtroIdade')?.value;
 
-    const nomesFinalizados = ['AGUARDANDO DOCUMENTOS DE ENCERRAMENTO', 'MEDIDA FINALIZADA', 'FINALIZADO'];
+    const nomesFinalizados = ['AGUARDANDO DOCUMENTOS DE ENCERRAMENTO', 'MEDIDA FINALIZADA', 'FINALIZADO', 'CONCLUÍDO'];
+
+    const ultimoMes = obterUltimoMesDisponivel();
+    const mesesDados = estado.mesesDados || [];
 
     let lista = estado.jovens.map(j => {
+        // HORAS ATRIBUIDAS
         const horasAtribuidas = parseFloat(j['HORAS']) || 0;
-        const horasCumpridas = (j.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
+        
+        // HORAS CUMPRIDAS (da aba do último mês)
+        let horasCumpridas = 0;
+        if (j['NOME']) {
+            horasCumpridas = buscarHorasCumpridasNoMes(j['NOME'], ultimoMes);
+            if (horasCumpridas === 0) {
+                for (const mes of mesesDados) {
+                    if (mes.nome === ultimoMes.nome) continue;
+                    horasCumpridas = buscarHorasCumpridasNoMes(j['NOME'], mes);
+                    if (horasCumpridas > 0) break;
+                }
+            }
+        }
+        
+        // SALDO
         const saldo = Math.max(0, horasAtribuidas - horasCumpridas);
 
+        // ÚLTIMA PRESENÇA
         let ultimaPresenca = null;
         let diasSemPresenca = 999;
-        const hist = j.historicoFrequencia || [];
-        if (hist.length > 0) {
-            const entradas = hist.filter(h => h.tipo === 'entrada' || h.tipo === 'presenca');
-            if (entradas.length > 0) {
-                const ultimaData = new Date(Math.max(...entradas.map(h => new Date(h.data).getTime())));
-                ultimaPresenca = ultimaData;
+        
+        if (j['NOME']) {
+            ultimaPresenca = buscarUltimaPresenca(j['NOME'], mesesDados);
+            if (ultimaPresenca) {
                 const agora = new Date();
-                diasSemPresenca = Math.floor((agora - ultimaData) / (1000 * 60 * 60 * 24));
+                diasSemPresenca = Math.floor((agora - ultimaPresenca) / (1000 * 60 * 60 * 24));
             }
         }
 
+        // DETERMINAR STATUS
         let status = j.status || 'ativo';
         let motivoStatus = '';
         let corStatus = '';
 
         const nomeUpper = (j['NOME'] || '').toUpperCase().trim();
-        const isFinalizado = nomesFinalizados.some(n => nomeUpper.includes(n)) || 
-                            (horasAtribuidas > 0 && saldo <= 0 && j['MEDIDA'] !== 'LA' && j['MEDIDA'] !== 'Liberação');
 
-        if (isFinalizado || status === 'concluído') {
+        // CHECK 1: MEDIDA FINALIZADA
+        const isFinalizado = 
+            nomesFinalizados.some(n => nomeUpper.includes(n)) || 
+            (horasAtribuidas > 0 && saldo <= 0 && j['MEDIDA'] !== 'LA') ||
+            j['MEDIDA'] === 'Liberação' ||
+            status === 'concluído';
+
+        if (isFinalizado) {
             status = 'concluído';
             motivoStatus = 'Medida Finalizada';
-            corStatus = 'background:#d1fae5; color:#065f46;';
-        } else if (status === 'suspenso') {
+            corStatus = 'background:#10b981; color:white;';
+        }
+        // CHECK 2: SUSPENSO
+        else if (status === 'suspenso') {
             motivoStatus = j.motivoSuspensao || 'Suspenso';
-            corStatus = 'background:#fce7f3; color:#be185d;';
-        } else if (diasSemPresenca >= 14) {
+            corStatus = 'background:#8b5cf6; color:white;';
+        }
+        // CHECK 3: DESCUMPRIMENTO
+        else if (diasSemPresenca >= 14) {
             status = 'descumprimento';
             motivoStatus = '14+ dias sem comparecer';
-            corStatus = 'background:#fee2e2; color:#991b1b;';
-        } else if (diasSemPresenca >= 7) {
+            corStatus = 'background:#ef4444; color:white;';
+        }
+        // CHECK 4: IRREGULAR
+        else if (diasSemPresenca >= 7) {
             status = 'irregular';
             motivoStatus = '7+ dias sem comparecer';
-            corStatus = 'background:#fef3c7; color:#92400e;';
-        } else {
+            corStatus = 'background:#f59e0b; color:white;';
+        }
+        // CHECK 5: REGULAR
+        else {
             status = 'ativo';
             motivoStatus = 'Regular';
             corStatus = 'background:#d1fae5; color:#065f46;';
         }
 
+        // LA
         if (j['MEDIDA'] === 'LA') {
             status = j.status || 'ativo';
             motivoStatus = j.motivoSuspensao || 'LA';
-            corStatus = status === 'suspenso' ? 'background:#fce7f3; color:#be185d;' : 'background:#d1fae5; color:#065f46;';
-        }
-
-        if (j['MEDIDA'] === 'Liberação') {
-            status = 'liberado';
-            motivoStatus = 'Liberado';
-            corStatus = 'background:#e5e7eb; color:#374151;';
+            if (status === 'suspenso') {
+                corStatus = 'background:#8b5cf6; color:white;';
+            } else if (status === 'concluído') {
+                corStatus = 'background:#10b981; color:white;';
+            } else {
+                corStatus = 'background:#d1fae5; color:#065f46;';
+            }
         }
 
         j._statusRender = status;
         j._motivoStatus = motivoStatus;
         j._corStatus = corStatus;
         j._horasAtribuidas = horasAtribuidas;
+        j._horasCumpridas = horasCumpridas;
         j._saldo = saldo;
         j._ultimaPresenca = ultimaPresenca;
         j._diasSemPresenca = diasSemPresenca;
@@ -786,6 +935,7 @@ function carregarLista() {
         return j;
     });
 
+    // APLICAR FILTROS
     lista = lista.filter(j => {
         if (fNome && !(j['NOME'] || '').toLowerCase().includes(fNome) && !(j['ID_DIGITAL'] || '').includes(fNome)) return false;
         if (fMedida && j['MEDIDA'] !== fMedida) return false;
@@ -794,9 +944,9 @@ function carregarLista() {
                 'ativo': ['ativo', 'regular'],
                 'suspenso': ['suspenso'],
                 'descumprimento': ['descumprimento', 'em descumprimento'],
-                'concluído': ['concluído', 'medida finalizada'],
+                'concluído': ['concluído', 'medida finalizada', 'liberado'],
                 'irregular': ['irregular'],
-                'liberado': ['liberado']
+                'liberado': ['liberado', 'concluído']
             };
             const statusPermitidos = statusMap[fStatus] || [];
             if (!statusPermitidos.includes(j._statusRender)) return false;
@@ -816,6 +966,7 @@ function carregarLista() {
     atualizarContadorLista(lista.length);
     const podeAlterarStatus = NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel);
 
+    // RENDERIZAR TABELA
     tbody.innerHTML = lista.map(j => {
         const ultimo = j._ultimaPresenca ? j._ultimaPresenca.toLocaleDateString('pt-BR') : 'Nunca';
         const renderSaldo = j['MEDIDA'] === 'LA' ? 
@@ -1865,7 +2016,6 @@ function popularSelectAcompInd() {
         estado.jovens.sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR'))
         .map(j => `<option value="${j.id}">${j['NOME'] || j['REFERENCIA']} - ${j['MEDIDA'] || ''} ${j.status === 'suspenso' ? '🔴' : j.status === 'descumprimento' ? '⚠️' : j.status === 'concluído' ? '✅' : ''}</option>`).join('');
     
-    // Atualiza select de profissionais para atendimento
     const selectProf = document.getElementById('selectProfissionalAtendimento');
     if (selectProf) {
         selectProf.innerHTML = '<option value="">Selecione...</option>' +
@@ -2170,9 +2320,6 @@ window.salvarDocumento = async function() {
     }
 };
 
-// ============================================================
-// FICHA MODAL
-// ============================================================
 window.abrirFichaModal = function(id) {
     if (!id) { alert('ID do jovem não fornecido.'); return; }
     const jovem = estado.jovens.find(j => j.id === id);
@@ -2181,10 +2328,9 @@ window.abrirFichaModal = function(id) {
     if (!modalFicha) { alert('Modal de ficha não encontrado.'); return; }
 
     document.getElementById('fichaTitulo').textContent = `📋 Ficha: ${jovem['NOME'] || 'Sem nome'}`;
-
-    // [O código da ficha modal é igual ao carregarFichaIndividual, mantido para compatibilidade]
-    // Por ser extenso, mantive a lógica já implementada anteriormente
-    // ...
+    // O conteúdo é similar ao carregarFichaIndividual
+    carregarFichaIndividual();
+    modalFicha.style.display = 'flex';
 };
 
 // ============================================================
@@ -2199,14 +2345,39 @@ window.imprimirFichaIndividual = function() {
     if (!win) { alert('Por favor, permita pop-ups para imprimir a ficha.'); return; }
 
     let logoBase64 = window._logoBase64 || '';
-    // ... código de impressão
+    // Restante do código de impressão...
 };
 
 // ============================================================
-// EXPORTAR EXCEL (COMPLETO E FUNCIONAL)
+// EXPORTAR EXCEL (CORRIGIDO)
 // ============================================================
 function exportarExcel() {
-    // Todos os campos da planilha original
+    const palavrasIgnorar = [
+        'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
+        'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
+        'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TERÇA', 'QUINTA', 'SÁBADO',
+        'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
+        'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
+        'TER', 'QUIN', 'SÁB', 'REFERENCIA', 'NOME', 'MEDIDA', 'MESES', 'HORAS',
+        'NASC', 'LEGENDA', 'STATUS', 'SITUAÇÃO'
+    ];
+
+    const jovensValidos = estado.jovens.filter(j => {
+        const nome = (j['NOME'] || '').toUpperCase().trim();
+        if (!nome || nome.length < 3) return false;
+        for (const palavra of palavrasIgnorar) {
+            if (nome.includes(palavra)) return false;
+        }
+        if (/^\d{2}\/\d{2}\/\d{4}/.test(nome)) return false;
+        if (/^\d+$/.test(nome.replace(/[.,]/g, ''))) return false;
+        return true;
+    });
+
+    if (jovensValidos.length === 0) {
+        alert('Não há dados válidos para exportar.');
+        return;
+    }
+
     const camposPlanilha = [
         'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA', 'MEDIDA',
         'MESES', 'HORAS', 'PROTETIVA', 'NASC.', 'MÊS ANIVERSARIO', 'NATURALIDADE',
@@ -2254,8 +2425,7 @@ function exportarExcel() {
         'QUAL NOME SOCIAL?': 'QUAL NOME SOCIAL?'
     };
 
-    // Adiciona campo Status e Horas Cumpridas
-    const data = estado.jovens.map(j => {
+    const data = jovensValidos.map(j => {
         const row = {};
         camposPlanilha.forEach(campo => {
             const header = headerMap[campo] || campo;
@@ -2271,16 +2441,10 @@ function exportarExcel() {
         return row;
     });
 
-    if (data.length === 0) {
-        alert('Não há dados para exportar.');
-        return;
-    }
-
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Jovens');
 
-    // Ajusta largura das colunas
     const colWidths = [];
     const headers = Object.keys(data[0] || {});
     headers.forEach(h => {
@@ -2298,7 +2462,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA (COMPLETO E FUNCIONAL)
+// IMPORTAR PLANILHA
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -2316,7 +2480,11 @@ async function importarPlanilha() {
         try {
             const data = await file.arrayBuffer();
             const wb = XLSX.read(data, { cellStyles: true });
-            const ws = wb.Sheets[wb.SheetNames[0]];
+            
+            // Processa abas mensais
+            processarAbasMensais(wb);
+            
+            const ws = wb.Sheets['GERAL'] || wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
 
             // Mapeamento de colunas
@@ -2348,7 +2516,6 @@ async function importarPlanilha() {
                 if (hNorm.includes('BAIRRO')) colMap['BAIRRO'] = h;
             });
 
-            // Encontra a coluna de NOME
             let colNome = colMap['NOME'] || 'NOME';
             if (!headers.find(h => h === colNome)) {
                 for (const h of headers) {
@@ -2362,7 +2529,6 @@ async function importarPlanilha() {
 
             let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
 
-            // Palavras que indicam que a linha não é um jovem
             const palavrasIgnorar = [
                 'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
                 'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
@@ -2374,13 +2540,11 @@ async function importarPlanilha() {
 
             for (const row of rows) {
                 try {
-                    // OBTÉM O NOME
                     let nome = '';
                     if (colNome && row[colNome] !== undefined && row[colNome] !== '') {
                         nome = String(row[colNome] || '').trim();
                     }
                     
-                    // Se não encontrou nome, tenta qualquer coluna que pareça ser nome
                     if (!nome || nome === 'undefined' || nome === '') {
                         for (const h of headers) {
                             const val = String(row[h] || '').trim();
@@ -2396,7 +2560,6 @@ async function importarPlanilha() {
                         }
                     }
 
-                    // Se ainda não tem nome, pula
                     if (!nome || nome === 'undefined' || nome === '') {
                         ignorados++;
                         continue;
@@ -2416,14 +2579,11 @@ async function importarPlanilha() {
                         continue;
                     }
 
-                    // Busca jovem existente pelo NOME
                     let jovemExistente = null;
                     const nomeExato = nome.toUpperCase().trim();
                     
-                    // Tenta por NOME exato
                     jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nomeExato);
                     
-                    // Se não encontrou, tenta por CPF
                     if (!jovemExistente) {
                         const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
                         if (cpfPlanilha && cpfPlanilha.length >= 11) {
@@ -2431,7 +2591,6 @@ async function importarPlanilha() {
                         }
                     }
                     
-                    // Se ainda não encontrou, tenta por similaridade
                     if (!jovemExistente && nome.length > 3) {
                         jovemExistente = estado.jovens.find(j => {
                             const jNome = (j['NOME'] || '').toUpperCase().trim();
@@ -2445,7 +2604,6 @@ async function importarPlanilha() {
                     }
 
                     if (jovemExistente) {
-                        // ATUALIZA JOVEM EXISTENTE
                         const jovemId = jovemExistente.id;
                         const historicoFrequencia = jovemExistente.historicoFrequencia || [];
                         const observacoes = jovemExistente.observacoes || [];
@@ -2502,7 +2660,6 @@ async function importarPlanilha() {
                         atualizados++;
                         
                     } else {
-                        // CRIA NOVO JOVEM
                         const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                         const novoJovem = {
                             id: novoId,
@@ -2570,7 +2727,6 @@ async function importarPlanilha() {
             statusDiv.style.color = '#065f46';
             statusDiv.textContent = mensagem;
             
-            // Oculta o status após 10 segundos
             setTimeout(() => {
                 statusDiv.style.display = 'none';
             }, 10000);
@@ -2589,19 +2745,158 @@ async function importarPlanilha() {
 // USUÁRIOS, PROFISSIONAIS, EXCLUSÃO, ETC.
 // ============================================================
 function renderizarUsuarios() {
-    // ... código existente
+    const tbody = document.getElementById('listaUsuarios');
+    if (!tbody) return;
+
+    const podeConfigurarHorarios = ['gestor', 'desenvolvedor', 'admin'].includes(estado.usuarioAtual?.nivel);
+    const podeAlterarNivel = ['gestor', 'desenvolvedor', 'admin'].includes(estado.usuarioAtual?.nivel);
+
+    const usuariosAtivos = estado.usuarios.filter(u => u.status === 'ativo');
+
+    if (usuariosAtivos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#6b7280;">Nenhum usuário ativo encontrado.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = usuariosAtivos.map(u => {
+        const isDesenvolvedor = u.nivel === 'desenvolvedor' || u.nivel === 'admin';
+        const isProprioUsuario = u.id === estado.usuarioAtual?.id;
+
+        let botoesHorarios = '';
+        if (podeConfigurarHorarios) {
+            if (isProprioUsuario) {
+                botoesHorarios = `<button onclick="abrirModalHorarios('${u.id}')" class="btn-sm btn-sm-primary">👤 Meu Horário</button>`;
+            } else if (isDesenvolvedor) {
+                botoesHorarios = `<span style="font-size:0.65rem; color:#10b981;">🔓 Acesso irrestrito</span>`;
+            } else {
+                botoesHorarios = `<button onclick="abrirModalHorarios('${u.id}')" class="btn-sm btn-sm-warning">⏱️ Horários</button>`;
+            }
+        }
+
+        let botoesNivel = '';
+        if (podeAlterarNivel && !isProprioUsuario && !isDesenvolvedor) {
+            const niveis = ['gestor', 'tecnico', 'oficineiro', 'autoridade', 'jovem'];
+            botoesNivel = `
+                <select onchange="alterarNivelUsuario('${u.id}', this.value)" style="padding:2px 6px; font-size:0.7rem; border:1px solid #d1d9e6; border-radius:4px;">
+                    <option value="">Alterar Nível</option>
+                    ${niveis.map(n => `<option value="${n}" ${u.nivel === n ? 'selected' : ''}>${NIVEIS_ACESSO[n]?.nome || n}</option>`).join('')}
+                </select>
+            `;
+        }
+
+        const podeExcluir = NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel) && !isProprioUsuario;
+        const botaoExcluir = podeExcluir ? `<button onclick="abrirModalExclusao('usuario', '${u.id}', '${u.nome}')" class="btn-sm btn-sm-danger">🗑️</button>` : '';
+
+        return `
+        <tr>
+            <td>${u.nome || '-'}</td>
+            <td>${u.email || '-'}</td>
+            <td>${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel || '-'} ${isDesenvolvedor ? ' 🛡️' : ''}</td>
+            <td><span style="color:#10b981;">${u.status}</span></td>
+            <td style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+                ${botoesHorarios}
+                ${botoesNivel}
+                ${botaoExcluir}
+            </td>
+        </tr>
+    `}).join('');
 }
 
+window.alterarNivelUsuario = async function(userId, novoNivel) {
+    if (!['gestor', 'desenvolvedor'].includes(estado.usuarioAtual?.nivel)) {
+        alert('❌ Você não tem permissão para alterar níveis de acesso.');
+        return;
+    }
+    const user = estado.usuarios.find(u => u.id === userId);
+    if (!user) {
+        alert('Usuário não encontrado.');
+        return;
+    }
+    if (user.id === estado.usuarioAtual.id) {
+        alert('❌ Você não pode alterar seu próprio nível de acesso.');
+        return;
+    }
+    if (user.nivel === 'desenvolvedor' && estado.usuarioAtual.nivel !== 'desenvolvedor') {
+        alert('❌ Apenas desenvolvedores podem alterar o nível de outro desenvolvedor.');
+        return;
+    }
+    if (!confirm(`Tem certeza que deseja alterar o nível de ${user.nome} de "${user.nivel}" para "${novoNivel}"?`)) {
+        return;
+    }
+    const nivelAnterior = user.nivel;
+    user.nivel = novoNivel;
+    try {
+        await upstash('SET', `user:${user.id}`, JSON.stringify(user));
+        await carregarTodosDados();
+        alert(`✅ Nível de acesso alterado com sucesso!\n${user.nome}: ${nivelAnterior} → ${novoNivel}`);
+    } catch (err) {
+        alert('Erro ao alterar nível: ' + err.message);
+    }
+};
+
 function renderizarPendentes() {
-    // ... código existente
+    const tbody = document.getElementById('listaPendentes');
+    if (!tbody) return;
+    const pendentes = estado.usuarios.filter(u => u.status !== 'ativo');
+    tbody.innerHTML = pendentes.map(u => `
+        <tr>
+            <td>${u.nome || '-'}</td>
+            <td>${u.email || '-'}</td>
+            <td>${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel || '-'}</td>
+            <td>
+                ${NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel) ? `
+                    <button onclick="aprovarUsuario('${u.id}', '${u.nivel}')" class="btn-sm btn-sm-success">✅ Aprovar</button>
+                    <button onclick="abrirModalExclusao('usuario', '${u.id}', '${u.nome}')" class="btn-sm btn-sm-danger">🗑️ Rejeitar</button>
+                ` : '<span style="color:#6b7280;">Aguardando aprovação</span>'}
+            </td>
+        </tr>
+    `).join('');
 }
 
 async function salvarNovoUsuario() {
-    // ... código existente
+    const nivel = document.getElementById('userNivel').value;
+    if (nivel === 'desenvolvedor') return alert('Não é possível cadastrar Desenvolvedor.');
+
+    const user = {
+        id: 'usr_' + Date.now(),
+        nome: document.getElementById('userNome').value.trim(),
+        email: document.getElementById('userEmail').value.trim(),
+        senha: document.getElementById('userSenha').value.trim(),
+        nivel: nivel,
+        status: 'ativo'
+    };
+    if (!user.nome || !user.email || !user.senha) return alert('Preencha todos os campos.');
+    try {
+        await upstash('SET', `user:${user.id}`, JSON.stringify(user));
+        await upstash('SADD', 'users:all', user.id);
+        estado.usuarios.push(user);
+        renderizarUsuarios();
+        ['userNome', 'userEmail', 'userSenha'].forEach(id => document.getElementById(id).value = '');
+    } catch (err) {
+        alert('Erro: ' + err.message);
+    }
 }
 
 window.aprovarUsuario = async function(id, nivel) {
-    // ... código existente
+    const user = estado.usuarios.find(u => u.id === id);
+    if (!user) return;
+
+    if (nivel === 'jovem') {
+        window._userParaVincular = user;
+        const select = document.getElementById('selectVincularJovem');
+        select.innerHTML = '<option value="">Selecione o Jovem...</option>' +
+            estado.jovens.map(j => `<option value="${j['CPF'] || j.id}">${j['NOME'] || j['REFERENCIA']} (CPF: ${j['CPF'] || 'Não informado'})</option>`).join('');
+        document.getElementById('modalVincularJovem').style.display = 'flex';
+    } else {
+        user.status = 'ativo';
+        try {
+            await upstash('SET', `user:${user.id}`, JSON.stringify(user));
+            await carregarTodosDados();
+            alert('✅ Usuário aprovado com sucesso!');
+        } catch (err) {
+            alert('Erro: ' + err.message);
+        }
+    }
 };
 
 function fecharModalVincular() {
@@ -2610,31 +2905,206 @@ function fecharModalVincular() {
 }
 
 async function salvarVinculoJovem() {
-    // ... código existente
+    const cpfOuId = document.getElementById('selectVincularJovem').value;
+    if (!cpfOuId) return alert('Selecione um jovem.');
+    const user = window._userParaVincular;
+    if (!user) return;
+    user.cpf = cpfOuId;
+    user.status = 'ativo';
+    try {
+        await upstash('SET', `user:${user.id}`, JSON.stringify(user));
+        fecharModalVincular();
+        await carregarTodosDados();
+        alert('✅ Jovem vinculado e aprovado com sucesso!');
+    } catch (err) {
+        alert('Erro: ' + err.message);
+    }
 }
 
 window.abrirModalHorarios = function(id) {
-    // ... código existente
+    const u = estado.usuarios.find(x => x.id === id);
+    if (!u) {
+        alert('Usuário não encontrado.');
+        return;
+    }
+    estado.usuarioEdicaoHorario = u;
+    document.getElementById('nomeUserHorario').textContent = u.nome;
+
+    const dias = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
+    const cfg = u.horarios || {};
+
+    document.getElementById('gridHorarios').innerHTML = `
+        <div style="background:#f0fdf4; padding:10px; border-radius:8px; margin-bottom:12px; border:1px solid #86efac;">
+            <strong>👤 Configurando: ${u.nome}</strong>
+            <span style="margin-left:10px; font-size:0.8rem; color:#6b7280;">(${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel})</span>
+        </div>
+        <label style="font-weight:600; display:block; margin-bottom:8px;">
+            <input type="checkbox" id="horariosAtivosGlobais" ${u.horariosConfigurados ? 'checked' : ''}>
+            Limitar Acesso por Horário
+        </label>
+        <div id="diasContainer" style="display:${u.horariosConfigurados ? 'block' : 'none'}; margin-top:10px;">
+            ${dias.map(d => `
+                <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px; flex-wrap:wrap; background:#f8fafc; padding:6px 10px; border-radius:6px;">
+                    <input type="checkbox" id="chk_${d}" ${cfg[d]?.ativo ? 'checked' : ''}>
+                    <span style="width:70px; text-transform:capitalize; font-weight:500;">${d}</span>
+                    <input type="time" id="ini_${d}" value="${cfg[d]?.inicio || '08:00'}" style="padding:4px 8px; border:1px solid #d1d9e6; border-radius:4px;">
+                    <span>até</span>
+                    <input type="time" id="fim_${d}" value="${cfg[d]?.fim || '17:00'}" style="padding:4px 8px; border:1px solid #d1d9e6; border-radius:4px;">
+                </div>
+            `).join('')}
+        </div>
+        <p style="font-size:0.75rem; color:#6b7280; margin-top:8px;">* O usuário só poderá acessar nos dias e horários configurados.</p>
+        <p style="font-size:0.75rem; color:#10b981; margin-top:4px;">* Desenvolvedores têm acesso irrestrito independente da configuração.</p>
+    `;
+
+    document.getElementById('horariosAtivosGlobais').onchange = (e) => {
+        document.getElementById('diasContainer').style.display = e.target.checked ? 'block' : 'none';
+    };
+
+    document.getElementById('modalHorarios').style.display = 'flex';
 };
 
 window.salvarHorariosUsuario = async function() {
-    // ... código existente
+    const u = estado.usuarioEdicaoHorario;
+    if (!u) return;
+
+    u.horariosConfigurados = document.getElementById('horariosAtivosGlobais').checked;
+    u.horarios = {};
+    ['segunda', 'terca', 'quarta', 'quinta', 'sexta'].forEach(d => {
+        u.horarios[d] = {
+            ativo: document.getElementById(`chk_${d}`).checked,
+            inicio: document.getElementById(`ini_${d}`).value,
+            fim: document.getElementById(`fim_${d}`).value
+        };
+    });
+
+    try {
+        await upstash('SET', `user:${u.id}`, JSON.stringify(u));
+        document.getElementById('modalHorarios').style.display = 'none';
+        alert('✅ Horários de acesso salvos com sucesso!');
+        await carregarTodosDados();
+    } catch (err) {
+        alert('Erro ao salvar horários: ' + err.message);
+    }
 };
 
 function renderizarMensagens() {
-    // ... código existente
+    const div = document.getElementById('listaMensagens');
+    if (!div) return;
+
+    const destinatario = document.getElementById('msgDestinatario');
+    if (destinatario) {
+        const usuariosAtivos = estado.usuarios.filter(u => u.status === 'ativo' && u.id !== estado.usuarioAtual?.id);
+        const autoridades = usuariosAtivos.filter(u => u.nivel === 'autoridade' || u.nivel === 'gestor');
+        destinatario.innerHTML = '<option value="">Selecione um destinatário...</option>' +
+            autoridades.map(u => `<option value="${u.id}">${u.nome} (${NIVEIS_ACESSO[u.nivel]?.nome || u.nivel})</option>`).join('');
+    }
+
+    const mensagens = estado.mensagens
+        .filter(m => m.para === estado.usuarioAtual?.id || m.de === estado.usuarioAtual?.id)
+        .sort((a, b) => new Date(b.data) - new Date(a.data));
+
+    div.innerHTML = mensagens.length > 0 ? mensagens.map(m => {
+        const remetente = estado.usuarios.find(u => u.id === m.de);
+        const isParaMim = m.para === estado.usuarioAtual?.id;
+        return `
+            <div style="background:${isParaMim ? '#eff6ff' : '#f8fafc'}; border-radius:8px; padding:12px; margin-bottom:8px; border-left:4px solid ${isParaMim ? '#3b82f6' : '#6c757d'};">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div>
+                        <strong>${remetente?.nome || 'Sistema'}</strong>
+                        <span style="font-size:0.7rem; color:#6b7280; margin-left:8px;">${new Date(m.data).toLocaleString('pt-BR')}</span>
+                    </div>
+                    <span style="font-size:0.7rem; color:#6b7280;">${isParaMim ? '📩 Recebida' : '📤 Enviada'}</span>
+                </div>
+                <div style="font-weight:500; margin-top:4px;">${m.assunto}</div>
+                <div style="color:#475569; margin-top:4px;">${m.texto}</div>
+                ${m.anexos ? `<div style="font-size:0.7rem; color:#6b7280; margin-top:4px;">📎 ${m.anexos.length} anexo(s)</div>` : ''}
+            </div>
+        `;
+    }).join('') : '<p style="color:#6b7280; text-align:center; padding:20px;">Nenhuma mensagem encontrada.</p>';
 }
 
 async function enviarMensagem() {
-    // ... código existente
+    const para = document.getElementById('msgDestinatario').value;
+    const assunto = document.getElementById('msgAssunto').value.trim();
+    const texto = document.getElementById('msgTexto').value.trim();
+
+    if (!para) return alert('Selecione um destinatário.');
+    if (!assunto) return alert('Digite um assunto.');
+    if (!texto) return alert('Digite a mensagem.');
+
+    const msg = {
+        id: 'msg_' + Date.now(),
+        de: estado.usuarioAtual.id,
+        para: para,
+        assunto: assunto,
+        texto: texto,
+        data: new Date().toISOString(),
+        lida: false
+    };
+
+    try {
+        await upstash('SET', `mensagem:${msg.id}`, JSON.stringify(msg));
+        await upstash('SADD', 'mensagens:all', msg.id);
+        estado.mensagens.push(msg);
+        document.getElementById('msgAssunto').value = '';
+        document.getElementById('msgTexto').value = '';
+        renderizarMensagens();
+        alert('✅ Mensagem enviada com sucesso!');
+    } catch (err) {
+        alert('Erro ao enviar mensagem: ' + err.message);
+    }
 }
 
 function renderizarProfissionais() {
-    // ... código existente
+    const div = document.getElementById('listaProfissionais');
+    if (!div) return;
+
+    div.innerHTML = estado.profissionais.map(p => `
+        <div class="profissional-item" style="background:#f8fafc; border-radius:12px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; border-left:4px solid #2c3e66;">
+            <div>
+                <strong>${p.nome || 'Sem nome'}</strong>
+                ${p.funcao ? `<span style="color:#6b7280; margin-left:8px;">${p.funcao}</span>` : ''}
+                ${p.registro ? `<span style="font-size:0.75rem; color:#6b7280; margin-left:8px;">Reg: ${p.registro}</span>` : ''}
+                ${p.numero ? `<span style="font-size:0.75rem; color:#6b7280; margin-left:8px;">Nº ${p.numero}</span>` : ''}
+            </div>
+            <div>
+                <button onclick="abrirModalExclusao('profissional', '${p.id}', '${p.nome}')" class="btn-sm btn-sm-danger">🗑️</button>
+            </div>
+        </div>
+    `).join('');
+
+    if (estado.profissionais.length === 0) {
+        div.innerHTML = '<p style="color:#6b7280; text-align:center; padding:20px;">Nenhum profissional cadastrado.</p>';
+    }
 }
 
 async function salvarProfissional() {
-    // ... código existente
+    const nome = document.getElementById('profNome').value.trim();
+    if (!nome) {
+        alert('Preencha o nome do profissional.');
+        return;
+    }
+    const profissional = {
+        id: 'prof_' + Date.now(),
+        nome: nome,
+        funcao: document.getElementById('profFuncao').value.trim(),
+        registro: document.getElementById('profRegistro').value.trim(),
+        numero: document.getElementById('profNumero').value.trim()
+    };
+    try {
+        await upstash('SET', `profissional:${profissional.id}`, JSON.stringify(profissional));
+        await upstash('SADD', 'profissionais:all', profissional.id);
+        estado.profissionais.push(profissional);
+        document.getElementById('profNome').value = '';
+        document.getElementById('profFuncao').value = '';
+        document.getElementById('profRegistro').value = '';
+        document.getElementById('profNumero').value = '';
+        renderizarProfissionais();
+        alert('✅ Profissional salvo com sucesso!');
+    } catch (err) {
+        alert('Erro ao salvar profissional: ' + err.message);
+    }
 }
 
 window.abrirModalExclusao = function(tipo, id, nome) {
@@ -2644,11 +3114,53 @@ window.abrirModalExclusao = function(tipo, id, nome) {
 };
 
 window.executarExclusao = async function() {
-    // ... código existente
+    if (!estado.exclusaoPendente) return;
+    const { tipo, id } = estado.exclusaoPendente;
+    try {
+        if (tipo === 'jovem') {
+            await upstash('DEL', `jovem:${id}`);
+            await upstash('SREM', 'jovens:all', id);
+            estado.jovens = estado.jovens.filter(j => j.id !== id);
+            estado.selecionadosLote.delete(id);
+        } else if (tipo === 'usuario') {
+            await upstash('DEL', `user:${id}`);
+            await upstash('SREM', 'users:all', id);
+            estado.usuarios = estado.usuarios.filter(u => u.id !== id);
+        } else if (tipo === 'oficina') {
+            await upstash('DEL', `oficina:${id}`);
+            await upstash('SREM', 'oficinas:all', id);
+            estado.oficinas = estado.oficinas.filter(o => o.id !== id);
+        } else if (tipo === 'planejamento') {
+            await upstash('DEL', `planejamento:${id}`);
+            await upstash('SREM', 'planejamentos:all', id);
+            estado.planejamentos = estado.planejamentos.filter(p => p.id !== id);
+        } else if (tipo === 'profissional') {
+            await upstash('DEL', `profissional:${id}`);
+            await upstash('SREM', 'profissionais:all', id);
+            estado.profissionais = estado.profissionais.filter(p => p.id !== id);
+        }
+        document.getElementById('modalConfirmExclusao').style.display = 'none';
+        await carregarTodosDados();
+        alert('✅ Registro excluído com sucesso!');
+    } catch (err) {
+        alert('Erro ao excluir: ' + err.message);
+    }
 };
 
 async function salvarNovaSenha() {
-    // ... código existente
+    const s1 = document.getElementById('novaSenhaInput').value;
+    const s2 = document.getElementById('confirmarNovaSenhaInput').value;
+    if (!s1 || s1.length < 6) return alert('Senha deve ter no mínimo 6 caracteres.');
+    if (s1 !== s2) return alert('As senhas não coincidem.');
+    try {
+        estado.usuarioAtual.senha = s1;
+        await upstash('SET', `user:${estado.usuarioAtual.id}`, JSON.stringify(estado.usuarioAtual));
+        alert('Senha alterada com sucesso!');
+        document.getElementById('novaSenhaInput').value = '';
+        document.getElementById('confirmarNovaSenhaInput').value = '';
+    } catch (err) {
+        alert('Erro ao alterar senha: ' + err.message);
+    }
 }
 
 async function carregarLogo() {
@@ -2711,16 +3223,18 @@ function atualizarLogoInterface(base64) {
     window._logoBase64 = base64;
 }
 
-// ============================================================
-// DASHBOARD JOVEM
-// ============================================================
 function renderizarDashboardJovem() {
-    // ... código existente
+    const cards = document.getElementById('jovemInfoCards');
+    const freqDiv = document.getElementById('jovemFrequencia');
+    if (!cards || !freqDiv) return;
+    if (estado.jovens.length === 0) {
+        cards.innerHTML = '<p style="color:#6b7280;">Nenhum dado encontrado.</p>';
+        freqDiv.innerHTML = '';
+        return;
+    }
+    // Implementação similar ao carregarLista mas para jovem específico
 }
 
-// ============================================================
-// ABRIR RELATÓRIO DE REVERTÊNCIA
-// ============================================================
 window.abrirRelatorioRevertencia = function() {
     const ofs = estado.oficinas.filter(o => o.reverte);
     let html = `<html><head><title>Relatório de Revertência</title><style>
@@ -2760,14 +3274,8 @@ window.abrirRelatorioRevertencia = function() {
     if (win) { win.document.write(html); win.document.close(); }
 };
 
-// ============================================================
-// AVISO DE OBSERVAÇÕES PARA GESTOR
-// ============================================================
 function exibirAvisoObservacoes() {}
 
-// ============================================================
-// POLLING
-// ============================================================
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(async () => {
@@ -2781,9 +3289,6 @@ function iniciarPolling() {
     }, 60000);
 }
 
-// ============================================================
-// CADASTRO DE USUÁRIO (SOLICITAÇÃO)
-// ============================================================
 async function cadastrarUsuario() {
     const nome = document.getElementById('cadastroNome').value.trim();
     const email = document.getElementById('cadastroEmail').value.trim();
@@ -2808,9 +3313,6 @@ async function cadastrarUsuario() {
     }
 }
 
-// ============================================================
-// FUNÇÕES DE COMPATIBILIDADE
-// ============================================================
 function salvarNovaSenhaAlt() {
     const s1 = document.getElementById('novaSenhaInputAlt').value;
     const s2 = document.getElementById('confirmarNovaSenhaInputAlt').value;
