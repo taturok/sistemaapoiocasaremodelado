@@ -223,7 +223,7 @@
         <div class="filtros-bar" id="filtrosFrequencia">
             <div class="filtro-group"><label>Buscar</label><input type="text" id="filtroNome" oninput="carregarLista()" placeholder="Nome/ID"></div>
             <div class="filtro-group"><label>Medida</label><select id="filtroMedida" onchange="carregarLista()"><option value="">Todas</option><option value="LA">LA</option><option value="PSC">PSC</option><option value="Internação">Internação</option><option value="Liberação">Liberação</option></select></div>
-            <div class="filtro-group"><label>Status</label><select id="filtroStatus" onchange="carregarLista()"><option value="">Todos</option><option value="ativo">Ativo</option><option value="suspenso">Suspenso</option><option value="descumprimento">Descumprimento</option><option value="concluído">Concluído</option></select></div>
+            <div class="filtro-group"><label>Status</label><select id="filtroStatus" onchange="carregarLista()"><option value="">Todos</option><option value="REGULAR">REGULAR</option><option value="IRREGULAR">IRREGULAR</option><option value="EM DESCUMPRIMENTO">EM DESCUMPRIMENTO</option><option value="SUSPENSO">SUSPENSO</option><option value="MEDIDA FINALIZADA">MEDIDA FINALIZADA</option><option value="LIBERADO">LIBERADO</option></select></div>
             <div class="filtro-group"><label>Saldo</label><select id="filtroSaldo" onchange="carregarLista()"><option value="">Todos</option><option value="critico">Crítico (>0h)</option><option value="zerado">Zerado</option></select></div>
             <div class="filtro-group"><label>Gênero</label><select id="filtroGenero" onchange="carregarLista()"><option value="">Todos</option><option value="M">Masculino</option><option value="F">Feminino</option><option value="NB">Não-binário</option></select></div>
             <div class="filtro-group"><label>Idade</label><select id="filtroIdade" onchange="carregarLista()"><option value="">Todas</option><option value="12-15">12 a 15</option><option value="16-18">16 a 18</option><option value="19+">19+</option></select></div>
@@ -321,11 +321,13 @@
 
         <div class="painel-duplo">
             <div class="card card-aviso" style="border-left-color:#f59e0b;">
-                <h3>🕒 7 dias sem comparecimento</h3>
+                <h3>🟡 7 dias sem comparecer</h3>
+                <p style="font-size:0.8rem; color:#92400e; margin-bottom:10px;">Clique em "Marcar IRREGULAR" para alterar o status manualmente.</p>
                 <div class="table-wrapper" style="margin:0;"><table><thead><tr><th>Jovem</th><th>Último</th><th>Dias</th><th>Ação</th></tr></thead><tbody id="tabela7dias"></tbody></table></div>
             </div>
             <div class="card card-alerta" style="border-left-color:#ef4444;">
-                <h3>🚨 14+ dias - Opção de Descumprimento</h3>
+                <h3>🔴 14+ dias - Opção de Descumprimento</h3>
+                <p style="font-size:0.8rem; color:#991b1b; margin-bottom:10px;">Clique em "Marcar EM DESCUMPRIMENTO" para alterar o status manualmente.</p>
                 <div class="table-wrapper" style="margin:0;"><table><thead><tr><th>Jovem</th><th>Último</th><th>Dias</th><th>Ação</th></tr></thead><tbody id="tabela14dias"></tbody></table></div>
             </div>
         </div>
@@ -394,8 +396,8 @@
         <div class="painel-duplo">
             <div class="card">
                 <h3>📈 Projeção Quinzenal (Próximos 3 Meses)</h3>
-                <p style="font-size:0.8rem; color:#6b7280; margin-bottom:10px;">Estimativa baseada em 4h/semana por jovem ativo</p>
-                <div class="table-wrapper" style="margin:0;"><table id="tabelaProjecao"><thead><tr><th>Quinzena</th><th>Período</th><th>Jovens Ativos</th><th>Horas Est.</th></tr></thead><tbody></tbody></table></div>
+                <p style="font-size:0.8rem; color:#6b7280; margin-bottom:10px;">Estimativa baseada em 4h/semana por jovem REGULAR</p>
+                <div class="table-wrapper" style="margin:0;"><table id="tabelaProjecao"><thead><tr><th>Quinzena</th><th>Período</th><th>Jovens REGULAR</th><th>Horas Est.</th></tr></thead><tbody></tbody></table></div>
             </div>
             <div class="card">
                 <h3>🎂 Aniversariantes (Próximos 3 Meses)</h3>
@@ -659,10 +661,12 @@
             <div class="campo">
                 <label>Novo Status</label>
                 <select id="loteNovoStatus">
-                    <option value="ativo">Ativo</option>
-                    <option value="suspenso">Suspenso</option>
-                    <option value="descumprimento">Descumprimento</option>
-                    <option value="concluído">Concluído</option>
+                    <option value="REGULAR">REGULAR</option>
+                    <option value="IRREGULAR">IRREGULAR</option>
+                    <option value="EM DESCUMPRIMENTO">EM DESCUMPRIMENTO</option>
+                    <option value="SUSPENSO">SUSPENSO</option>
+                    <option value="MEDIDA FINALIZADA">MEDIDA FINALIZADA</option>
+                    <option value="LIBERADO">LIBERADO</option>
                 </select>
             </div>
             <div id="loteMotivoSuspensao" style="display:none;">
