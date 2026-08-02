@@ -1,7 +1,7 @@
 // ============================================================
 // SISTEMA DE CONTROLE DE MEDIDAS SOCIOEDUCATIVAS v2.1
 // BACKEND: UPSTASH REDIS REST API
-// CORREÇÕES: Exportação, Importação e Recálculo de Status
+// CORREÇÃO: STATUS E FILTROS COMPATÍVEIS COM A PLANILHA
 // ============================================================
 
 // ============================================================
@@ -72,6 +72,44 @@ let pollingInterval = null;
 let _jovemDocAtual = null;
 
 // ============================================================
+// STATUS MAP - CORRESPONDÊNCIA ENTRE PLANILHA E SISTEMA
+// ============================================================
+const STATUS_MAP = {
+    'ativo': 'ativo',
+    'regular': 'regular',
+    'irregular': 'irregular',
+    'em descumprimento': 'descumprimento',
+    'descumprimento': 'descumprimento',
+    'suspenso': 'suspenso',
+    'finalizada': 'concluído',
+    'medida finalizada': 'concluído',
+    'concluído': 'concluído',
+    'liberado': 'liberado'
+};
+
+// MAPA REVERSO PARA EXIBIÇÃO
+const STATUS_DISPLAY = {
+    'ativo': 'Ativo',
+    'regular': 'Regular',
+    'irregular': 'Irregular',
+    'descumprimento': 'Descumprimento',
+    'suspenso': 'Suspenso',
+    'concluído': 'Concluído',
+    'liberado': 'Liberado'
+};
+
+// CORES POR STATUS
+const STATUS_COLORS = {
+    'ativo': 'background:#d1fae5; color:#065f46;',
+    'regular': 'background:#d1fae5; color:#065f46;',
+    'irregular': 'background:#fef3c7; color:#92400e;',
+    'descumprimento': 'background:#fee2e2; color:#991b1b;',
+    'suspenso': 'background:#fce7f3; color:#be185d;',
+    'concluído': 'background:#d1fae5; color:#065f46;',
+    'liberado': 'background:#e5e7eb; color:#374151;'
+};
+
+// ============================================================
 // UPSTASH HELPERS
 // ============================================================
 async function upstash(cmd, ...args) {
@@ -103,6 +141,36 @@ function fileToBase64(file) {
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
+}
+
+// ============================================================
+// FUNÇÃO AUXILIAR - NORMALIZAR STATUS
+// ============================================================
+function normalizarStatus(status) {
+    if (!status) return 'regular';
+    const statusLower = status.toLowerCase().trim();
+    
+    // Mapeamento direto
+    if (STATUS_MAP[statusLower]) return STATUS_MAP[statusLower];
+    
+    // Busca por similaridade
+    for (const [key, value] of Object.entries(STATUS_MAP)) {
+        if (statusLower.includes(key) || key.includes(statusLower)) {
+            return value;
+        }
+    }
+    
+    // Se for "EM DESCUMPRIMENTO" (maiúsculo)
+    if (status.toUpperCase().includes('EM DESCUMPRIMENTO')) return 'descumprimento';
+    if (status.toUpperCase().includes('DESCUMPRIMENTO')) return 'descumprimento';
+    if (status.toUpperCase().includes('FINALIZADA')) return 'concluído';
+    if (status.toUpperCase().includes('ATIVO')) return 'ativo';
+    if (status.toUpperCase().includes('REGULAR')) return 'regular';
+    if (status.toUpperCase().includes('IRREGULAR')) return 'irregular';
+    if (status.toUpperCase().includes('SUSPENSO')) return 'suspenso';
+    if (status.toUpperCase().includes('LIBERADO')) return 'liberado';
+    
+    return 'regular';
 }
 
 // ============================================================
@@ -397,30 +465,38 @@ function mostrarAbasPorNivel(nivel) {
 }
 
 // ============================================================
-// DASHBOARD
+// DASHBOARD - CORRIGIDA
 // ============================================================
 function renderizarDashboard() {
     const total = estado.jovens.length;
-    const ativos = estado.jovens.filter(j => {
-        const status = (j._statusRender || j.status || '').toLowerCase();
-        return ['regular', 'ativo'].includes(status);
-    }).length;
-    const irregulares = estado.jovens.filter(j => {
-        const status = (j._statusRender || j.status || '').toLowerCase();
-        return ['irregular'].includes(status);
-    }).length;
-    const descumprimento = estado.jovens.filter(j => {
-        const status = (j._statusRender || j.status || '').toLowerCase();
-        return ['descumprimento', 'em descumprimento'].includes(status);
-    }).length;
-    const suspensos = estado.jovens.filter(j => {
-        const status = (j._statusRender || j.status || '').toLowerCase();
-        return ['suspenso'].includes(status);
-    }).length;
-    const concluidos = estado.jovens.filter(j => {
-        const status = (j._statusRender || j.status || '').toLowerCase();
-        return ['concluído', 'finalizada', 'medida finalizada'].includes(status);
-    }).length;
+    
+    // Conta por status normalizado
+    const statusCount = {
+        ativo: 0,
+        regular: 0,
+        irregular: 0,
+        descumprimento: 0,
+        suspenso: 0,
+        concluído: 0,
+        liberado: 0
+    };
+    
+    estado.jovens.forEach(j => {
+        const statusNormalizado = normalizarStatus(j.status || j._statusRender);
+        if (statusCount.hasOwnProperty(statusNormalizado)) {
+            statusCount[statusNormalizado]++;
+        } else {
+            statusCount.regular++;
+        }
+    });
+    
+    // Total de ativos = ativo + regular
+    const ativos = statusCount.ativo + statusCount.regular;
+    const irregulares = statusCount.irregular;
+    const descumprimento = statusCount.descumprimento;
+    const suspensos = statusCount.suspenso;
+    const concluidos = statusCount.concluído;
+    const liberados = statusCount.liberado;
 
     document.getElementById('totalJovens').textContent = total;
     document.getElementById('ativosJovens').textContent = ativos;
@@ -470,31 +546,27 @@ function carregarLista() {
 
     // USA O STATUS DA PLANILHA - NÃO RECALCULA
     let lista = estado.jovens.map(j => {
-        let status = j.status || 'regular';
+        // Normaliza o status da planilha
+        const statusOriginal = j.status || 'regular';
+        const statusNormalizado = normalizarStatus(statusOriginal);
+        
+        // Motivo do status
         let motivoStatus = j.motivoSuspensao || '';
-        let corStatus = '';
         
-        const statusDisplay = {
-            'regular': { cor: 'background:#d1fae5; color:#065f46;', label: 'Regular' },
-            'ativo': { cor: 'background:#d1fae5; color:#065f46;', label: 'Ativo' },
-            'irregular': { cor: 'background:#fef3c7; color:#92400e;', label: 'Irregular' },
-            'descumprimento': { cor: 'background:#fee2e2; color:#991b1b;', label: 'Descumprimento' },
-            'em descumprimento': { cor: 'background:#fee2e2; color:#991b1b;', label: 'Descumprimento' },
-            'suspenso': { cor: 'background:#fce7f3; color:#be185d;', label: 'Suspenso' },
-            'concluído': { cor: 'background:#d1fae5; color:#065f46;', label: 'Concluído' },
-            'finalizada': { cor: 'background:#d1fae5; color:#065f46;', label: 'Finalizada' },
-            'liberado': { cor: 'background:#e5e7eb; color:#374151;', label: 'Liberado' },
-            'medida finalizada': { cor: 'background:#d1fae5; color:#065f46;', label: 'Finalizada' }
-        };
+        // Se for suspenso, usa o motivo
+        if (statusNormalizado === 'suspenso' && !motivoStatus) {
+            motivoStatus = 'Suspenso';
+        }
         
-        const statusKey = status.toLowerCase().trim();
-        const statusInfo = statusDisplay[statusKey] || { cor: 'background:#e5e7eb; color:#374151;', label: status };
-        corStatus = statusInfo.cor;
+        // Cor do status
+        const corStatus = STATUS_COLORS[statusNormalizado] || 'background:#e5e7eb; color:#374151;';
         
+        // Horas e saldo
         const horasAtribuidas = parseFloat(j['HORAS']) || 0;
         const horasCumpridas = (j.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
         const saldo = Math.max(0, horasAtribuidas - horasCumpridas);
         
+        // Última presença
         let ultimaPresenca = null;
         const hist = j.historicoFrequencia || [];
         if (hist.length > 0) {
@@ -504,14 +576,16 @@ function carregarLista() {
             }
         }
         
-        j._statusRender = status;
+        // Armazena no objeto
+        j._statusRender = statusNormalizado;
+        j._statusOriginal = statusOriginal;
         j._motivoStatus = motivoStatus;
         j._corStatus = corStatus;
         j._horasAtribuidas = horasAtribuidas;
         j._horasCumpridas = horasCumpridas;
         j._saldo = saldo;
         j._ultimaPresenca = ultimaPresenca;
-        j._statusLabel = statusInfo.label;
+        j._statusLabel = STATUS_DISPLAY[statusNormalizado] || statusOriginal;
 
         return j;
     });
@@ -521,17 +595,18 @@ function carregarLista() {
         if (fNome && !(j['NOME'] || '').toLowerCase().includes(fNome) && !(j['ID_DIGITAL'] || '').includes(fNome)) return false;
         if (fMedida && j['MEDIDA'] !== fMedida) return false;
         if (fStatus) {
-            const statusMap = {
+            // Mapeia o filtro para o status normalizado
+            const filterMap = {
                 'regular': ['regular', 'ativo'],
                 'ativo': ['regular', 'ativo'],
                 'suspenso': ['suspenso'],
-                'descumprimento': ['descumprimento', 'em descumprimento'],
-                'concluído': ['concluído', 'finalizada', 'medida finalizada'],
+                'descumprimento': ['descumprimento'],
+                'concluído': ['concluído'],
                 'irregular': ['irregular'],
                 'liberado': ['liberado']
             };
-            const statusPermitidos = statusMap[fStatus] || [];
-            if (!statusPermitidos.some(s => j._statusRender.toLowerCase().includes(s))) return false;
+            const statusPermitidos = filterMap[fStatus] || [];
+            if (!statusPermitidos.includes(j._statusRender)) return false;
         }
         if (fSaldo === 'critico' && j._saldo <= 0 && j['MEDIDA'] !== 'LA') return false;
         if (fSaldo === 'zerado' && j._saldo > 0 && j['MEDIDA'] !== 'LA') return false;
@@ -580,7 +655,7 @@ function carregarLista() {
             botoesStatus = `
                 <select onchange="alterarStatusManual('${j.id}', this.value)" style="padding:2px 6px; font-size:0.7rem; border:1px solid #d1d9e6; border-radius:4px; background:white;">
                     <option value="">Status</option>
-                    ${opcoes.map(s => `<option value="${s}" ${j._statusRender.toLowerCase() === s ? 'selected' : ''}>${s.toUpperCase()}</option>`).join('')}
+                    ${opcoes.map(s => `<option value="${s}" ${j._statusRender === s ? 'selected' : ''}>${s.toUpperCase()}</option>`).join('')}
                 </select>
             `;
         }
@@ -601,19 +676,7 @@ function carregarLista() {
 
         const isSelecionado = estado.selecionadosLote.has(j.id);
 
-        const statusDisplay = {
-            'regular': 'Regular',
-            'ativo': 'Ativo',
-            'suspenso': 'Suspenso',
-            'descumprimento': 'Descumprimento',
-            'em descumprimento': 'Descumprimento',
-            'concluído': 'Concluído',
-            'finalizada': 'Finalizada',
-            'irregular': 'Irregular',
-            'liberado': 'Liberado',
-            'medida finalizada': 'Finalizada'
-        };
-        const statusLabel = statusDisplay[j._statusRender.toLowerCase()] || j._statusRender;
+        const statusLabel = STATUS_DISPLAY[j._statusRender] || j._statusRender || 'Regular';
 
         return `<tr>
             <td><input type="checkbox" data-id="${j.id}" ${isSelecionado ? 'checked' : ''} onchange="toggleSelecionarJovem('${j.id}')"></td>
@@ -642,7 +705,7 @@ function carregarLista() {
 }
 
 // ============================================================
-// EXPORTAR EXCEL - CORRIGIDA (NÃO FILTRA JOVENS VÁLIDOS)
+// EXPORTAR EXCEL - CORRIGIDA
 // ============================================================
 function exportarExcel() {
     const palavrasIgnorar = [
@@ -676,10 +739,8 @@ function exportarExcel() {
         const medidasValidas = ['PSC', 'LA', 'L.A', 'INTERNAÇÃO', 'LIBERAÇÃO', 'PSC/LA', 'LA/PSC', 'A.T', 'AT'];
         const temMedida = medidasValidas.some(m => medida.toUpperCase().includes(m));
         
-        const statusValidos = ['ativo', 'regular', 'descumprimento', 'em descumprimento', 
-                               'irregular', 'suspenso', 'concluído', 'finalizada', 'liberado'];
         const status = j._statusRender || j.status || '';
-        const temStatus = statusValidos.some(s => status.toLowerCase().includes(s));
+        const temStatus = status && status.length > 0;
         
         const referencia = (j['REFERENCIA'] || '').trim();
         const temReferencia = referencia && referencia.length >= 2;
@@ -689,10 +750,9 @@ function exportarExcel() {
 
     console.log(`📊 Total de jovens no sistema: ${estado.jovens.length}`);
     console.log(`📊 Jovens válidos para exportação: ${jovensValidos.length}`);
-    console.log(`📊 Jovens excluídos: ${estado.jovens.length - jovensValidos.length}`);
 
     if (jovensValidos.length === 0) {
-        alert('⚠️ Não há dados válidos para exportar. Verifique se os jovens têm NOME e MEDIDA preenchidos.');
+        alert('⚠️ Não há dados válidos para exportar.');
         return;
     }
 
@@ -745,7 +805,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA - CORRIGIDA (NÃO IMPORTA LEGENDAS)
+// IMPORTAR PLANILHA - CORRIGIDA
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -778,23 +838,6 @@ async function importarPlanilha() {
                 'P - PRESENÇA', 'A - AUSENCIA', 'J - JUSTIFICADO',
                 'LEGENDA', 'CÓDIGOS', 'RENDA', 'BENEFÍCIO'
             ];
-
-            const statusMap = {
-                'REGULAR': 'regular',
-                'ATIVO': 'regular',
-                'IRREGULAR': 'irregular',
-                'DESCUMPRIMENTO': 'descumprimento',
-                'EM DESCUMPRIMENTO': 'descumprimento',
-                'SUSPENSO': 'suspenso',
-                'FINALIZADA': 'concluído',
-                'MEDIDA FINALIZADA': 'concluído',
-                'CONCLUÍDO': 'concluído',
-                'CONCLUIDO': 'concluído',
-                'LIBERADO': 'liberado',
-                'PEDIR EXT.': 'concluído',
-                'EXT. ANDAMENTO': 'regular',
-                'AGUARDANDO': 'regular'
-            };
 
             let colNome = null;
             const headers = Object.keys(rows[0] || {});
@@ -845,7 +888,7 @@ async function importarPlanilha() {
                     const nomeUpper = nome.toUpperCase().trim();
                     let deveIgnorar = false;
                     
-                    if (!nome || nome.length < 3) {
+                    if (!nome || nome.length < 2) {
                         deveIgnorar = true;
                     }
                     
@@ -869,7 +912,10 @@ async function importarPlanilha() {
                         continue;
                     }
 
-                    let statusImportado = null;
+                    // ============================================================
+                    // ✅ OBTÉM STATUS DA PLANILHA - CORRIGIDO
+                    // ============================================================
+                    let statusImportado = 'regular';
                     let colStatus = null;
                     for (const h of headers) {
                         const hUpper = h.toUpperCase().trim();
@@ -880,25 +926,17 @@ async function importarPlanilha() {
                     }
                     
                     if (colStatus && row[colStatus] !== undefined && row[colStatus] !== '') {
-                        const statusRaw = String(row[colStatus]).toUpperCase().trim();
-                        for (const [key, value] of Object.entries(statusMap)) {
-                            if (statusRaw.includes(key) || key.includes(statusRaw)) {
-                                statusImportado = value;
-                                break;
-                            }
-                        }
-                        if (!statusImportado) {
-                            const validStatus = ['regular', 'suspenso', 'descumprimento', 'concluído', 'irregular', 'liberado'];
-                            if (validStatus.includes(statusRaw.toLowerCase())) {
-                                statusImportado = statusRaw.toLowerCase();
-                            }
-                        }
-                    }
-                    
-                    if (!statusImportado) {
-                        statusImportado = 'regular';
+                        const statusRaw = String(row[colStatus]).trim();
+                        console.log(`🔍 Status encontrado para "${nome}": "${statusRaw}"`);
+                        
+                        // Normaliza o status
+                        statusImportado = normalizarStatus(statusRaw);
+                        console.log(`   → Status normalizado: "${statusImportado}"`);
                     }
 
+                    // ============================================================
+                    // ✅ BUSCA JOVEM EXISTENTE
+                    // ============================================================
                     let jovemExistente = null;
                     const nomeExato = nome.toUpperCase().trim();
                     
@@ -920,6 +958,9 @@ async function importarPlanilha() {
                         }
                     }
 
+                    // ============================================================
+                    // ✅ CRIA OU ATUALIZA JOVEM
+                    // ============================================================
                     if (jovemExistente) {
                         const jovemId = jovemExistente.id;
                         const jovemAtualizado = {
@@ -974,6 +1015,7 @@ async function importarPlanilha() {
                             estado.jovens[index] = jovemAtualizado;
                         }
                         atualizados++;
+                        console.log(`✅ Atualizado: ${nome} → Status: ${statusImportado}`);
                         
                     } else {
                         const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -1025,6 +1067,7 @@ async function importarPlanilha() {
                             await upstash('SADD', 'jovens:all', novoId);
                             estado.jovens.push(novoJovem);
                             importados++;
+                            console.log(`✅ Importado: ${nome} → Status: ${statusImportado}`);
                         } else {
                             ignorados++;
                         }
@@ -1047,6 +1090,10 @@ async function importarPlanilha() {
             statusDiv.style.background = '#d1fae5';
             statusDiv.style.color = '#065f46';
             statusDiv.textContent = mensagem;
+            
+            // Recarrega a lista para mostrar os novos dados
+            carregarLista();
+            renderizarDashboard();
             
             setTimeout(() => {
                 statusDiv.style.display = 'none';
@@ -2209,11 +2256,16 @@ function renderizarRelatorios() {
         const statusCount = {};
         estado.jovens.forEach(j => {
             const s = j._statusRender || j.status || 'regular';
-            statusCount[s] = (statusCount[s] || 0) + 1;
+            if (statusCount[s]) {
+                statusCount[s]++;
+            } else {
+                statusCount[s] = 1;
+            }
         });
         let html = '<div class="relatorio-card"><h4>📊 Distribuição por Status</h4><table style="width:100%; margin-top:10px;"><thead><tr><th>Status</th><th>Quantidade</th></tr></thead><tbody>';
         const statusMap = {
             'regular': 'Regular',
+            'ativo': 'Ativo',
             'suspenso': 'Suspenso',
             'descumprimento': 'Descumprimento',
             'concluído': 'Concluído',
@@ -2360,6 +2412,7 @@ window.carregarFichaIndividual = function() {
                 ${jovem._statusRender === 'descumprimento' ? `<div class="ficha-campo" style="grid-column:1/-1; background:#fee2e2; padding:8px; border-radius:4px;"><strong style="color:#991b1b;">⚠️ Status: Descumprimento</strong></div>` : ''}
                 ${jovem._statusRender === 'concluído' ? `<div class="ficha-campo" style="grid-column:1/-1; background:#d1fae5; padding:8px; border-radius:4px;"><strong style="color:#065f46;">✅ Medida Finalizada</strong></div>` : ''}
                 ${jovem._statusRender === 'irregular' ? `<div class="ficha-campo" style="grid-column:1/-1; background:#fef3c7; padding:8px; border-radius:4px;"><strong style="color:#92400e;">🟠 Status: Irregular</strong></div>` : ''}
+                ${jovem._statusRender === 'ativo' ? `<div class="ficha-campo" style="grid-column:1/-1; background:#d1fae5; padding:8px; border-radius:4px;"><strong style="color:#065f46;">✅ Status: Ativo</strong></div>` : ''}
             </div>
             ${acoesLAHTML}
         `;
