@@ -364,42 +364,6 @@ function atualizarInterfaceCompleta() {
     renderizarAcoesLA();
     atualizarContadorLista(estado.jovens.length);
     listarMetasLAProximas();
-    // Verificar medidas finalizadas após carregar tudo
-    setTimeout(() => verificarMedidasFinalizadas(), 1000);
-}
-
-// ============================================================
-// VERIFICAR MEDIDAS FINALIZADAS (AUTOMAÇÃO MANTIDA)
-// ============================================================
-async function verificarMedidasFinalizadas() {
-    try {
-        let alterados = 0;
-        for (const j of estado.jovens) {
-            // Só verifica se não for LA e não estiver já finalizado ou liberado
-            if (j['MEDIDA'] !== 'LA' && j.status !== 'MEDIDA FINALIZADA' && j.status !== 'LIBERADO') {
-                const saldo = parseFloat(calcularSaldo(j));
-                if (saldo <= 0 && j['MEDIDA'] !== 'Liberação') {
-                    j.status = 'MEDIDA FINALIZADA';
-                    if (!j.observacoes) j.observacoes = [];
-                    j.observacoes.push({
-                        data: new Date().toISOString(),
-                        profissional: 'Sistema',
-                        texto: '✅ Status alterado automaticamente para "MEDIDA FINALIZADA" - horas zeradas.'
-                    });
-                    await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
-                    alterados++;
-                }
-            }
-        }
-        if (alterados > 0) {
-            console.log(`${alterados} jovens tiveram medida finalizada automaticamente.`);
-            // Recarregar a lista para atualizar a interface
-            carregarLista();
-            renderizarDashboard();
-        }
-    } catch (err) {
-        console.error('Erro ao verificar medidas finalizadas:', err);
-    }
 }
 
 // ============================================================
@@ -969,9 +933,7 @@ function carregarLista() {
 
         const podeRegistrarPonto = j['MEDIDA'] !== 'Liberação' &&
             j.status !== 'SUSPENSO' &&
-            j.status !== 'MEDIDA FINALIZADA' &&
-            j.status !== 'IRREGULAR' &&
-            j.status !== 'EM DESCUMPRIMENTO';
+            j.status !== 'MEDIDA FINALIZADA';
 
         if (podeRegistrarPonto && j['MEDIDA'] !== 'LA') {
             for (let i = hist.length - 1; i >= 0; i--) {
@@ -1000,10 +962,6 @@ function carregarLista() {
         let motivoStatus = '';
         if (j.status === 'SUSPENSO' && j.motivoSuspensao) {
             motivoStatus = `<span title="${j.motivoSuspensao}" style="cursor:help; font-size:0.75rem; color:#be185d;">${j.motivoSuspensao.substring(0, 20)}${j.motivoSuspensao.length > 20 ? '...' : ''}</span>`;
-        } else if (j.status === 'EM DESCUMPRIMENTO') {
-            motivoStatus = `<span style="font-size:0.75rem; color:#991b1b;">14+ dias sem comparecer</span>`;
-        } else if (j.status === 'IRREGULAR') {
-            motivoStatus = `<span style="font-size:0.75rem; color:#92400e;">7+ dias sem comparecer</span>`;
         }
 
         let botaoPonto = '';
@@ -1350,6 +1308,8 @@ window.registrarPontoNaLinha = async function(jovemId) {
     if (jovem['MEDIDA'] === 'Liberação') return alert('❌ Jovem está liberado.');
     if (jovem.status === 'SUSPENSO') return alert('❌ Jovem está suspenso.');
     if (jovem.status === 'MEDIDA FINALIZADA') return alert('❌ Jovem já finalizou a medida.');
+
+    // Se o jovem estiver IRREGULAR ou EM DESCUMPRIMENTO, oferece a opção de reativar
     if (jovem.status === 'IRREGULAR') {
         if (!confirm('Este jovem está irregular (7+ dias sem comparecer). Deseja reativá-lo para REGULAR ao registrar presença?')) return;
         jovem.status = 'REGULAR';
@@ -2869,7 +2829,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA (COMPLETO E CORRIGIDO)
+// IMPORTAR PLANILHA - USA EXATAMENTE O STATUS DA COLUNA AJ
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -3057,11 +3017,12 @@ async function importarPlanilha() {
                     }
 
                     // ================================================================
-                    // OBTER STATUS DA PLANILHA
+                    // OBTER STATUS DA PLANILHA - EXATAMENTE COMO ESTÁ NA COLUNA AJ
                     // ================================================================
-                    let statusPlanilha = null;
+                    let statusPlanilha = 'REGULAR'; // valor padrão
                     if (colMap.STATUS && row[colMap.STATUS]) {
                         const statusRaw = String(row[colMap.STATUS]).toUpperCase().trim();
+                        // Mapeamento exato dos status da planilha
                         const statusMap = {
                             'REGULAR': 'REGULAR',
                             'ATIVO': 'REGULAR',
@@ -3077,7 +3038,7 @@ async function importarPlanilha() {
                             'LIBERADO': 'LIBERADO',
                             'LIBERAÇÃO': 'LIBERADO'
                         };
-                        statusPlanilha = statusMap[statusRaw] || null;
+                        statusPlanilha = statusMap[statusRaw] || statusRaw;
                     }
 
                     // ================================================================
@@ -3165,12 +3126,8 @@ async function importarPlanilha() {
                             }
                         }
                         
-                        // Aplicar status da planilha
-                        if (statusPlanilha) {
-                            jovemAtualizado.status = statusPlanilha;
-                        } else if (!jovemAtualizado.status) {
-                            jovemAtualizado.status = jovemExistente.status || 'REGULAR';
-                        }
+                        // APLICAR STATUS EXATAMENTE COMO VEM DA PLANILHA
+                        jovemAtualizado.status = statusPlanilha;
                         
                         await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
                         
@@ -3186,7 +3143,7 @@ async function importarPlanilha() {
                         const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                         const novoJovem = { 
                             id: novoId, 
-                            status: statusPlanilha || 'REGULAR',
+                            status: statusPlanilha,
                             historicoFrequencia: [],
                             observacoes: [],
                             documentos: [],
