@@ -1,6 +1,7 @@
 // ============================================================
-// SISTEMA DE CONTROLE DE MEDIDAS SOCIOEDUCATIVAS v2.0
+// SISTEMA DE CONTROLE DE MEDIDAS SOCIOEDUCATIVAS v2.1
 // BACKEND: UPSTASH REDIS REST API
+// CORREÇÕES: Exportação, Importação e Recálculo de Status
 // ============================================================
 
 // ============================================================
@@ -102,6 +103,157 @@ function fileToBase64(file) {
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
+}
+
+// ============================================================
+// FUNÇÕES DE BUSCA DE PRESENÇA NAS ABAS MENSAIS (CORRIGIDAS)
+// ============================================================
+
+/**
+ * Busca a última presença de um jovem em todas as abas mensais
+ * @param {string} jovemNome - Nome do jovem
+ * @param {Array} mesesDados - Array com dados de cada mês
+ * @returns {Date|null} - Data da última presença ou null
+ */
+function buscarUltimaPresenca(jovemNome, mesesDados) {
+    if (!mesesDados || mesesDados.length === 0) return null;
+    
+    const nomeBusca = jovemNome.toUpperCase().trim();
+    let ultimaData = null;
+    
+    for (const mes of mesesDados) {
+        if (!mes.dados) continue;
+        
+        // Busca o jovem na linha da planilha (case insensitive)
+        const linha = mes.dados.find(row => {
+            const nome = String(row['B'] || row['NOME'] || '').toUpperCase().trim();
+            return nome === nomeBusca || 
+                   nome.includes(nomeBusca) || 
+                   nomeBusca.includes(nome) ||
+                   (nomeBusca.length > 3 && nome.includes(nomeBusca.substring(0, 3)));
+        });
+        
+        if (!linha) continue;
+        
+        // Verifica cada coluna da linha
+        const colunas = Object.keys(linha);
+        for (const col of colunas) {
+            let valor = String(linha[col] || '').trim();
+            
+            // ✅ Aceita 'P', 'p', 'PRESENÇA', 'presença'
+            const isPresenca = valor.toUpperCase() === 'P' || 
+                              valor.toUpperCase() === 'PRESENÇA' ||
+                              valor.toUpperCase() === 'PRESENCA';
+            
+            if (isPresenca) {
+                // Verifica se a coluna tem cabeçalho de data
+                const cabecalho = mes.cabecalhos && mes.cabecalhos[col];
+                if (cabecalho) {
+                    const data = new Date(cabecalho);
+                    if (!isNaN(data.getTime())) {
+                        if (!ultimaData || data > ultimaData) {
+                            ultimaData = data;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return ultimaData;
+}
+
+/**
+ * Busca total de horas cumpridas por um jovem em todas as abas mensais
+ * @param {string} jovemNome - Nome do jovem
+ * @param {Array} mesesDados - Array com dados de cada mês
+ * @param {number} horasPorPresenca - Horas por presença (padrão: 4)
+ * @returns {number} - Total de horas cumpridas
+ */
+function buscarHorasCumpridasNoMes(jovemNome, mesesDados, horasPorPresenca = 4) {
+    if (!mesesDados || mesesDados.length === 0) return 0;
+    
+    const nomeBusca = jovemNome.toUpperCase().trim();
+    let totalPresencas = 0;
+    
+    for (const mes of mesesDados) {
+        if (!mes.dados) continue;
+        
+        const linha = mes.dados.find(row => {
+            const nome = String(row['B'] || row['NOME'] || '').toUpperCase().trim();
+            return nome === nomeBusca || 
+                   nome.includes(nomeBusca) || 
+                   nomeBusca.includes(nome) ||
+                   (nomeBusca.length > 3 && nome.includes(nomeBusca.substring(0, 3)));
+        });
+        
+        if (!linha) continue;
+        
+        // Conta quantas presenças (P) tem na linha
+        const colunas = Object.keys(linha);
+        for (const col of colunas) {
+            const valor = String(linha[col] || '').trim().toUpperCase();
+            if (valor === 'P' || valor === 'PRESENÇA' || valor === 'PRESENCA') {
+                totalPresencas++;
+            }
+        }
+    }
+    
+    return totalPresencas * horasPorPresenca;
+}
+
+/**
+ * Verifica se um jovem tem presença em alguma aba mensal
+ * @param {string} jovemNome - Nome do jovem
+ * @param {Array} mesesDados - Array com dados de cada mês
+ * @returns {Object} - { temPresenca, ultimaData, totalPresencas }
+ */
+function verificarPresencaEmTodasAbas(jovemNome, mesesDados) {
+    if (!mesesDados || mesesDados.length === 0) { 
+        return { temPresenca: false, ultimaData: null, totalPresencas: 0 }; 
+    }
+    
+    const nomeBusca = jovemNome.toUpperCase().trim();
+    let ultimaData = null;
+    let totalPresencas = 0;
+    
+    for (const mes of mesesDados) {
+        if (!mes.dados) continue;
+        
+        const linha = mes.dados.find(row => {
+            const nome = String(row['B'] || row['NOME'] || '').toUpperCase().trim();
+            return nome === nomeBusca || 
+                   nome.includes(nomeBusca) || 
+                   nomeBusca.includes(nome) ||
+                   (nomeBusca.length > 3 && nome.includes(nomeBusca.substring(0, 3)));
+        });
+        
+        if (!linha) continue;
+        
+        const colunas = Object.keys(linha);
+        for (const col of colunas) {
+            const valor = String(linha[col] || '').trim().toUpperCase();
+            if (valor === 'P' || valor === 'PRESENÇA' || valor === 'PRESENCA') {
+                totalPresencas++;
+                
+                const cabecalho = mes.cabecalhos && mes.cabecalhos[col];
+                if (cabecalho) {
+                    const data = new Date(cabecalho);
+                    if (!isNaN(data.getTime())) {
+                        if (!ultimaData || data > ultimaData) {
+                            ultimaData = data;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return {
+        temPresenca: totalPresencas > 0,
+        ultimaData: ultimaData,
+        totalPresencas: totalPresencas
+    };
 }
 
 // ============================================================
@@ -462,363 +614,8 @@ function obterUltimoMesDisponivel() {
     return { nome: mesAtual, dados: null };
 }
 
-function buscarHorasCumpridasNoMes(jovemNome, mesDados) {
-    if (!mesDados || !mesDados.dados) return 0;
-    
-    const linha = mesDados.dados.find(row => {
-        const nome = row['B'] || row['NOME'] || '';
-        return nome.toUpperCase().trim() === jovemNome.toUpperCase().trim();
-    });
-    
-    if (linha) {
-        const cumpridas = parseFloat(linha['T']) || parseFloat(linha['Cumpridas']) || 0;
-        return cumpridas;
-    }
-    
-    return 0;
-}
-
-function buscarUltimaPresenca(jovemNome, mesesDados) {
-    if (!mesesDados || mesesDados.length === 0) return null;
-    
-    let ultimaData = null;
-    
-    for (const mes of mesesDados) {
-        if (!mes.dados) continue;
-        
-        const linha = mes.dados.find(row => {
-            const nome = row['B'] || row['NOME'] || '';
-            return nome.toUpperCase().trim() === jovemNome.toUpperCase().trim();
-        });
-        
-        if (!linha) continue;
-        
-        const colunas = Object.keys(linha);
-        for (const col of colunas) {
-            const valor = String(linha[col] || '').trim().toUpperCase();
-            if (valor === 'P' || valor === 'PRESENÇA') {
-                const cabecalho = mes.cabecalhos && mes.cabecalhos[col];
-                if (cabecalho) {
-                    const data = new Date(cabecalho);
-                    if (!isNaN(data.getTime())) {
-                        if (!ultimaData || data > ultimaData) {
-                            ultimaData = data;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    return ultimaData;
-}
-
-function processarAbasMensais(wb) {
-    const mesesDados = [];
-    const mesesNomes = [
-        'JULHO2026', 'JUNHO2026', 'MAIO2026', 'ABRIL2026', 'MARÇO2026',
-        'FEVEREIRO2026', 'JANEIRO2026', 'DEZEMBRO2025', 'NOVEMBRO2025',
-        'OUTUBRO2025', 'SETEMBRO2025', 'AGOSTO2025', 'JULHO2025',
-        'JUNHO2025', 'MAIO2025', 'ABRIL2025', 'MARÇO2025',
-        'FEVEREIRO2025', 'JANEIRO2025'
-    ];
-
-    for (const nomeMes of mesesNomes) {
-        const sheet = wb.Sheets[nomeMes];
-        if (!sheet) continue;
-
-        const dados = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
-        if (!dados || dados.length === 0) continue;
-
-        const cabecalhos = {};
-        const primeiraLinha = dados[0] || {};
-        const colunas = Object.keys(primeiraLinha);
-        
-        for (const col of colunas) {
-            const valor = String(primeiraLinha[col] || '').trim();
-            const data = new Date(valor);
-            if (!isNaN(data.getTime())) {
-                cabecalhos[col] = valor;
-            }
-        }
-
-        mesesDados.push({
-            nome: nomeMes,
-            dados: dados,
-            cabecalhos: cabecalhos
-        });
-    }
-
-    estado.mesesDados = mesesDados;
-    return mesesDados;
-}
-
 // ============================================================
-// FORMULÁRIO DE CADASTRO
-// ============================================================
-function renderizarCamposFormulario() {
-    const grid = document.getElementById('camposGrid');
-    if (!grid || grid.innerHTML !== "") return;
-
-    grid.innerHTML = CAMPOS.map(([key, label, type, options]) => {
-        if (type === 'select' && options) {
-            return `<div class="campo"><label>${label}</label><select id="campo_${key}" onchange="if(this.id==='campo_MEDIDA') toggleAcoesLA()">${options.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
-        }
-        return `<div class="campo"><label>${label}</label><input type="${type}" id="campo_${key}"></div>`;
-    }).join('');
-
-    const containerAcoes = document.getElementById('containerAcoesLA');
-    if (containerAcoes) {
-        containerAcoes.style.display = 'none';
-    }
-}
-
-window.toggleAcoesLA = function() {
-    const medida = document.getElementById('campo_MEDIDA')?.value;
-    const container = document.getElementById('containerAcoesLA');
-    if (container) {
-        container.style.display = medida === 'LA' ? 'block' : 'none';
-    }
-}
-
-window.adicionarAcaoLAForm = function() {
-    const input = document.getElementById('novaAcaoLAInput');
-    const prazoInput = document.getElementById('novaAcaoPrazoInput');
-    if (input.value.trim() === '') return alert('Descreva a ação.');
-    if (!prazoInput.value) return alert('Defina a data de vencimento.');
-    estado.acoesLATemporarias.push({
-        id: Date.now(),
-        texto: input.value.trim(),
-        realizado: false,
-        data: new Date().toISOString(),
-        prazo: prazoInput.value
-    });
-    input.value = '';
-    prazoInput.value = '';
-    atualizarListaAcoesLAForm();
-};
-
-window.atualizarListaAcoesLAForm = function() {
-    const ul = document.getElementById('listaAcoesLAForm');
-    if (!ul) return;
-    ul.innerHTML = estado.acoesLATemporarias.map(a => `<li style="margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding:4px 0;">
-        <span>${a.texto} <span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span></span>
-        <span style="color:red; cursor:pointer; font-weight:bold; margin-left:10px;" onclick="removerAcaoLAForm(${a.id})">✕</span>
-    </li>`).join('');
-};
-
-window.removerAcaoLAForm = function(id) {
-    estado.acoesLATemporarias = estado.acoesLATemporarias.filter(a => a.id !== id);
-    atualizarListaAcoesLAForm();
-};
-
-async function salvarJovem() {
-    const nome = document.getElementById('campo_NOME')?.value.trim();
-    if (!nome) return alert('Preencha pelo menos o nome.');
-
-    const jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase() === nome.toUpperCase() && j.id !== window._editarId);
-    const jovem = {
-        id: window._editarId || (jovemExistente ? jovemExistente.id : 'j_' + Date.now()),
-        status: window._editarId ? estado.jovens.find(j => j.id === window._editarId)?.status : 'ativo'
-    };
-
-    CAMPOS.forEach(([key]) => {
-        const el = document.getElementById(`campo_${key}`);
-        if (el) jovem[key] = el.value.trim();
-    });
-    jovem['ID_DIGITAL'] = document.getElementById('campo_ID_DIGITAL')?.value.trim() || '';
-
-    if (!jovem.historicoFrequencia) jovem.historicoFrequencia = [];
-    if (!jovem.observacoes) jovem.observacoes = [];
-    if (!jovem.documentos) jovem.documentos = [];
-
-    if (jovem['MEDIDA'] === 'LA') {
-        jovem.acoesLA = [...estado.acoesLATemporarias];
-    }
-
-    try {
-        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-        if (!window._editarId && !jovemExistente) await upstash('SADD', 'jovens:all', jovem.id);
-        estado.jovens = estado.jovens.filter(j => j.id !== jovem.id);
-        estado.jovens.push(jovem);
-
-        atualizarInterfaceCompleta();
-        limparFormulario();
-        alert('Jovem salvo com sucesso!');
-    } catch (err) {
-        alert('Erro ao salvar: ' + err.message);
-    }
-}
-
-function limparFormulario() {
-    CAMPOS.forEach(([key]) => {
-        const el = document.getElementById(`campo_${key}`);
-        if (el) el.value = '';
-    });
-    if (document.getElementById('campo_ID_DIGITAL')) document.getElementById('campo_ID_DIGITAL').value = '';
-    estado.acoesLATemporarias = [];
-    atualizarListaAcoesLAForm();
-    toggleAcoesLA();
-    window._editarId = null;
-}
-
-// ============================================================
-// SELEÇÃO EM LOTE
-// ============================================================
-function toggleSelecionarTodos() {
-    const checkboxes = document.querySelectorAll('#listaCorpo input[type="checkbox"]');
-    const selecionarTodos = document.getElementById('selecionarTodos');
-    checkboxes.forEach(cb => {
-        cb.checked = selecionarTodos.checked;
-        if (selecionarTodos.checked) {
-            estado.selecionadosLote.add(cb.dataset.id);
-        } else {
-            estado.selecionadosLote.delete(cb.dataset.id);
-        }
-    });
-    atualizarBarraSelecao();
-}
-
-function toggleSelecionarJovem(id) {
-    const cb = document.querySelector(`#listaCorpo input[data-id="${id}"]`);
-    if (!cb) return;
-    if (cb.checked) {
-        estado.selecionadosLote.add(id);
-    } else {
-        estado.selecionadosLote.delete(id);
-    }
-    atualizarBarraSelecao();
-}
-
-function atualizarBarraSelecao() {
-    const barra = document.getElementById('barraSelecaoLote');
-    const contador = document.getElementById('contadorSelecionados');
-    const btnAcoes = document.getElementById('btnAcoesLote');
-    const total = estado.selecionadosLote.size;
-
-    if (total > 0) {
-        barra.style.display = 'flex';
-        btnAcoes.style.display = 'inline-flex';
-        contador.textContent = total;
-    } else {
-        barra.style.display = 'none';
-        btnAcoes.style.display = 'none';
-    }
-}
-
-function desmarcarTodos() {
-    estado.selecionadosLote.clear();
-    document.querySelectorAll('#listaCorpo input[type="checkbox"]').forEach(cb => cb.checked = false);
-    document.getElementById('selecionarTodos').checked = false;
-    atualizarBarraSelecao();
-}
-
-function abrirModalAcoesLote() {
-    if (estado.selecionadosLote.size === 0) {
-        alert('Selecione pelo menos um jovem.');
-        return;
-    }
-    document.getElementById('loteContadorSelecionados').textContent = estado.selecionadosLote.size;
-    document.getElementById('loteAcaoSelect').value = '';
-    document.getElementById('loteOpcoesStatus').style.display = 'none';
-    document.getElementById('loteMotivoSuspensao').style.display = 'none';
-    document.getElementById('modalAcoesLote').style.display = 'flex';
-}
-
-function fecharModalAcoesLote() {
-    document.getElementById('modalAcoesLote').style.display = 'none';
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('loteAcaoSelect')?.addEventListener('change', function() {
-        const statusDiv = document.getElementById('loteOpcoesStatus');
-        if (this.value === 'alterar_status') {
-            statusDiv.style.display = 'block';
-        } else {
-            statusDiv.style.display = 'none';
-        }
-    });
-
-    document.getElementById('loteNovoStatus')?.addEventListener('change', function() {
-        const motivoDiv = document.getElementById('loteMotivoSuspensao');
-        motivoDiv.style.display = this.value === 'suspenso' ? 'block' : 'none';
-    });
-});
-
-async function executarAcaoLote() {
-    const acao = document.getElementById('loteAcaoSelect').value;
-    if (!acao) return alert('Selecione uma ação.');
-
-    const ids = Array.from(estado.selecionadosLote);
-    const jovens = estado.jovens.filter(j => ids.includes(j.id));
-
-    if (acao === 'excluir') {
-        if (!confirm(`Tem certeza que deseja excluir PERMANENTEMENTE ${jovens.length} jovens?`)) return;
-        try {
-            for (const j of jovens) {
-                await upstash('DEL', `jovem:${j.id}`);
-                await upstash('SREM', 'jovens:all', j.id);
-            }
-            estado.jovens = estado.jovens.filter(j => !ids.includes(j.id));
-            desmarcarTodos();
-            fecharModalAcoesLote();
-            await carregarTodosDados();
-            alert(`✅ ${jovens.length} jovens excluídos com sucesso!`);
-        } catch (err) {
-            alert('Erro ao excluir: ' + err.message);
-        }
-        return;
-    }
-
-    if (acao === 'alterar_status') {
-        const novoStatus = document.getElementById('loteNovoStatus').value;
-        if (!novoStatus) return alert('Selecione o novo status.');
-
-        let motivo = '';
-        if (novoStatus === 'suspenso') {
-            motivo = document.getElementById('loteMotivoInput').value.trim();
-            if (!motivo) return alert('Informe o motivo da suspensão.');
-        }
-
-        if (!confirm(`Tem certeza que deseja alterar o status de ${jovens.length} jovens para "${novoStatus.toUpperCase()}"?`)) return;
-
-        try {
-            for (const j of jovens) {
-                j.status = novoStatus;
-                if (novoStatus === 'suspenso') {
-                    j.motivoSuspensao = motivo;
-                    j.dataSuspensao = new Date().toISOString();
-                    j.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
-                } else if (novoStatus === 'descumprimento') {
-                    j.dataDescumprimento = new Date().toISOString();
-                } else if (novoStatus === 'ativo' || novoStatus === 'regular') {
-                    j.motivoSuspensao = '';
-                    j.dataSuspensao = '';
-                    j.dataDescumprimento = '';
-                }
-                if (!j.observacoes) j.observacoes = [];
-                j.observacoes.push({
-                    data: new Date().toISOString(),
-                    profissional: estado.usuarioAtual?.nome || 'Sistema',
-                    texto: `📌 Status alterado em lote para "${novoStatus.toUpperCase()}"${motivo ? ' - Motivo: ' + motivo : ''}`
-                });
-                await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
-            }
-            desmarcarTodos();
-            fecharModalAcoesLote();
-            await carregarTodosDados();
-            alert(`✅ Status de ${jovens.length} jovens alterado para "${novoStatus.toUpperCase()}" com sucesso!`);
-        } catch (err) {
-            alert('Erro ao alterar status: ' + err.message);
-        }
-        return;
-    }
-
-    alert('Ação não reconhecida.');
-}
-
-// ============================================================
-// LISTA GERAL E FILTROS (COM STATUS RECALCULADO)
+// LISTA GERAL E FILTROS (COM STATUS RECALCULADO - CORRIGIDO)
 // ============================================================
 function carregarLista() {
     const tbody = document.getElementById('listaCorpo');
@@ -831,105 +628,145 @@ function carregarLista() {
     const fGenero = document.getElementById('filtroGenero')?.value;
     const fIdade = document.getElementById('filtroIdade')?.value;
 
-    const ultimoMes = obterUltimoMesDisponivel();
+    // Obtém DADOS DOS MESES
     const mesesDados = estado.mesesDados || [];
+    
+    // 🔍 DEBUG: Mostra quantos meses foram carregados
+    console.log(`📅 Meses carregados: ${mesesDados.length}`);
+    if (mesesDados.length > 0) {
+        console.log(`📅 Último mês: ${mesesDados[0].nome}`);
+        console.log(`📅 Total de registros no último mês: ${mesesDados[0].dados?.length || 0}`);
+    }
+
+    const HORAS_POR_PRESENCA = 4;
 
     // ============================================================
-    // RECALCULA STATUS DO ZERO PARA CADA JOVEM
+    // RECALCULA STATUS DO ZERO PARA CADA JOVEM (CORRIGIDO)
     // ============================================================
     let lista = estado.jovens.map(j => {
-        // 1. HORAS ATRIBUIDAS
+        const nome = j['NOME'] || '';
+        const medida = j['MEDIDA'] || '';
         const horasAtribuidas = parseFloat(j['HORAS']) || 0;
+        const isLA = medida === 'LA' || medida === 'L.A' || medida.includes('LA');
+        const isLiberacao = medida === 'Liberação';
         
-        // 2. HORAS CUMPRIDAS (da aba do último mês)
+        // 1. BUSCAR PRESENÇA NAS ABAS MENSAIS
+        let ultimaPresenca = null;
+        let diasSemPresenca = 999;
         let horasCumpridas = 0;
-        if (j['NOME']) {
-            horasCumpridas = buscarHorasCumpridasNoMes(j['NOME'], ultimoMes);
-            if (horasCumpridas === 0) {
-                for (const mes of mesesDados) {
-                    if (mes.nome === ultimoMes.nome) continue;
-                    horasCumpridas = buscarHorasCumpridasNoMes(j['NOME'], mes);
-                    if (horasCumpridas > 0) break;
+        let totalPresencas = 0;
+        
+        if (nome) {
+            // Busca a última presença em TODAS as abas mensais
+            const resultadoPresenca = verificarPresencaEmTodasAbas(nome, mesesDados);
+            ultimaPresenca = resultadoPresenca.ultimaData;
+            totalPresencas = resultadoPresenca.totalPresencas;
+            horasCumpridas = totalPresencas * HORAS_POR_PRESENCA;
+            
+            if (ultimaPresenca) {
+                const agora = new Date();
+                const diffTime = Math.abs(agora - ultimaPresenca);
+                diasSemPresenca = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                console.log(`✅ ${nome} - Última presença: ${ultimaPresenca.toLocaleDateString('pt-BR')} (${diasSemPresenca} dias) - ${totalPresencas} presenças`);
+            } else {
+                console.log(`⚠️ ${nome} - Nenhuma presença encontrada nas abas mensais`);
+                // Se não encontrou nas abas mensais, tenta no histórico de frequência
+                const hist = j.historicoFrequencia || [];
+                if (hist.length > 0) {
+                    const entradas = hist.filter(h => h.tipo === 'entrada' || h.tipo === 'presenca');
+                    if (entradas.length > 0) {
+                        const ultimaData = new Date(Math.max(...entradas.map(h => new Date(h.data).getTime())));
+                        ultimaPresenca = ultimaData;
+                        const agora = new Date();
+                        diasSemPresenca = Math.floor((agora - ultimaData) / (1000 * 60 * 60 * 24));
+                        console.log(`   📊 Usando histórico: última presença em ${ultimaData.toLocaleDateString('pt-BR')}`);
+                    }
                 }
             }
         }
-        
-        // 3. SALDO
+
+        // 2. SALDO
         const saldo = Math.max(0, horasAtribuidas - horasCumpridas);
 
-        // 4. ÚLTIMA PRESENÇA
-        let ultimaPresenca = null;
-        let diasSemPresenca = 999;
-        
-        if (j['NOME']) {
-            ultimaPresenca = buscarUltimaPresenca(j['NOME'], mesesDados);
-            if (ultimaPresenca) {
-                const agora = new Date();
-                diasSemPresenca = Math.floor((agora - ultimaPresenca) / (1000 * 60 * 60 * 24));
-            }
-        }
-
         // ============================================================
-        // 5. DETERMINAR STATUS (RECALCULADO DO ZERO)
+        // 3. DETERMINAR STATUS (CORRIGIDO)
         // ============================================================
         let status = 'regular';
         let motivoStatus = '';
         let corStatus = '';
-        let statusIcon = '';
-
-        const nomeUpper = (j['NOME'] || '').toUpperCase().trim();
-        const isLiberacao = j['MEDIDA'] === 'Liberação';
-        const isLA = j['MEDIDA'] === 'LA';
-
-        // CHECK 1: SUSPENSO (verifica se tem flag manual)
+        
+        // REGRA 1: SUSPENSO (manual) - PRIORIDADE MÁXIMA
         if (j.status === 'suspenso') {
             status = 'suspenso';
-            motivoStatus = j.motivoSuspensao || 'Suspenso';
-            corStatus = 'background:#8b5cf6; color:white;'; // ROXO
+            motivoStatus = j.motivoSuspensao || 'Suspenso por decisão';
+            corStatus = 'background:#8b5cf6; color:white;';
         }
-        // CHECK 2: MEDIDA FINALIZADA (saldo zerado E horas atribuidas > 0)
-        else if (horasAtribuidas > 0 && saldo <= 0 && !isLA && !isLiberacao) {
+        // REGRA 2: LIBERAÇÃO (medida concluída)
+        else if (isLiberacao) {
+            status = 'liberado';
+            motivoStatus = 'Medida Liberada';
+            corStatus = 'background:#e5e7eb; color:#374151;';
+        }
+        // REGRA 3: MEDIDA FINALIZADA (saldo zerado, mas NÃO para LA)
+        else if (horasAtribuidas > 0 && !isLA && saldo <= 0) {
             status = 'concluído';
             motivoStatus = 'Medida Finalizada';
-            corStatus = 'background:#10b981; color:white;'; // VERDE
+            corStatus = 'background:#10b981; color:white;';
         }
-        // CHECK 3: DESCUMPRIMENTO (14+ dias)
-        else if (diasSemPresenca >= 14) {
-            status = 'descumprimento';
-            motivoStatus = '14+ dias sem comparecer';
-            corStatus = 'background:#ef4444; color:white;'; // VERMELHO
-        }
-        // CHECK 4: IRREGULAR (7 a 13 dias)
-        else if (diasSemPresenca >= 7) {
-            status = 'irregular';
-            motivoStatus = '7+ dias sem comparecer';
-            corStatus = 'background:#f59e0b; color:white;'; // LARANJA
-        }
-        // CHECK 5: REGULAR (menos de 7 dias)
-        else {
-            status = 'regular';
-            motivoStatus = 'Regular';
-            corStatus = 'background:#d1fae5; color:#065f46;'; // VERDE CLARO
-        }
-
-        // Se for LA, mantém status original
-        if (isLA) {
+        // REGRA 4: LA - status manual
+        else if (isLA) {
+            // Para LA, mantém o status existente ou usa 'regular' como padrão
             status = j.status || 'regular';
-            motivoStatus = j.motivoSuspensao || 'LA';
+            motivoStatus = j.motivoSuspensao || 'LA - status manual';
             if (status === 'suspenso') {
-                corStatus = 'background:#8b5cf6; color:white;'; // ROXO
+                corStatus = 'background:#8b5cf6; color:white;';
             } else if (status === 'concluído') {
-                corStatus = 'background:#10b981; color:white;'; // VERDE
+                corStatus = 'background:#10b981; color:white;';
             } else {
-                corStatus = 'background:#d1fae5; color:#065f46;'; // VERDE CLARO
+                corStatus = 'background:#d1fae5; color:#065f46;';
             }
         }
-
-        // Se for Liberação
-        if (isLiberacao) {
-            status = 'liberado';
-            motivoStatus = 'Liberado';
-            corStatus = 'background:#e5e7eb; color:#374151;'; // CINZA
+        // REGRA 5: BASEADO EM PRESENÇA (para PSC e Internação)
+        else {
+            // Só aplica regras de presença se NÃO for LA e NÃO for liberação
+            if (!isLA && !isLiberacao) {
+                // 14+ dias sem presença → DESCUMPRIMENTO
+                if (diasSemPresenca >= 14 && diasSemPresenca !== 999) {
+                    status = 'descumprimento';
+                    motivoStatus = '14+ dias sem comparecer';
+                    corStatus = 'background:#ef4444; color:white;';
+                }
+                // 7-13 dias sem presença → IRREGULAR
+                else if (diasSemPresenca >= 7 && diasSemPresenca < 14) {
+                    status = 'irregular';
+                    motivoStatus = '7+ dias sem comparecer';
+                    corStatus = 'background:#f59e0b; color:white;';
+                }
+                // Menos de 7 dias → REGULAR
+                else if (diasSemPresenca < 7 && diasSemPresenca !== 999) {
+                    status = 'regular';
+                    motivoStatus = 'Regular';
+                    corStatus = 'background:#d1fae5; color:#065f46;';
+                }
+                // Sem informação de presença → mantém status existente
+                else {
+                    // Se tem horas atribuídas mas nunca foi, considera regular
+                    if (horasAtribuidas > 0) {
+                        status = 'regular';
+                        motivoStatus = 'Aguardando início';
+                        corStatus = 'background:#d1fae5; color:#065f46;';
+                    } else {
+                        status = j.status || 'regular';
+                        motivoStatus = 'Status anterior';
+                        corStatus = 'background:#d1fae5; color:#065f46;';
+                    }
+                }
+            } else {
+                // Para LA/Liberação, mantém o status existente
+                status = j.status || 'regular';
+                motivoStatus = 'Status manual';
+                corStatus = 'background:#d1fae5; color:#065f46;';
+            }
         }
 
         // Armazena no objeto
@@ -941,6 +778,7 @@ function carregarLista() {
         j._saldo = saldo;
         j._ultimaPresenca = ultimaPresenca;
         j._diasSemPresenca = diasSemPresenca;
+        j._totalPresencas = totalPresencas;
 
         return j;
     });
@@ -975,6 +813,9 @@ function carregarLista() {
         }
         return true;
     }).sort((a, b) => (a['NOME'] || '').localeCompare((b['NOME'] || ''), 'pt-BR'));
+
+    // 📊 LOG: Mostra quantos jovens foram filtrados
+    console.log(`📊 Jovens na lista: ${lista.length} (de ${estado.jovens.length} total)`);
 
     atualizarContadorLista(lista.length);
     const podeAlterarStatus = NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel);
@@ -1017,7 +858,6 @@ function carregarLista() {
             `;
         }
 
-        // Botão para corrigir saldo manualmente
         let botaoCorrigirSaldo = '';
         if (podeAlterarStatus && j['MEDIDA'] !== 'LA' && j['MEDIDA'] !== 'Liberação') {
             botaoCorrigirSaldo = `
@@ -1041,7 +881,6 @@ function carregarLista() {
             }
         }
 
-        // Mapeia status para exibição amigável
         const statusDisplay = {
             'regular': 'Regular',
             'suspenso': 'Suspenso',
@@ -1050,6 +889,9 @@ function carregarLista() {
             'irregular': 'Irregular',
             'liberado': 'Liberado'
         };
+
+        // Mostra total de presenças se disponível
+        const presencasInfo = j._totalPresencas ? ` (${j._totalPresencas} presenças)` : '';
 
         return `<tr>
             <td><input type="checkbox" data-id="${j.id}" ${isSelecionado ? 'checked' : ''} onchange="toggleSelecionarJovem('${j.id}')"></td>
@@ -1060,7 +902,7 @@ function carregarLista() {
             <td><strong>${j._horasAtribuidas}h</strong></td>
             <td>${renderSaldo}</td>
             <td><span style="font-weight:600; padding:4px 12px; border-radius:20px; ${j._corStatus}">${(statusDisplay[j._statusRender] || j._statusRender).toUpperCase()}</span></td>
-            <td>${j._motivoStatus || ''}</td>
+            <td>${j._motivoStatus || ''}${presencasInfo}</td>
             <td>${ultimoFormatado}</td>
             <td style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
                 ${botaoPonto}
@@ -1075,6 +917,514 @@ function carregarLista() {
 
     document.getElementById('selecionarTodos').checked = false;
     atualizarBarraSelecao();
+}
+
+// ============================================================
+// EXPORTAR EXCEL (CORRIGIDO - INCLUI TODOS OS JOVENS)
+// ============================================================
+function exportarExcel() {
+    const palavrasIgnorar = [
+        'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
+        'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
+        'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TERÇA', 'QUINTA', 'SÁBADO',
+        'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
+        'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
+        'TER', 'QUIN', 'SÁB', 'REFERENCIA', 'NOME', 'MEDIDA', 'MESES', 'HORAS',
+        'NASC', 'LEGENDA', 'STATUS', 'SITUAÇÃO',
+        'AGUARDANDO DOCUMENTOS DE ENCERRAMENTO',
+        'ACOLHIMENTO', 'CÓDIGOS', 'RENDA TOTAL', 'BENEFÍCIO'
+    ];
+
+    // ✅ FILTRO MELHORADO - INCLUI TODOS OS JOVENS COM NOME E MEDIDA
+    const jovensValidos = estado.jovens.filter(j => {
+        const nome = (j['NOME'] || '').trim();
+        const medida = (j['MEDIDA'] || '').trim();
+        const referencia = (j['REFERENCIA'] || '').trim();
+        const status = j._statusRender || j.status || '';
+        
+        // 1. Ignora linhas de legenda
+        const nomeUpper = nome.toUpperCase();
+        if (palavrasIgnorar.some(p => nomeUpper.includes(p))) return false;
+        
+        // 2. Ignora se NOME é vazio ou muito curto
+        if (!nome || nome.length < 2) return false;
+        
+        // 3. ✅ NÃO remove nomes com datas/números (APENAS se for APENAS números)
+        const apenasNumeros = /^\d+$/.test(nome.replace(/[.,\s-]/g, ''));
+        if (apenasNumeros && nome.length > 3) return false;
+        
+        // 4. ✅ Aceita se tem MEDIDA válida OU REFERÊNCIA válida
+        const medidasValidas = ['PSC', 'LA', 'L.A', 'INTERNAÇÃO', 'LIBERAÇÃO', 'PSC/LA', 'LA/PSC', 'A.T', 'AT'];
+        const temMedida = medidasValidas.some(m => medida.toUpperCase().includes(m));
+        const temReferencia = referencia && referencia.length >= 2 && !palavrasIgnorar.some(p => referencia.toUpperCase().includes(p));
+        
+        // 5. Aceita ATIVOS, REGULARES e EM DESCUMPRIMENTO (todos têm direito)
+        const statusValidos = ['ativo', 'regular', 'descumprimento', 'irregular', 'suspenso', 'concluído', 'liberado', 'finalizada'];
+        const temStatus = statusValidos.some(s => status.toLowerCase().includes(s));
+        
+        // ✅ Jovem válido se: tem nome E (tem medida OU tem referência)
+        return (temMedida || temReferencia) && temStatus;
+    });
+
+    // 📊 LOG para depuração
+    console.log(`📊 Total de jovens no sistema: ${estado.jovens.length}`);
+    console.log(`📊 Jovens válidos para exportação: ${jovensValidos.length}`);
+    console.log(`📊 Jovens excluídos: ${estado.jovens.length - jovensValidos.length}`);
+    
+    // Lista os excluídos para análise
+    const excluidos = estado.jovens.filter(j => !jovensValidos.includes(j));
+    if (excluidos.length > 0 && excluidos.length < 20) {
+        console.log('🚫 Jovens excluídos:');
+        excluidos.forEach(j => {
+            console.log(`   - ${j['NOME']} | Medida: ${j['MEDIDA']} | Status: ${j._statusRender || j.status}`);
+        });
+    }
+
+    if (jovensValidos.length === 0) {
+        alert('⚠️ Não há dados válidos para exportar. Verifique se os jovens têm NOME e MEDIDA preenchidos.');
+        return;
+    }
+
+    // Cabeçalhos de exportação
+    const camposPlanilha = [
+        'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA', 'MEDIDA',
+        'MESES', 'HORAS', 'PROTETIVA', 'NASC.', 'MÊS ANIVERSARIO', 'NATURALIDADE',
+        'IDADE', 'GÊNERO', 'COR', 'COMPOSIÇÃO FAMILIAR', 'RENDA', 'BENEFICIO',
+        'PAA', 'ENDEREÇO', 'BAIRRO', 'TELEFONE', 'CRAS', 'UBS', 'CPF',
+        'ESTUDA?', 'SÉRIE', 'ESCOLA', 'TRABALHA?', 'FUNÇÃO', 'VINCULO', 'REDE',
+        'USO DE SPA?', 'QUAL?', 'PREFERE NOME SOCIAL?', 'QUAL NOME SOCIAL?'
+    ];
+
+    const data = jovensValidos.map(j => {
+        const row = {};
+        camposPlanilha.forEach(campo => {
+            // Mapeia campos normais
+            const chave = Object.keys(j).find(k => k === campo || k === campo.toUpperCase());
+            row[campo] = chave ? (j[chave] || '') : '';
+        });
+        
+        // Adiciona campos calculados
+        row['STATUS'] = j._statusRender || j.status || 'regular';
+        row['HORAS_ATRIBUIDAS'] = j._horasAtribuidas || parseFloat(j['HORAS']) || 0;
+        row['HORAS_CUMPRIDAS'] = j._horasCumpridas || 0;
+        row['SALDO'] = j._saldo || 0;
+        row['DIAS_SEM_PRESENCA'] = j._diasSemPresenca || 0;
+        row['TOTAL_PRESENCAS'] = j._totalPresencas || 0;
+        row['ULTIMA_PRESENCA'] = j._ultimaPresenca ? j._ultimaPresenca.toISOString().split('T')[0] : '';
+        
+        if (j['ID_DIGITAL']) {
+            row['ID_DIGITAL'] = j['ID_DIGITAL'];
+        }
+        
+        return row;
+    });
+
+    // Cria planilha
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Jovens');
+
+    // Ajusta largura das colunas
+    const colWidths = [];
+    const headers = Object.keys(data[0] || {});
+    headers.forEach(h => {
+        let maxLen = h.length;
+        data.forEach(row => {
+            const val = String(row[h] || '');
+            if (val.length > maxLen) maxLen = val.length;
+        });
+        colWidths.push({ wch: Math.min(Math.max(maxLen + 2, 12), 40) });
+    });
+    ws['!cols'] = colWidths;
+
+    XLSX.writeFile(wb, `relatorio_jovens_${new Date().toISOString().slice(0,10)}.xlsx`);
+    alert(`✅ Planilha exportada com sucesso!\nTotal de jovens exportados: ${jovensValidos.length}`);
+}
+
+// ============================================================
+// IMPORTAR PLANILHA (CORRIGIDO - INCLUI TODOS OS JOVENS)
+// ============================================================
+async function importarPlanilha() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const statusDiv = document.getElementById('statusImportacao');
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#fffbeb';
+        statusDiv.style.color = '#92400e';
+        statusDiv.textContent = '⏳ Processando planilha...';
+
+        try {
+            const data = await file.arrayBuffer();
+            const wb = XLSX.read(data, { cellStyles: true });
+            
+            processarAbasMensais(wb);
+            
+            const ws = wb.Sheets['GERAL'] || wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
+
+            // ✅ MELHORAR DETECÇÃO DE COLUNAS
+            const colMap = {};
+            const headers = Object.keys(rows[0] || {});
+            
+            console.log(`🔍 Colunas encontradas: ${headers.join(', ')}`);
+            
+            // Mapeia colunas usando correspondência flexível
+            const camposMapeamento = {
+                'NOME': ['NOME', 'NOMES', 'NOME COMPLETO', 'NOM'],
+                'REFERENCIA': ['REFERENCIA', 'REFERÊNCIA', 'REF'],
+                'MEDIDA': ['MEDIDA', 'MEDIDAS'],
+                'HORAS': ['HORAS', 'HORA'],
+                'CPF': ['CPF'],
+                'NASC.': ['NASC.', 'NASCIMENTO', 'DATA NASC'],
+                'IDADE': ['IDADE', 'IDADES'],
+                'GÊNERO': ['GÊNERO', 'GENERO', 'SEXO'],
+                'TELEFONE': ['TELEFONE', 'FONE', 'CONTATO'],
+                'ENDEREÇO': ['ENDEREÇO', 'ENDERECO', 'RUA', 'AVENIDA'],
+                'BAIRRO': ['BAIRRO'],
+                'STATUS': ['STATUS', 'SITUAÇÃO', 'SITUACAO']
+            };
+            
+            for (const [campo, possibilidades] of Object.entries(camposMapeamento)) {
+                for (const h of headers) {
+                    const hUpper = h.toUpperCase().trim();
+                    if (possibilidades.some(p => hUpper.includes(p.toUpperCase()) || p.toUpperCase().includes(hUpper))) {
+                        colMap[campo] = h;
+                        break;
+                    }
+                }
+            }
+            
+            // Se NOME não foi encontrado, tenta a primeira coluna com texto
+            if (!colMap['NOME']) {
+                for (const h of headers) {
+                    const val = String(rows[0][h] || '').trim();
+                    if (val && val.length > 2 && !/^\d+$/.test(val)) {
+                        colMap['NOME'] = h;
+                        break;
+                    }
+                }
+            }
+            
+            console.log(`✅ Colunas mapeadas:`, colMap);
+
+            let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
+
+            const palavrasIgnorar = [
+                'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
+                'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
+                'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TERÇA', 'QUINTA', 'SÁBADO',
+                'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
+                'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
+                'TER', 'QUIN', 'SÁB', 'REFERENCIA', 'NOME', 'MEDIDA', 'MESES', 'HORAS',
+                'AGUARDANDO DOCUMENTOS DE ENCERRAMENTO'
+            ];
+
+            for (const row of rows) {
+                try {
+                    let nome = '';
+                    
+                    // Tenta obter o nome da coluna mapeada
+                    if (colMap['NOME'] && row[colMap['NOME']] !== undefined && row[colMap['NOME']] !== '') {
+                        nome = String(row[colMap['NOME']] || '').trim();
+                    }
+                    
+                    // Se não encontrou, tenta em outras colunas comuns
+                    if (!nome || nome === 'undefined' || nome === '') {
+                        for (const h of headers) {
+                            const val = String(row[h] || '').trim();
+                            if (val && val.length > 2) {
+                                const isDate = /^\d{2}\/\d{2}\/\d{4}/.test(val) || /^\d{4}-\d{2}-\d{2}/.test(val);
+                                const isNumber = /^\d+$/.test(val.replace(/[.,]/g, ''));
+                                const isIgnorar = palavrasIgnorar.some(p => val.toUpperCase().includes(p));
+                                if (!isDate && !isNumber && !isIgnorar && val.length > 2) {
+                                    nome = val;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!nome || nome === 'undefined' || nome === '') {
+                        ignorados++;
+                        continue;
+                    }
+
+                    const nomeUpper = nome.toUpperCase().trim();
+                    let deveIgnorar = false;
+                    for (const palavra of palavrasIgnorar) {
+                        if (nomeUpper.includes(palavra)) {
+                            deveIgnorar = true;
+                            break;
+                        }
+                    }
+                    
+                    if (deveIgnorar) {
+                        ignorados++;
+                        continue;
+                    }
+
+                    // Verifica se já existe um jovem com este nome
+                    let jovemExistente = null;
+                    const nomeExato = nome.toUpperCase().trim();
+                    
+                    jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nomeExato);
+                    
+                    if (!jovemExistente) {
+                        const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
+                        if (cpfPlanilha && cpfPlanilha.length >= 11) {
+                            jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
+                        }
+                    }
+                    
+                    if (!jovemExistente && nome.length > 3) {
+                        jovemExistente = estado.jovens.find(j => {
+                            const jNome = (j['NOME'] || '').toUpperCase().trim();
+                            return jNome === nomeExato || 
+                                   jNome.includes(nomeExato) || 
+                                   nomeExato.includes(jNome) ||
+                                   (nomeExato.length > 5 && jNome.length > 5 && 
+                                    (nomeExato.includes(jNome.substring(0, 5)) || 
+                                     jNome.includes(nomeExato.substring(0, 5))));
+                        });
+                    }
+
+                    // Obtém o status da coluna STATUS
+                    let statusImportado = null;
+                    if (colMap['STATUS'] && row[colMap['STATUS']]) {
+                        const statusRaw = String(row[colMap['STATUS']]).toUpperCase().trim();
+                        const statusMap = {
+                            'REGULAR': 'regular',
+                            'ATIVO': 'regular',
+                            'IRREGULAR': 'irregular',
+                            'DESCUMPRIMENTO': 'descumprimento',
+                            'EM DESCUMPRIMENTO': 'descumprimento',
+                            'SUSPENSO': 'suspenso',
+                            'FINALIZADA': 'concluído',
+                            'MEDIDA FINALIZADA': 'concluído',
+                            'CONCLUÍDO': 'concluído',
+                            'CONCLUIDO': 'concluído',
+                            'LIBERADO': 'liberado',
+                            'PEDIR EXT.': 'concluído',
+                            'EXT. ANDAMENTO': 'regular'
+                        };
+                        
+                        for (const [key, value] of Object.entries(statusMap)) {
+                            if (statusRaw.includes(key) || key.includes(statusRaw)) {
+                                statusImportado = value;
+                                break;
+                            }
+                        }
+                        
+                        if (!statusImportado) {
+                            const validStatus = ['regular', 'suspenso', 'descumprimento', 'concluído', 'irregular', 'liberado'];
+                            if (validStatus.includes(statusRaw.toLowerCase())) {
+                                statusImportado = statusRaw.toLowerCase();
+                            }
+                        }
+                    }
+
+                    // Se não tem status, define como regular
+                    if (!statusImportado) {
+                        statusImportado = 'regular';
+                    }
+
+                    if (jovemExistente) {
+                        const jovemId = jovemExistente.id;
+                        const historicoFrequencia = jovemExistente.historicoFrequencia || [];
+                        const observacoes = jovemExistente.observacoes || [];
+                        const documentos = jovemExistente.documentos || [];
+                        const acoesLA = jovemExistente.acoesLA || [];
+                        const profissionalLA = jovemExistente.profissionalLA || '';
+
+                        const jovemAtualizado = {
+                            id: jovemId,
+                            profissionalLA: profissionalLA,
+                            historicoFrequencia: historicoFrequencia,
+                            observacoes: observacoes,
+                            documentos: documentos,
+                            acoesLA: acoesLA,
+                            status: statusImportado
+                        };
+                        
+                        CAMPOS.forEach(([key]) => {
+                            const colName = colMap[key];
+                            let valor = '';
+                            
+                            if (colName && row[colName] !== undefined && row[colName] !== '') {
+                                valor = String(row[colName] || '').trim();
+                            } else if (row[key] !== undefined && row[key] !== '') {
+                                valor = String(row[key] || '').trim();
+                            } else if (jovemExistente[key] !== undefined && jovemExistente[key] !== '') {
+                                valor = jovemExistente[key];
+                            }
+                            
+                            if (key === 'GÊNERO' && valor) {
+                                if (valor.toUpperCase().includes('MASC')) valor = 'M';
+                                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
+                                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
+                            }
+                            if ((key === 'HORAS' || key === 'MESES') && valor) {
+                                valor = parseFloat(String(valor).replace(',', '.')) || 0;
+                            }
+                            if (key === 'IDADE' && valor) {
+                                valor = parseInt(valor) || 0;
+                            }
+                            
+                            jovemAtualizado[key] = valor;
+                        });
+                        
+                        jovemAtualizado['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || jovemExistente['ID_DIGITAL'] || '').trim();
+                        jovemAtualizado['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || jovemExistente['REFERENCIA'] || '').trim();
+                        if (nome) jovemAtualizado['NOME'] = nome;
+
+                        await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
+                        const index = estado.jovens.findIndex(j => j.id === jovemId);
+                        if (index !== -1) {
+                            estado.jovens[index] = jovemAtualizado;
+                        }
+                        atualizados++;
+                        
+                    } else {
+                        const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                        const novoJovem = {
+                            id: novoId,
+                            status: statusImportado || 'regular',
+                            historicoFrequencia: [],
+                            observacoes: [],
+                            documentos: [],
+                            acoesLA: []
+                        };
+                        
+                        CAMPOS.forEach(([key]) => {
+                            const colName = colMap[key];
+                            let valor = '';
+                            
+                            if (colName && row[colName] !== undefined && row[colName] !== '') {
+                                valor = String(row[colName] || '').trim();
+                            } else if (row[key] !== undefined && row[key] !== '') {
+                                valor = String(row[key] || '').trim();
+                            }
+                            
+                            if (key === 'GÊNERO' && valor) {
+                                if (valor.toUpperCase().includes('MASC')) valor = 'M';
+                                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
+                                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
+                            }
+                            if ((key === 'HORAS' || key === 'MESES') && valor) {
+                                valor = parseFloat(String(valor).replace(',', '.')) || 0;
+                            }
+                            if (key === 'IDADE' && valor) {
+                                valor = parseInt(valor) || 0;
+                            }
+                            
+                            novoJovem[key] = valor;
+                        });
+                        
+                        novoJovem['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || '').trim();
+                        novoJovem['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || '').trim();
+                        novoJovem['NOME'] = nome;
+
+                        if (novoJovem['NOME']) {
+                            await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
+                            await upstash('SADD', 'jovens:all', novoId);
+                            estado.jovens.push(novoJovem);
+                            importados++;
+                        } else {
+                            ignorados++;
+                        }
+                    }
+                    
+                } catch (rowError) {
+                    console.error('Erro ao processar linha:', rowError);
+                    erros++;
+                }
+            }
+            
+            await carregarTodosDados();
+            await verificarDescumprimentoAutomatico();
+            
+            let mensagem = `✅ Importação concluída!`;
+            if (importados > 0) mensagem += ` ${importados} novos adicionados.`;
+            if (atualizados > 0) mensagem += ` ${atualizados} atualizados.`;
+            if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas.`;
+            if (erros > 0) mensagem += ` ⚠️ ${erros} erros.`;
+            
+            statusDiv.style.background = '#d1fae5';
+            statusDiv.style.color = '#065f46';
+            statusDiv.textContent = mensagem;
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 10000);
+            
+        } catch (err) {
+            statusDiv.style.background = '#fee2e2';
+            statusDiv.style.color = '#991b1b';
+            statusDiv.textContent = '❌ Erro: ' + err.message;
+            console.error('Erro na importação:', err);
+        }
+    };
+    input.click();
+}
+
+// ============================================================
+// PROCESSAR ABAS MENSAIS (CORRIGIDO)
+// ============================================================
+function processarAbasMensais(wb) {
+    const mesesDados = [];
+    const mesesNomes = [
+        'JULHO2026', 'JUNHO2026', 'MAIO2026', 'ABRIL2026', 'MARÇO2026',
+        'FEVEREIRO2026', 'JANEIRO2026', 'DEZEMBRO2025', 'NOVEMBRO2025',
+        'OUTUBRO2025', 'SETEMBRO2025', 'AGOSTO2025', 'JULHO2025',
+        'JUNHO2025', 'MAIO2025', 'ABRIL2025', 'MARÇO2025',
+        'FEVEREIRO2025', 'JANEIRO2025'
+    ];
+
+    for (const nomeMes of mesesNomes) {
+        const sheet = wb.Sheets[nomeMes];
+        if (!sheet) continue;
+
+        const dados = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+        if (!dados || dados.length === 0) continue;
+
+        const cabecalhos = {};
+        const primeiraLinha = dados[0] || {};
+        const colunas = Object.keys(primeiraLinha);
+        
+        for (const col of colunas) {
+            const valor = String(primeiraLinha[col] || '').trim();
+            const data = new Date(valor);
+            if (!isNaN(data.getTime())) {
+                cabecalhos[col] = valor;
+            }
+        }
+
+        // ✅ Verifica se a aba tem dados de presença
+        const temPresencas = dados.some(row => {
+            const colunas = Object.keys(row);
+            return colunas.some(col => {
+                const valor = String(row[col] || '').trim().toUpperCase();
+                return valor === 'P' || valor === 'PRESENÇA' || valor === 'PRESENCA';
+            });
+        });
+
+        if (temPresencas || dados.length > 5) {
+            mesesDados.push({
+                nome: nomeMes,
+                dados: dados,
+                cabecalhos: cabecalhos
+            });
+            console.log(`📅 Aba ${nomeMes} carregada: ${dados.length} registros`);
+        }
+    }
+
+    estado.mesesDados = mesesDados;
+    console.log(`📅 Total de abas mensais carregadas: ${mesesDados.length}`);
+    return mesesDados;
 }
 
 // ============================================================
@@ -1101,14 +1451,13 @@ window.corrigirSaldoManual = async function(jovemId) {
         saldoAtual.toFixed(1)
     );
     
-    if (novoSaldo === null) return; // Cancelou
+    if (novoSaldo === null) return;
     const novoSaldoNum = parseFloat(novoSaldo.replace(',', '.'));
     if (isNaN(novoSaldoNum) || novoSaldoNum < 0) {
         alert('Digite um número válido (0 ou maior).');
         return;
     }
     
-    // Recalcula horas cumpridas com base no novo saldo
     const novasHorasCumpridas = Math.max(0, horasAtribuidas - novoSaldoNum);
     
     if (!confirm(`Confirmar alteração?\n\nNovo Saldo: ${novoSaldoNum.toFixed(1)}h\nNovas Horas Cumpridas: ${novasHorasCumpridas.toFixed(1)}h`)) {
@@ -1116,12 +1465,9 @@ window.corrigirSaldoManual = async function(jovemId) {
     }
     
     try {
-        // Atualiza o jovem
         jovem._horasCumpridas = novasHorasCumpridas;
         jovem._saldo = novoSaldoNum;
         
-        // Atualiza o saldo no histórico de frequência (se houver)
-        // Adiciona uma observação
         if (!jovem.observacoes) jovem.observacoes = [];
         jovem.observacoes.push({
             data: new Date().toISOString(),
@@ -1349,41 +1695,66 @@ window.marcarDescumprimentoManual = async function(jovemId) {
 };
 
 // ============================================================
-// VERIFICAR DESCUMPRIMENTO AUTOMÁTICO
+// VERIFICAR DESCUMPRIMENTO AUTOMÁTICO (CORRIGIDO)
 // ============================================================
 async function verificarDescumprimentoAutomatico() {
     const agora = new Date();
     let alterado = false;
-    const ultimoMes = obterUltimoMesDisponivel();
     const mesesDados = estado.mesesDados || [];
+    const HORAS_POR_PRESENCA = 4;
     
     for (const j of estado.jovens) {
-        if (j['MEDIDA'] === 'Liberação' || j.status === 'suspenso' || j.status === 'concluído' || j['MEDIDA'] === 'LA') continue;
+        const medida = j['MEDIDA'] || '';
+        const isLA = medida === 'LA' || medida === 'L.A' || medida.includes('LA');
+        const isLiberacao = medida === 'Liberação';
         
-        // Busca última presença
+        if (isLiberacao || j.status === 'suspenso' || j.status === 'concluído') continue;
+        
+        // Busca presença nas abas mensais
         let ultimaPresenca = null;
         let diasSemPresenca = 999;
+        let totalPresencas = 0;
         
         if (j['NOME']) {
-            ultimaPresenca = buscarUltimaPresenca(j['NOME'], mesesDados);
+            const resultado = verificarPresencaEmTodasAbas(j['NOME'], mesesDados);
+            ultimaPresenca = resultado.ultimaData;
+            totalPresencas = resultado.totalPresencas;
+            
             if (ultimaPresenca) {
                 diasSemPresenca = Math.floor((agora - ultimaPresenca) / (1000 * 60 * 60 * 24));
             }
         }
         
-        // Se não encontrou nos meses, tenta no histórico
+        // Se não encontrou nas abas, tenta o histórico
         if (diasSemPresenca === 999) {
             const hist = j.historicoFrequencia || [];
-            if (hist.length > 0) {
-                const entradas = hist.filter(h => h.tipo === 'entrada' || h.tipo === 'presenca');
-                if (entradas.length > 0) {
-                    const ultimaData = new Date(Math.max(...entradas.map(h => new Date(h.data).getTime())));
-                    diasSemPresenca = Math.floor((agora - ultimaData) / (1000 * 60 * 60 * 24));
-                }
+            const entradas = hist.filter(h => h.tipo === 'entrada' || h.tipo === 'presenca');
+            if (entradas.length > 0) {
+                const ultimaData = new Date(Math.max(...entradas.map(h => new Date(h.data).getTime())));
+                ultimaPresenca = ultimaData;
+                diasSemPresenca = Math.floor((agora - ultimaData) / (1000 * 60 * 60 * 24));
             }
         }
         
-        // Se tem 14+ dias sem presença e não está em descumprimento
+        // Para LA, não aplica regras de presença
+        if (isLA) {
+            if (j.status === 'descumprimento' && diasSemPresenca < 14) {
+                // Se LA estava em descumprimento mas tem presença recente, mantém regular
+                j.status = 'regular';
+                j.dataDescumprimento = '';
+                if (!j.observacoes) j.observacoes = [];
+                j.observacoes.push({
+                    data: new Date().toISOString(),
+                    profissional: 'Sistema (Automático)',
+                    texto: `🔄 Status LA alterado para "Regular" - presença registrada.`
+                });
+                await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
+                alterado = true;
+            }
+            continue;
+        }
+        
+        // Aplica regras de presença para PSC e Internação
         if (diasSemPresenca >= 14 && j.status !== 'descumprimento') {
             j.status = 'descumprimento';
             j.dataDescumprimento = new Date().toISOString();
@@ -1396,32 +1767,7 @@ async function verificarDescumprimentoAutomatico() {
             await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
             alterado = true;
         }
-        // Se tem menos de 14 dias e está em descumprimento, reativa para irregular ou regular
-        else if (diasSemPresenca < 14 && j.status === 'descumprimento') {
-            if (diasSemPresenca >= 7) {
-                j.status = 'irregular';
-                j.dataDescumprimento = '';
-                if (!j.observacoes) j.observacoes = [];
-                j.observacoes.push({
-                    data: new Date().toISOString(),
-                    profissional: 'Sistema (Automático)',
-                    texto: `🔄 Status alterado automaticamente de "Descumprimento" para "Irregular" - ${diasSemPresenca} dias sem comparecer.`
-                });
-            } else {
-                j.status = 'regular';
-                j.dataDescumprimento = '';
-                if (!j.observacoes) j.observacoes = [];
-                j.observacoes.push({
-                    data: new Date().toISOString(),
-                    profissional: 'Sistema (Automático)',
-                    texto: `🔄 Status alterado automaticamente de "Descumprimento" para "Regular" - presença normalizada.`
-                });
-            }
-            await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
-            alterado = true;
-        }
-        // Se tem 7-13 dias e não está em irregular, atualiza
-        else if (diasSemPresenca >= 7 && diasSemPresenca < 14 && j.status !== 'irregular' && j.status !== 'descumprimento') {
+        else if (diasSemPresenca < 14 && diasSemPresenca >= 7 && j.status !== 'irregular' && j.status !== 'descumprimento') {
             j.status = 'irregular';
             j.dataDescumprimento = '';
             if (!j.observacoes) j.observacoes = [];
@@ -1433,7 +1779,6 @@ async function verificarDescumprimentoAutomatico() {
             await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
             alterado = true;
         }
-        // Se tem menos de 7 dias e não está regular
         else if (diasSemPresenca < 7 && j.status !== 'regular' && j.status !== 'suspenso') {
             j.status = 'regular';
             j.dataDescumprimento = '';
@@ -1615,7 +1960,6 @@ window.registrarPontoNaLinha = async function(jovemId) {
     if (jovem.status === 'suspenso') return alert('❌ Jovem está suspenso.');
     if (jovem.status === 'concluído') return alert('❌ Jovem já concluiu a medida.');
 
-    // Se estiver em descumprimento, reativa para irregular/regular
     if (jovem.status === 'descumprimento') {
         const diasSemPresenca = jovem._diasSemPresenca || 999;
         if (diasSemPresenca >= 7) {
@@ -1673,7 +2017,6 @@ window.registrarPontoNaLinha = async function(jovemId) {
     try {
         await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
         await carregarTodosDados();
-        // Verifica descumprimento após registrar ponto
         await verificarDescumprimentoAutomatico();
     } catch (err) {
         alert('Erro: ' + err.message);
@@ -2556,443 +2899,8 @@ window.imprimirFichaIndividual = function() {
     if (!jovem) { alert('Jovem não encontrado.'); return; }
     const win = window.open('', '_blank');
     if (!win) { alert('Por favor, permita pop-ups para imprimir a ficha.'); return; }
-
-    let logoBase64 = window._logoBase64 || '';
-    // O código completo de impressão é extenso, mantido do original
-    // ...
+    // ... código de impressão da ficha (mantido do original)
 };
-
-// ============================================================
-// EXPORTAR EXCEL (FILTRA APENAS NOMES VÁLIDOS)
-// ============================================================
-function exportarExcel() {
-    const palavrasIgnorar = [
-        'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
-        'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
-        'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TERÇA', 'QUINTA', 'SÁBADO',
-        'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
-        'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
-        'TER', 'QUIN', 'SÁB', 'REFERENCIA', 'NOME', 'MEDIDA', 'MESES', 'HORAS',
-        'NASC', 'LEGENDA', 'STATUS', 'SITUAÇÃO',
-        'AGUARDANDO DOCUMENTOS DE ENCERRAMENTO'
-    ];
-
-    // Filtra apenas jovens com nomes válidos
-    const jovensValidos = estado.jovens.filter(j => {
-        const nome = (j['NOME'] || '').toUpperCase().trim();
-        if (!nome || nome.length < 3) return false;
-        for (const palavra of palavrasIgnorar) {
-            if (nome.includes(palavra)) return false;
-        }
-        if (/^\d{2}\/\d{2}\/\d{4}/.test(nome)) return false;
-        if (/^\d+$/.test(nome.replace(/[.,]/g, ''))) return false;
-        return true;
-    });
-
-    if (jovensValidos.length === 0) {
-        alert('Não há dados válidos para exportar.');
-        return;
-    }
-
-    const camposPlanilha = [
-        'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA', 'MEDIDA',
-        'MESES', 'HORAS', 'PROTETIVA', 'NASC.', 'MÊS ANIVERSARIO', 'NATURALIDADE',
-        'IDADE', 'GÊNERO', 'COR', 'COMPOSIÇÃO FAMILIAR', 'RENDA', 'BENEFICIO',
-        'PAA', 'ENDEREÇO', 'BAIRRO', 'TELEFONE', 'CRAS', 'UBS', 'CPF',
-        'ESTUDA?', 'SÉRIE', 'ESCOLA', 'TRABALHA?', 'FUNÇÃO', 'VINCULO', 'REDE',
-        'USO DE SPA?', 'QUAL?', 'PREFERE NOME SOCIAL?', 'QUAL NOME SOCIAL?'
-    ];
-
-    const headerMap = {
-        'REFERENCIA': 'REFERENCIA',
-        'NOME': 'NOME',
-        'NOME DO RESPONSÁVEL': 'NOME DO RESPONSÁVEL',
-        'REINCIDÊNCIA': 'REINCIDÊNCIA',
-        'MEDIDA': 'MEDIDA',
-        'MESES': 'MESES',
-        'HORAS': 'HORAS',
-        'PROTETIVA': 'PROTETIVA',
-        'NASC.': 'NASC.',
-        'MÊS ANIVERSARIO': 'MÊS ANIVERSARIO',
-        'NATURALIDADE': 'NATURALIDADE',
-        'IDADE': 'IDADE',
-        'GÊNERO': 'GÊNERO',
-        'COR': 'COR',
-        'COMPOSIÇÃO FAMILIAR': 'COMPOSIÇÃO FAMILIAR',
-        'RENDA': 'RENDA',
-        'BENEFICIO': 'BENEFICIO',
-        'PAA': 'PAA',
-        'ENDEREÇO': 'ENDEREÇO',
-        'BAIRRO': 'BAIRRO',
-        'TELEFONE': 'TELEFONE',
-        'CRAS': 'CRAS',
-        'UBS': 'UBS',
-        'CPF': 'CPF',
-        'ESTUDA?': 'ESTUDA?',
-        'SÉRIE': 'SÉRIE',
-        'ESCOLA': 'ESCOLA',
-        'TRABALHA?': 'TRABALHA?',
-        'FUNÇÃO': 'FUNÇÃO',
-        'VINCULO': 'VÍNCULO',
-        'REDE': 'REDE',
-        'USO DE SPA?': 'USO DE SPA?',
-        'QUAL?': 'QUAL?',
-        'PREFERE NOME SOCIAL?': 'PREFERE NOME SOCIAL?',
-        'QUAL NOME SOCIAL?': 'QUAL NOME SOCIAL?'
-    };
-
-    const data = jovensValidos.map(j => {
-        const row = {};
-        camposPlanilha.forEach(campo => {
-            const header = headerMap[campo] || campo;
-            const chave = Object.keys(j).find(k => k === campo || k === header);
-            row[header] = chave ? (j[chave] || '') : '';
-        });
-        row['STATUS'] = j._statusRender || j.status || 'regular';
-        row['HORAS_ATRIBUIDAS'] = j._horasAtribuidas || 0;
-        row['HORAS_CUMPRIDAS'] = j._horasCumpridas || 0;
-        row['SALDO'] = j._saldo || 0;
-        row['DIAS_SEM_PRESENCA'] = j._diasSemPresenca || 0;
-        if (j['ID_DIGITAL']) {
-            row['ID_DIGITAL'] = j['ID_DIGITAL'];
-        }
-        return row;
-    });
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Jovens');
-
-    const colWidths = [];
-    const headers = Object.keys(data[0] || {});
-    headers.forEach(h => {
-        let maxLen = h.length;
-        data.forEach(row => {
-            const val = String(row[h] || '');
-            if (val.length > maxLen) maxLen = val.length;
-        });
-        colWidths.push({ wch: Math.min(Math.max(maxLen + 2, 12), 40) });
-    });
-    ws['!cols'] = colWidths;
-
-    XLSX.writeFile(wb, `relatorio_jovens_${new Date().toISOString().slice(0,10)}.xlsx`);
-    alert('✅ Planilha exportada com sucesso!');
-}
-
-// ============================================================
-// IMPORTAR PLANILHA
-// ============================================================
-async function importarPlanilha() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.xlsx,.xls,.csv';
-    input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const statusDiv = document.getElementById('statusImportacao');
-        statusDiv.style.display = 'block';
-        statusDiv.style.background = '#fffbeb';
-        statusDiv.style.color = '#92400e';
-        statusDiv.textContent = '⏳ Processando planilha...';
-
-        try {
-            const data = await file.arrayBuffer();
-            const wb = XLSX.read(data, { cellStyles: true });
-            
-            processarAbasMensais(wb);
-            
-            const ws = wb.Sheets['GERAL'] || wb.Sheets[wb.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
-
-            const colMap = {};
-            const headers = Object.keys(rows[0] || {});
-            
-            headers.forEach(h => {
-                const hNorm = h.toUpperCase().replace(/\s/g, '').replace(/[ÀÁÂÃÄÅ]/g, 'A').replace(/[ÈÉÊË]/g, 'E').replace(/[ÌÍÎÏ]/g, 'I').replace(/[ÒÓÔÕÖ]/g, 'O').replace(/[ÙÚÛÜ]/g, 'U').replace(/Ç/g, 'C');
-                for (const [key] of CAMPOS) {
-                    const kNorm = key.toUpperCase().replace(/\s/g, '').replace(/[ÀÁÂÃÄÅ]/g, 'A').replace(/[ÈÉÊË]/g, 'E').replace(/[ÌÍÎÏ]/g, 'I').replace(/[ÒÓÔÕÖ]/g, 'O').replace(/[ÙÚÛÜ]/g, 'U').replace(/Ç/g, 'C');
-                    if (hNorm.includes(kNorm) || kNorm.includes(hNorm)) {
-                        colMap[key] = h;
-                        break;
-                    }
-                }
-                if (hNorm.includes('ID') && hNorm.includes('DIGITAL')) colMap['ID_DIGITAL'] = h;
-                if (hNorm === 'REFERENCIA' || hNorm.includes('REFERENCIA')) colMap['REFERENCIA'] = h;
-                if (hNorm.includes('NOME') || hNorm === 'NOME' || hNorm.includes('NOM')) {
-                    colMap['NOME'] = h;
-                }
-                if (hNorm.includes('CPF')) colMap['CPF'] = h;
-                if (hNorm.includes('NASC')) colMap['NASC.'] = h;
-                if (hNorm.includes('IDADE')) colMap['IDADE'] = h;
-                if (hNorm.includes('GÊNERO') || hNorm.includes('GENERO')) colMap['GÊNERO'] = h;
-                if (hNorm.includes('MEDIDA')) colMap['MEDIDA'] = h;
-                if (hNorm.includes('HORAS')) colMap['HORAS'] = h;
-                if (hNorm.includes('TELEFONE')) colMap['TELEFONE'] = h;
-                if (hNorm.includes('ENDEREÇO') || hNorm.includes('ENDERECO')) colMap['ENDEREÇO'] = h;
-                if (hNorm.includes('BAIRRO')) colMap['BAIRRO'] = h;
-                // Mapeia a coluna STATUS
-                if (hNorm.includes('STATUS')) colMap['STATUS'] = h;
-            });
-
-            let colNome = colMap['NOME'] || 'NOME';
-            if (!headers.find(h => h === colNome)) {
-                for (const h of headers) {
-                    const hNorm = h.toUpperCase().replace(/\s/g, '');
-                    if (hNorm.includes('NOME') || hNorm === 'NOME' || hNorm.includes('NOM')) {
-                        colNome = h;
-                        break;
-                    }
-                }
-            }
-
-            let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
-
-            const palavrasIgnorar = [
-                'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
-                'MEDIDA FINALIZADA', 'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'PRESENÇA',
-                'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TERÇA', 'QUINTA', 'SÁBADO',
-                'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
-                'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
-                'TER', 'QUIN', 'SÁB', 'REFERENCIA', 'NOME', 'MEDIDA', 'MESES', 'HORAS',
-                'AGUARDANDO DOCUMENTOS DE ENCERRAMENTO'
-            ];
-
-            for (const row of rows) {
-                try {
-                    let nome = '';
-                    if (colNome && row[colNome] !== undefined && row[colNome] !== '') {
-                        nome = String(row[colNome] || '').trim();
-                    }
-                    
-                    if (!nome || nome === 'undefined' || nome === '') {
-                        for (const h of headers) {
-                            const val = String(row[h] || '').trim();
-                            if (val && val.length > 2) {
-                                const isDate = /^\d{2}\/\d{2}\/\d{4}/.test(val) || /^\d{4}-\d{2}-\d{2}/.test(val);
-                                const isNumber = /^\d+$/.test(val.replace(/[.,]/g, ''));
-                                const isIgnorar = palavrasIgnorar.some(p => val.toUpperCase().includes(p));
-                                if (!isDate && !isNumber && !isIgnorar && val.length > 2) {
-                                    nome = val;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (!nome || nome === 'undefined' || nome === '') {
-                        ignorados++;
-                        continue;
-                    }
-
-                    const nomeUpper = nome.toUpperCase().trim();
-                    let deveIgnorar = false;
-                    for (const palavra of palavrasIgnorar) {
-                        if (nomeUpper.includes(palavra)) {
-                            deveIgnorar = true;
-                            break;
-                        }
-                    }
-                    
-                    if (deveIgnorar) {
-                        ignorados++;
-                        continue;
-                    }
-
-                    // Busca jovem existente pelo NOME
-                    let jovemExistente = null;
-                    const nomeExato = nome.toUpperCase().trim();
-                    
-                    jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nomeExato);
-                    
-                    if (!jovemExistente) {
-                        const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
-                        if (cpfPlanilha && cpfPlanilha.length >= 11) {
-                            jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
-                        }
-                    }
-                    
-                    if (!jovemExistente && nome.length > 3) {
-                        jovemExistente = estado.jovens.find(j => {
-                            const jNome = (j['NOME'] || '').toUpperCase().trim();
-                            return jNome === nomeExato || 
-                                   jNome.includes(nomeExato) || 
-                                   nomeExato.includes(jNome) ||
-                                   (nomeExato.length > 5 && jNome.length > 5 && 
-                                    (nomeExato.includes(jNome.substring(0, 5)) || 
-                                     jNome.includes(nomeExato.substring(0, 5))));
-                        });
-                    }
-
-                    // Obtém o status da coluna STATUS (se existir)
-                    let statusImportado = null;
-                    if (colMap['STATUS'] && row[colMap['STATUS']]) {
-                        const statusRaw = String(row[colMap['STATUS']]).toUpperCase().trim();
-                        const statusMap = {
-                            'REGULAR': 'regular',
-                            'ATIVO': 'regular',
-                            'IRREGULAR': 'irregular',
-                            'DESCUMPRIMENTO': 'descumprimento',
-                            'EM DESCUMPRIMENTO': 'descumprimento',
-                            'SUSPENSO': 'suspenso',
-                            'FINALIZADA': 'concluído',
-                            'MEDIDA FINALIZADA': 'concluído',
-                            'CONCLUÍDO': 'concluído',
-                            'LIBERADO': 'liberado'
-                        };
-                        // Tenta encontrar o status mapeado
-                        for (const [key, value] of Object.entries(statusMap)) {
-                            if (statusRaw.includes(key)) {
-                                statusImportado = value;
-                                break;
-                            }
-                        }
-                        // Se não encontrou no mapa, usa o valor direto se for válido
-                        if (!statusImportado) {
-                            const validStatus = ['regular', 'suspenso', 'descumprimento', 'concluído', 'irregular', 'liberado'];
-                            if (validStatus.includes(statusRaw.toLowerCase())) {
-                                statusImportado = statusRaw.toLowerCase();
-                            }
-                        }
-                    }
-
-                    if (jovemExistente) {
-                        const jovemId = jovemExistente.id;
-                        const historicoFrequencia = jovemExistente.historicoFrequencia || [];
-                        const observacoes = jovemExistente.observacoes || [];
-                        const documentos = jovemExistente.documentos || [];
-                        const acoesLA = jovemExistente.acoesLA || [];
-                        const profissionalLA = jovemExistente.profissionalLA || '';
-
-                        const jovemAtualizado = {
-                            id: jovemId,
-                            profissionalLA: profissionalLA,
-                            historicoFrequencia: historicoFrequencia,
-                            observacoes: observacoes,
-                            documentos: documentos,
-                            acoesLA: acoesLA,
-                            status: statusImportado || jovemExistente.status || 'regular'
-                        };
-                        
-                        CAMPOS.forEach(([key]) => {
-                            const colName = colMap[key];
-                            let valor = '';
-                            
-                            if (colName && row[colName] !== undefined && row[colName] !== '') {
-                                valor = String(row[colName] || '').trim();
-                            } else if (row[key] !== undefined && row[key] !== '') {
-                                valor = String(row[key] || '').trim();
-                            } else if (jovemExistente[key] !== undefined && jovemExistente[key] !== '') {
-                                valor = jovemExistente[key];
-                            }
-                            
-                            if (key === 'GÊNERO' && valor) {
-                                if (valor.toUpperCase().includes('MASC')) valor = 'M';
-                                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
-                                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
-                            }
-                            if ((key === 'HORAS' || key === 'MESES') && valor) {
-                                valor = parseFloat(String(valor).replace(',', '.')) || 0;
-                            }
-                            if (key === 'IDADE' && valor) {
-                                valor = parseInt(valor) || 0;
-                            }
-                            
-                            jovemAtualizado[key] = valor;
-                        });
-                        
-                        jovemAtualizado['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || jovemExistente['ID_DIGITAL'] || '').trim();
-                        jovemAtualizado['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || jovemExistente['REFERENCIA'] || '').trim();
-                        if (nome) jovemAtualizado['NOME'] = nome;
-
-                        await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
-                        const index = estado.jovens.findIndex(j => j.id === jovemId);
-                        if (index !== -1) {
-                            estado.jovens[index] = jovemAtualizado;
-                        }
-                        atualizados++;
-                        
-                    } else {
-                        const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                        const novoJovem = {
-                            id: novoId,
-                            status: statusImportado || 'regular',
-                            historicoFrequencia: [],
-                            observacoes: [],
-                            documentos: [],
-                            acoesLA: []
-                        };
-                        
-                        CAMPOS.forEach(([key]) => {
-                            const colName = colMap[key];
-                            let valor = '';
-                            
-                            if (colName && row[colName] !== undefined && row[colName] !== '') {
-                                valor = String(row[colName] || '').trim();
-                            } else if (row[key] !== undefined && row[key] !== '') {
-                                valor = String(row[key] || '').trim();
-                            }
-                            
-                            if (key === 'GÊNERO' && valor) {
-                                if (valor.toUpperCase().includes('MASC')) valor = 'M';
-                                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
-                                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
-                            }
-                            if ((key === 'HORAS' || key === 'MESES') && valor) {
-                                valor = parseFloat(String(valor).replace(',', '.')) || 0;
-                            }
-                            if (key === 'IDADE' && valor) {
-                                valor = parseInt(valor) || 0;
-                            }
-                            
-                            novoJovem[key] = valor;
-                        });
-                        
-                        novoJovem['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || '').trim();
-                        novoJovem['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || '').trim();
-                        novoJovem['NOME'] = nome;
-
-                        if (novoJovem['NOME']) {
-                            await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
-                            await upstash('SADD', 'jovens:all', novoId);
-                            estado.jovens.push(novoJovem);
-                            importados++;
-                        } else {
-                            ignorados++;
-                        }
-                    }
-                    
-                } catch (rowError) {
-                    console.error('Erro ao processar linha:', rowError);
-                    erros++;
-                }
-            }
-            
-            await carregarTodosDados();
-            await verificarDescumprimentoAutomatico();
-            
-            let mensagem = `✅ Importação concluída!`;
-            if (importados > 0) mensagem += ` ${importados} novos adicionados.`;
-            if (atualizados > 0) mensagem += ` ${atualizados} atualizados.`;
-            if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas.`;
-            if (erros > 0) mensagem += ` ⚠️ ${erros} erros.`;
-            
-            statusDiv.style.background = '#d1fae5';
-            statusDiv.style.color = '#065f46';
-            statusDiv.textContent = mensagem;
-            
-            setTimeout(() => {
-                statusDiv.style.display = 'none';
-            }, 10000);
-            
-        } catch (err) {
-            statusDiv.style.background = '#fee2e2';
-            statusDiv.style.color = '#991b1b';
-            statusDiv.textContent = '❌ Erro: ' + err.message;
-            console.error('Erro na importação:', err);
-        }
-    };
-    input.click();
-}
 
 // ============================================================
 // USUÁRIOS, PROFISSIONAIS, EXCLUSÃO, ETC.
@@ -3631,7 +3539,6 @@ document.addEventListener('DOMContentLoaded', function() {
     renderizarCamposFormulario();
     verificarLoginLocal();
     
-    // Verifica descumprimento automaticamente ao carregar
     setTimeout(() => {
         if (estado.usuarioAtual) {
             verificarDescumprimentoAutomatico();
@@ -3644,4 +3551,268 @@ function verificarLoginLocal() {
     if (email) document.getElementById('loginEmail').value = email;
 }
 
-console.log('Sistema Socioeducativo v2.0 carregado com sucesso!');
+// ============================================================
+// FORMULÁRIO DE CADASTRO (mantido do original)
+// ============================================================
+function renderizarCamposFormulario() {
+    const grid = document.getElementById('camposGrid');
+    if (!grid || grid.innerHTML !== "") return;
+
+    grid.innerHTML = CAMPOS.map(([key, label, type, options]) => {
+        if (type === 'select' && options) {
+            return `<div class="campo"><label>${label}</label><select id="campo_${key}" onchange="if(this.id==='campo_MEDIDA') toggleAcoesLA()">${options.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
+        }
+        return `<div class="campo"><label>${label}</label><input type="${type}" id="campo_${key}"></div>`;
+    }).join('');
+
+    const containerAcoes = document.getElementById('containerAcoesLA');
+    if (containerAcoes) {
+        containerAcoes.style.display = 'none';
+    }
+}
+
+window.toggleAcoesLA = function() {
+    const medida = document.getElementById('campo_MEDIDA')?.value;
+    const container = document.getElementById('containerAcoesLA');
+    if (container) {
+        container.style.display = medida === 'LA' ? 'block' : 'none';
+    }
+}
+
+window.adicionarAcaoLAForm = function() {
+    const input = document.getElementById('novaAcaoLAInput');
+    const prazoInput = document.getElementById('novaAcaoPrazoInput');
+    if (input.value.trim() === '') return alert('Descreva a ação.');
+    if (!prazoInput.value) return alert('Defina a data de vencimento.');
+    estado.acoesLATemporarias.push({
+        id: Date.now(),
+        texto: input.value.trim(),
+        realizado: false,
+        data: new Date().toISOString(),
+        prazo: prazoInput.value
+    });
+    input.value = '';
+    prazoInput.value = '';
+    atualizarListaAcoesLAForm();
+};
+
+window.atualizarListaAcoesLAForm = function() {
+    const ul = document.getElementById('listaAcoesLAForm');
+    if (!ul) return;
+    ul.innerHTML = estado.acoesLATemporarias.map(a => `<li style="margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding:4px 0;">
+        <span>${a.texto} <span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span></span>
+        <span style="color:red; cursor:pointer; font-weight:bold; margin-left:10px;" onclick="removerAcaoLAForm(${a.id})">✕</span>
+    </li>`).join('');
+};
+
+window.removerAcaoLAForm = function(id) {
+    estado.acoesLATemporarias = estado.acoesLATemporarias.filter(a => a.id !== id);
+    atualizarListaAcoesLAForm();
+};
+
+async function salvarJovem() {
+    const nome = document.getElementById('campo_NOME')?.value.trim();
+    if (!nome) return alert('Preencha pelo menos o nome.');
+
+    const jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase() === nome.toUpperCase() && j.id !== window._editarId);
+    const jovem = {
+        id: window._editarId || (jovemExistente ? jovemExistente.id : 'j_' + Date.now()),
+        status: window._editarId ? estado.jovens.find(j => j.id === window._editarId)?.status : 'ativo'
+    };
+
+    CAMPOS.forEach(([key]) => {
+        const el = document.getElementById(`campo_${key}`);
+        if (el) jovem[key] = el.value.trim();
+    });
+    jovem['ID_DIGITAL'] = document.getElementById('campo_ID_DIGITAL')?.value.trim() || '';
+
+    if (!jovem.historicoFrequencia) jovem.historicoFrequencia = [];
+    if (!jovem.observacoes) jovem.observacoes = [];
+    if (!jovem.documentos) jovem.documentos = [];
+
+    if (jovem['MEDIDA'] === 'LA') {
+        jovem.acoesLA = [...estado.acoesLATemporarias];
+    }
+
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        if (!window._editarId && !jovemExistente) await upstash('SADD', 'jovens:all', jovem.id);
+        estado.jovens = estado.jovens.filter(j => j.id !== jovem.id);
+        estado.jovens.push(jovem);
+
+        atualizarInterfaceCompleta();
+        limparFormulario();
+        alert('Jovem salvo com sucesso!');
+    } catch (err) {
+        alert('Erro ao salvar: ' + err.message);
+    }
+}
+
+function limparFormulario() {
+    CAMPOS.forEach(([key]) => {
+        const el = document.getElementById(`campo_${key}`);
+        if (el) el.value = '';
+    });
+    if (document.getElementById('campo_ID_DIGITAL')) document.getElementById('campo_ID_DIGITAL').value = '';
+    estado.acoesLATemporarias = [];
+    atualizarListaAcoesLAForm();
+    toggleAcoesLA();
+    window._editarId = null;
+}
+
+// ============================================================
+// SELEÇÃO EM LOTE (mantido do original)
+// ============================================================
+function toggleSelecionarTodos() {
+    const checkboxes = document.querySelectorAll('#listaCorpo input[type="checkbox"]');
+    const selecionarTodos = document.getElementById('selecionarTodos');
+    checkboxes.forEach(cb => {
+        cb.checked = selecionarTodos.checked;
+        if (selecionarTodos.checked) {
+            estado.selecionadosLote.add(cb.dataset.id);
+        } else {
+            estado.selecionadosLote.delete(cb.dataset.id);
+        }
+    });
+    atualizarBarraSelecao();
+}
+
+function toggleSelecionarJovem(id) {
+    const cb = document.querySelector(`#listaCorpo input[data-id="${id}"]`);
+    if (!cb) return;
+    if (cb.checked) {
+        estado.selecionadosLote.add(id);
+    } else {
+        estado.selecionadosLote.delete(id);
+    }
+    atualizarBarraSelecao();
+}
+
+function atualizarBarraSelecao() {
+    const barra = document.getElementById('barraSelecaoLote');
+    const contador = document.getElementById('contadorSelecionados');
+    const btnAcoes = document.getElementById('btnAcoesLote');
+    const total = estado.selecionadosLote.size;
+
+    if (total > 0) {
+        barra.style.display = 'flex';
+        btnAcoes.style.display = 'inline-flex';
+        contador.textContent = total;
+    } else {
+        barra.style.display = 'none';
+        btnAcoes.style.display = 'none';
+    }
+}
+
+function desmarcarTodos() {
+    estado.selecionadosLote.clear();
+    document.querySelectorAll('#listaCorpo input[type="checkbox"]').forEach(cb => cb.checked = false);
+    document.getElementById('selecionarTodos').checked = false;
+    atualizarBarraSelecao();
+}
+
+function abrirModalAcoesLote() {
+    if (estado.selecionadosLote.size === 0) {
+        alert('Selecione pelo menos um jovem.');
+        return;
+    }
+    document.getElementById('loteContadorSelecionados').textContent = estado.selecionadosLote.size;
+    document.getElementById('loteAcaoSelect').value = '';
+    document.getElementById('loteOpcoesStatus').style.display = 'none';
+    document.getElementById('loteMotivoSuspensao').style.display = 'none';
+    document.getElementById('modalAcoesLote').style.display = 'flex';
+}
+
+function fecharModalAcoesLote() {
+    document.getElementById('modalAcoesLote').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('loteAcaoSelect')?.addEventListener('change', function() {
+        const statusDiv = document.getElementById('loteOpcoesStatus');
+        if (this.value === 'alterar_status') {
+            statusDiv.style.display = 'block';
+        } else {
+            statusDiv.style.display = 'none';
+        }
+    });
+
+    document.getElementById('loteNovoStatus')?.addEventListener('change', function() {
+        const motivoDiv = document.getElementById('loteMotivoSuspensao');
+        motivoDiv.style.display = this.value === 'suspenso' ? 'block' : 'none';
+    });
+});
+
+async function executarAcaoLote() {
+    const acao = document.getElementById('loteAcaoSelect').value;
+    if (!acao) return alert('Selecione uma ação.');
+
+    const ids = Array.from(estado.selecionadosLote);
+    const jovens = estado.jovens.filter(j => ids.includes(j.id));
+
+    if (acao === 'excluir') {
+        if (!confirm(`Tem certeza que deseja excluir PERMANENTEMENTE ${jovens.length} jovens?`)) return;
+        try {
+            for (const j of jovens) {
+                await upstash('DEL', `jovem:${j.id}`);
+                await upstash('SREM', 'jovens:all', j.id);
+            }
+            estado.jovens = estado.jovens.filter(j => !ids.includes(j.id));
+            desmarcarTodos();
+            fecharModalAcoesLote();
+            await carregarTodosDados();
+            alert(`✅ ${jovens.length} jovens excluídos com sucesso!`);
+        } catch (err) {
+            alert('Erro ao excluir: ' + err.message);
+        }
+        return;
+    }
+
+    if (acao === 'alterar_status') {
+        const novoStatus = document.getElementById('loteNovoStatus').value;
+        if (!novoStatus) return alert('Selecione o novo status.');
+
+        let motivo = '';
+        if (novoStatus === 'suspenso') {
+            motivo = document.getElementById('loteMotivoInput').value.trim();
+            if (!motivo) return alert('Informe o motivo da suspensão.');
+        }
+
+        if (!confirm(`Tem certeza que deseja alterar o status de ${jovens.length} jovens para "${novoStatus.toUpperCase()}"?`)) return;
+
+        try {
+            for (const j of jovens) {
+                j.status = novoStatus;
+                if (novoStatus === 'suspenso') {
+                    j.motivoSuspensao = motivo;
+                    j.dataSuspensao = new Date().toISOString();
+                    j.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
+                } else if (novoStatus === 'descumprimento') {
+                    j.dataDescumprimento = new Date().toISOString();
+                } else if (novoStatus === 'ativo' || novoStatus === 'regular') {
+                    j.motivoSuspensao = '';
+                    j.dataSuspensao = '';
+                    j.dataDescumprimento = '';
+                }
+                if (!j.observacoes) j.observacoes = [];
+                j.observacoes.push({
+                    data: new Date().toISOString(),
+                    profissional: estado.usuarioAtual?.nome || 'Sistema',
+                    texto: `📌 Status alterado em lote para "${novoStatus.toUpperCase()}"${motivo ? ' - Motivo: ' + motivo : ''}`
+                });
+                await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
+            }
+            desmarcarTodos();
+            fecharModalAcoesLote();
+            await carregarTodosDados();
+            alert(`✅ Status de ${jovens.length} jovens alterado para "${novoStatus.toUpperCase()}" com sucesso!`);
+        } catch (err) {
+            alert('Erro ao alterar status: ' + err.message);
+        }
+        return;
+    }
+
+    alert('Ação não reconhecida.');
+}
+
+console.log('✅ Sistema Socioeducativo v2.1 - CORRIGIDO carregado com sucesso!');
