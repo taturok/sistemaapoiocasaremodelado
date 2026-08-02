@@ -12,26 +12,24 @@
     
     <style>
         /* ============================================================
-           RESET E ESTILOS GERAIS
+           SISTEMA DE CONTROLE DE MEDIDAS SOCIOEDUCATIVAS v2.1
+           ESTILOS COMPLETOS – ATUALIZADOS
            ============================================================ */
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #f0f4f8;
-            color: #1e293b;
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+            overflow-x: hidden;
         }
 
-        /* ============================================================
-           TELA DE LOGIN
-           ============================================================ */
+        /* ===== TELA DE LOGIN ===== */
         #telaLogin {
             display: flex;
             justify-content: center;
@@ -39,56 +37,68 @@
             min-height: 100vh;
             background: linear-gradient(135deg, #1A2A4A 0%, #2c3e66 50%, #3b5998 100%);
             padding: 20px;
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 99999;
+            transition: opacity 0.3s ease;
         }
-
         #telaLogin.hidden {
             display: none !important;
+            opacity: 0;
+            pointer-events: none;
         }
 
-        .login-container {
+        #telaCadastro {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1A2A4A 0%, #2c3e66 50%, #3b5998 100%);
+            z-index: 99999;
+            justify-content: center;
+            align-items: center;
+        }
+        #telaCadastro.visible {
+            display: flex;
+        }
+
+        /* ===== LOGIN BOX ===== */
+        .login-box {
             background: white;
-            border-radius: 20px;
             padding: 40px;
+            border-radius: 28px;
             max-width: 420px;
             width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
-
-        .login-container .logo {
+        .login-box .logo {
             text-align: center;
             margin-bottom: 30px;
         }
-
-        .login-container .logo img {
-            max-height: 80px;
-            max-width: 100%;
-            object-fit: contain;
-        }
-
-        .login-container .logo h1 {
+        .login-box .logo h1 {
             font-size: 22px;
             color: #1A2A4A;
-            margin-top: 10px;
         }
-
-        .login-container .logo p {
+        .login-box .logo p {
             color: #6b7280;
             font-size: 14px;
         }
-
-        .login-container .form-group {
+        .login-box .form-group {
             margin-bottom: 18px;
         }
-
-        .login-container .form-group label {
+        .login-box .form-group label {
             display: block;
             font-weight: 600;
             font-size: 14px;
             color: #334155;
             margin-bottom: 5px;
         }
-
-        .login-container .form-group input {
+        .login-box .form-group input,
+        .login-box .form-group select {
             width: 100%;
             padding: 12px 16px;
             border: 2px solid #e2e8f0;
@@ -97,14 +107,13 @@
             transition: border-color 0.3s;
             background: #f8fafc;
         }
-
-        .login-container .form-group input:focus {
+        .login-box .form-group input:focus,
+        .login-box .form-group select:focus {
             border-color: #2c3e66;
             outline: none;
             background: white;
         }
-
-        .login-container .btn-primary {
+        .login-box .btn {
             width: 100%;
             padding: 14px;
             background: #1A2A4A;
@@ -115,244 +124,323 @@
             font-weight: 600;
             cursor: pointer;
             transition: background 0.3s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
-
-        .login-container .btn-primary:hover {
+        .login-box .btn:hover {
             background: #2c3e66;
         }
-
-        .login-container .btn-primary:disabled {
+        .login-box .btn:disabled {
             opacity: 0.7;
             cursor: not-allowed;
         }
-
-        .login-container .erro {
+        .login-box .erro {
             color: #dc2626;
             font-size: 14px;
             text-align: center;
             margin-top: 10px;
             min-height: 20px;
         }
-
-        .login-container .links {
-            text-align: center;
-            margin-top: 15px;
-            font-size: 14px;
-        }
-
-        .login-container .links a {
-            color: #2c3e66;
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .login-container .links a:hover {
-            text-decoration: underline;
-        }
-
-        /* ============================================================
-           TELA DE CADASTRO DE USUÁRIO
-           ============================================================ */
-        #telaCadastro {
-            display: none;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #1A2A4A 0%, #2c3e66 50%, #3b5998 100%);
-            padding: 20px;
-        }
-
-        #telaCadastro .login-container {
-            max-width: 480px;
-        }
-
-        #telaCadastro .login-container .sucesso {
+        .login-box .sucesso {
             color: #16a34a;
             text-align: center;
             margin-top: 10px;
             display: none;
         }
-
-        /* ============================================================
-           LAYOUT PRINCIPAL
-           ============================================================ */
-        .main-content {
-            display: none;
-            min-height: 100vh;
-            flex-direction: row;
-            background: #f0f4f8;
+        .login-box .links {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        .login-box .links a {
+            color: #2c3e66;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .login-box .links a:hover {
+            text-decoration: underline;
         }
 
+        .logo-login-img {
+            display: block;
+            margin: 0 auto 16px auto;
+            max-height: 100px;
+            max-width: 160px;
+            width: auto;
+            object-fit: contain;
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* ===== CONTEÚDO PRINCIPAL ===== */
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            min-height: 100vh;
+        }
         .main-content.visible {
             display: flex !important;
         }
 
-        /* ============================================================
-           SIDEBAR
-           ============================================================ */
+        /* ===== SIDEBAR ===== */
         .sidebar {
             width: 260px;
             background: #1A2A4A;
-            color: white;
-            height: 100vh;
+            color: #e2e8f0;
+            display: flex;
+            flex-direction: column;
             position: fixed;
-            left: 0;
             top: 0;
+            left: 0;
+            bottom: 0;
             overflow-y: auto;
             z-index: 1000;
+            box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
             transition: transform 0.3s ease;
         }
-
-        .sidebar .sidebar-header {
-            padding: 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #4a5a7a;
+            border-radius: 10px;
         }
 
-        .sidebar .sidebar-header img {
-            max-height: 50px;
-            max-width: 100%;
-            object-fit: contain;
-        }
-
-        .sidebar .sidebar-header h3 {
-            font-size: 16px;
-            margin-top: 8px;
-            font-weight: 400;
-        }
-
-        .sidebar .sidebar-header .user-info {
-            font-size: 12px;
-            color: #94a3b8;
-            margin-top: 4px;
-        }
-
-        .sidebar .menu {
-            list-style: none;
-            padding: 10px 0;
-        }
-
-        .sidebar .menu .menu-item {
-            padding: 12px 24px;
-            cursor: pointer;
+        .sidebar-brand {
             display: flex;
             align-items: center;
             gap: 12px;
+            padding: 24px 20px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .sidebar-brand i {
+            font-size: 28px;
+            color: #f59e0b;
+        }
+        .sidebar-brand span {
+            font-size: 1.1rem;
+            font-weight: 600;
+            line-height: 1.2;
+            color: white;
+        }
+        .sidebar-brand small {
+            display: block;
+            font-weight: 400;
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+
+        .sidebar-user {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sidebar-user .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #2c3e66;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+        }
+        .sidebar-user .user-info {
+            flex: 1;
+        }
+        .sidebar-user .user-info .name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: white;
+        }
+        .sidebar-user .user-info .role {
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+        .status-online {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            margin-right: 4px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .sidebar-menu {
+            flex: 1;
+            padding: 16px 12px 30px;
+        }
+        .menu-category {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+            padding: 16px 12px 6px;
+            font-weight: 700;
+        }
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 16px;
+            margin: 2px 0;
+            border-radius: 10px;
             color: #cbd5e1;
-            transition: all 0.2s;
-            border-left: 3px solid transparent;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.15s;
+            border: none;
+            background: transparent;
+            width: 100%;
+            text-align: left;
         }
-
-        .sidebar .menu .menu-item:hover {
-            background: rgba(255,255,255,0.05);
+        .menu-item i {
+            width: 22px;
+            font-size: 1rem;
+            text-align: center;
+            color: #94a3b8;
+            transition: 0.15s;
+        }
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.06);
             color: white;
         }
-
-        .sidebar .menu .menu-item.active {
-            background: rgba(255,255,255,0.08);
+        .menu-item:hover i {
+            color: #f59e0b;
+        }
+        .menu-item.active {
+            background: rgba(37, 99, 235, 0.25);
             color: white;
-            border-left-color: #60a5fa;
+            border-left: 3px solid #2563EB;
         }
-
-        .sidebar .menu .menu-item i {
-            width: 20px;
-            font-size: 16px;
+        .menu-item.active i {
+            color: #f59e0b;
         }
-
-        .sidebar .menu .menu-item .badge {
+        .menu-item .badge {
             background: #ef4444;
             color: white;
-            font-size: 10px;
+            font-size: 0.6rem;
             padding: 2px 8px;
             border-radius: 10px;
             margin-left: auto;
         }
 
-        .sidebar .menu-divider {
-            height: 1px;
-            background: rgba(255,255,255,0.08);
-            margin: 8px 20px;
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.7rem;
+            color: #64748b;
         }
-
-        .sidebar .logout-btn {
-            padding: 12px 24px;
-            cursor: pointer;
+        .sidebar-footer .logout-btn {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             color: #f87171;
-            border-top: 1px solid rgba(255,255,255,0.08);
-            margin-top: 10px;
+            cursor: pointer;
+            padding: 8px 4px;
+            border: none;
+            background: transparent;
+            font-size: 0.85rem;
+            width: 100%;
+        }
+        .sidebar-footer .logout-btn:hover {
+            color: #ef4444;
+        }
+        .sidebar-footer .logout-btn i {
+            width: 22px;
         }
 
-        .sidebar .logout-btn:hover {
-            background: rgba(255,255,255,0.05);
-        }
-
-        /* ============================================================
-           OVERLAY DO SIDEBAR (mobile)
-           ============================================================ */
         .sidebar-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
+            inset: 0;
+            background: rgba(0, 0, 0, 0.3);
             z-index: 999;
         }
-
         .sidebar-overlay.active {
             display: block;
         }
 
-        /* ============================================================
-           CONTEÚDO PRINCIPAL
-           ============================================================ */
-        .content {
-            margin-left: 260px;
-            flex: 1;
-            padding: 20px;
-            min-height: 100vh;
-        }
-
-        .content-header {
+        /* ===== HEADER ===== */
+        .header {
+            background: white;
+            padding: 16px 32px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 10px 0 20px 0;
-            border-bottom: 2px solid #e2e8f0;
-            margin-bottom: 24px;
+            justify-content: space-between;
+            border-bottom: 1px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
             flex-wrap: wrap;
             gap: 12px;
         }
-
-        .content-header .hamburger {
-            display: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: #1A2A4A;
-        }
-
-        .content-header .page-title {
-            font-size: 22px;
-            font-weight: 700;
-            color: #1A2A4A;
-        }
-
-        .content-header .page-title i {
-            color: #2c3e66;
-            margin-right: 10px;
-        }
-
-        .content-header .header-actions {
+        .header-left {
             display: flex;
-            gap: 8px;
+            align-items: center;
+            gap: 16px;
+        }
+        .header-left .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.4rem;
+            color: #1A2A4A;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+        .header-left .page-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1A2A4A;
+        }
+        .header-left .page-title i {
+            color: #2563EB;
+            margin-right: 8px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             flex-wrap: wrap;
         }
-
-        .content-header .header-actions .btn {
+        .header-actions .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #f1f5f9;
+            padding: 6px 16px 6px 12px;
+            border-radius: 40px;
+            font-size: 0.85rem;
+            color: #1e293b;
+        }
+        .header-actions .user-badge i {
+            color: #2563EB;
+        }
+        .header-actions .btn {
             padding: 8px 16px;
             border: none;
             border-radius: 8px;
@@ -360,103 +448,103 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
-
-        .content-header .header-actions .btn-primary-header {
+        .header-actions .btn-primary-header {
             background: #1A2A4A;
             color: white;
         }
-
-        .content-header .header-actions .btn-primary-header:hover {
+        .header-actions .btn-primary-header:hover {
             background: #2c3e66;
         }
-
-        .content-header .header-actions .btn-success-header {
+        .header-actions .btn-success-header {
             background: #16a34a;
             color: white;
         }
-
-        .content-header .header-actions .btn-success-header:hover {
+        .header-actions .btn-success-header:hover {
             background: #15803d;
         }
-
-        /* ============================================================
-           PÁGINAS
-           ============================================================ */
-        .page {
-            display: none;
-            animation: fadeIn 0.3s ease;
+        .header-actions .btn-outline-header {
+            background: transparent;
+            border: 1px solid #d1d9e6;
+            color: #1e293b;
+        }
+        .header-actions .btn-outline-header:hover {
+            background: #f1f5f9;
         }
 
+        /* ===== PÁGINAS ===== */
+        .page {
+            display: none;
+            padding: 28px 32px;
+            animation: fadeIn 0.2s ease;
+        }
         .page.active {
             display: block;
         }
-
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            0% { opacity: 0; transform: translateY(6px); }
+            100% { opacity: 1; transform: translateY(0); }
         }
 
-        /* ============================================================
-           CARDS DASHBOARD
-           ============================================================ */
+        /* ===== CARDS DASHBOARD ===== */
         .cards-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
         }
-
         .card {
             background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            border-left: 4px solid #2c3e66;
-            transition: transform 0.2s;
+            border-radius: 16px;
+            padding: 20px 18px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e9edf2;
+            transition: 0.15s;
+            position: relative;
+            overflow: hidden;
         }
-
         .card:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
             transform: translateY(-2px);
         }
-
         .card .card-icon {
-            font-size: 24px;
-            margin-bottom: 8px;
+            font-size: 1.8rem;
+            margin-bottom: 6px;
         }
-
         .card .card-value {
-            font-size: 28px;
+            font-size: 2rem;
             font-weight: 700;
             color: #1A2A4A;
         }
-
         .card .card-label {
-            font-size: 14px;
-            color: #6b7280;
+            font-size: 0.8rem;
+            color: #64748b;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
         }
-
         .card .card-sub {
-            font-size: 12px;
+            font-size: 0.75rem;
             color: #94a3b8;
-            margin-top: 2px;
+            margin-top: 4px;
         }
+        .card.card-success .card-icon { color: #10b981; }
+        .card.card-danger .card-icon { color: #ef4444; }
+        .card.card-warning .card-icon { color: #f59e0b; }
+        .card.card-info .card-icon { color: #2563EB; }
 
-        .card.card-info { border-left-color: #3b82f6; }
-        .card.card-success { border-left-color: #22c55e; }
-        .card.card-danger { border-left-color: #ef4444; }
-        .card.card-warning { border-left-color: #f59e0b; }
-
-        /* ============================================================
-           FORMULÁRIOS
-           ============================================================ */
+        /* ===== FORMULÁRIOS ===== */
         .form-container {
             background: white;
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e9edf2;
+            margin-bottom: 20px;
         }
-
         .form-container .form-title {
             font-size: 18px;
             font-weight: 600;
@@ -466,40 +554,43 @@
             align-items: center;
             gap: 10px;
         }
+        .form-container .form-title i {
+            color: #2563EB;
+        }
 
         .form-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
             gap: 14px;
         }
-
         .form-grid .campo {
             display: flex;
             flex-direction: column;
         }
-
         .form-grid .campo label {
             font-size: 13px;
             font-weight: 600;
             color: #334155;
             margin-bottom: 4px;
         }
-
         .form-grid .campo input,
-        .form-grid .campo select {
+        .form-grid .campo select,
+        .form-grid .campo textarea {
             padding: 8px 12px;
             border: 1.5px solid #e2e8f0;
             border-radius: 8px;
             font-size: 14px;
             transition: border-color 0.3s;
             background: #f8fafc;
+            width: 100%;
         }
-
         .form-grid .campo input:focus,
-        .form-grid .campo select:focus {
+        .form-grid .campo select:focus,
+        .form-grid .campo textarea:focus {
             border-color: #2c3e66;
             outline: none;
             background: white;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
         }
 
         .form-actions {
@@ -508,7 +599,6 @@
             margin-top: 20px;
             flex-wrap: wrap;
         }
-
         .form-actions .btn {
             padding: 10px 24px;
             border: none;
@@ -517,100 +607,47 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
-
-        .btn-save {
+        .form-actions .btn-save {
             background: #1A2A4A;
             color: white;
         }
-
-        .btn-save:hover {
+        .form-actions .btn-save:hover {
             background: #2c3e66;
         }
-
-        .btn-clear {
+        .form-actions .btn-clear {
             background: #e2e8f0;
             color: #475569;
         }
-
-        .btn-clear:hover {
+        .form-actions .btn-clear:hover {
             background: #cbd5e1;
         }
-
-        .btn-danger {
+        .form-actions .btn-danger {
             background: #dc2626;
             color: white;
         }
-
-        .btn-danger:hover {
+        .form-actions .btn-danger:hover {
             background: #b91c1c;
         }
-
-        .btn-sm {
-            padding: 4px 10px;
-            font-size: 12px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-sm-primary {
-            background: #3b82f6;
-            color: white;
-        }
-
-        .btn-sm-primary:hover {
-            background: #2563eb;
-        }
-
-        .btn-sm-success {
-            background: #22c55e;
-            color: white;
-        }
-
-        .btn-sm-success:hover {
+        .form-actions .btn-success {
             background: #16a34a;
-        }
-
-        .btn-sm-danger {
-            background: #ef4444;
             color: white;
         }
-
-        .btn-sm-danger:hover {
-            background: #dc2626;
+        .form-actions .btn-success:hover {
+            background: #15803d;
         }
 
-        .btn-sm-warning {
-            background: #f59e0b;
-            color: white;
-        }
-
-        .btn-sm-warning:hover {
-            background: #d97706;
-        }
-
-        .btn-sm-info {
-            background: #06b6d4;
-            color: white;
-        }
-
-        .btn-sm-info:hover {
-            background: #0891b2;
-        }
-
-        /* ============================================================
-           TABELAS
-           ============================================================ */
+        /* ===== TABELAS ===== */
         .table-wrapper {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             overflow-x: auto;
+            background: white;
+            border-radius: 16px;
+            border: 1px solid #e9edf2;
+            margin: 20px 0;
         }
-
         .table-wrapper .table-toolbar {
             padding: 12px 16px;
             background: #f8fafc;
@@ -620,7 +657,6 @@
             gap: 10px;
             align-items: center;
         }
-
         .table-wrapper .table-toolbar .filtros {
             display: flex;
             flex-wrap: wrap;
@@ -628,7 +664,6 @@
             align-items: center;
             flex: 1;
         }
-
         .table-wrapper .table-toolbar .filtros input,
         .table-wrapper .table-toolbar .filtros select {
             padding: 6px 10px;
@@ -637,128 +672,222 @@
             font-size: 13px;
             background: white;
         }
-
         .table-wrapper .table-toolbar .filtros input:focus,
         .table-wrapper .table-toolbar .filtros select:focus {
             border-color: #2c3e66;
             outline: none;
         }
 
-        .table-wrapper table {
+        table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 14px;
+            font-size: 0.85rem;
         }
-
-        .table-wrapper table th {
-            background: #f1f5f9;
-            color: #1e293b;
-            font-weight: 600;
+        th, td {
             padding: 10px 12px;
             text-align: left;
-            border-bottom: 2px solid #e2e8f0;
-            white-space: nowrap;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+        th {
+            background: #f8fafc;
+            color: #1e293b;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
             position: sticky;
             top: 0;
             z-index: 10;
         }
-
-        .table-wrapper table td {
-            padding: 8px 12px;
-            border-bottom: 1px solid #f1f5f9;
-            vertical-align: middle;
+        tr:hover td {
+            background: #fafcff;
+        }
+        tr:last-child td {
+            border-bottom: none;
         }
 
-        .table-wrapper table tr:hover td {
-            background: #f8fafc;
-        }
-
-        .table-wrapper table .status-badge {
-            padding: 3px 10px;
-            border-radius: 12px;
+        /* ===== BOTÕES PEQUENOS ===== */
+        .btn-sm {
+            padding: 4px 10px;
             font-size: 12px;
-            font-weight: 600;
-        }
-
-        /* ============================================================
-           SELETOR EM LOTE
-           ============================================================ */
-        .barra-selecao {
-            display: none;
-            background: #e0f2fe;
-            padding: 10px 16px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .barra-selecao .btn {
-            padding: 6px 14px;
             border: none;
             border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
             cursor: pointer;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 2000;
-            justify-content: center;
+            transition: all 0.2s;
+            display: inline-flex;
             align-items: center;
-            padding: 20px;
+            gap: 4px;
+        }
+        .btn-sm i {
+            font-size: 12px;
+        }
+        .btn-sm:hover {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+        .btn-sm-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-sm-primary:hover {
+            background: #2563eb;
+        }
+        .btn-sm-success {
+            background: #22c55e;
+            color: white;
+        }
+        .btn-sm-success:hover {
+            background: #16a34a;
+        }
+        .btn-sm-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-sm-danger:hover {
+            background: #dc2626;
+        }
+        .btn-sm-warning {
+            background: #f59e0b;
+            color: white;
+        }
+        .btn-sm-warning:hover {
+            background: #d97706;
+        }
+        .btn-sm-info {
+            background: #06b6d4;
+            color: white;
+        }
+        .btn-sm-info:hover {
+            background: #0891b2;
+        }
+        .btn-sm-outline {
+            background: transparent;
+            border: 1px solid #d1d9e6;
+            color: #475569;
+        }
+        .btn-sm-outline:hover {
+            background: #f1f5f9;
         }
 
-        .modal.active {
+        /* ===== BADGES E STATUS ===== */
+        .badge {
+            display: inline-block;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+        .badge-neutral { background: #f1f5f9; color: #475569; }
+        .badge-purple { background: #f3e8ff; color: #6b21a5; }
+
+        .status-ativo { background: #d1fae5; color: #065f46; }
+        .status-irregular { background: #fef3c7; color: #92400e; }
+        .status-suspenso { background: #fce7f3; color: #be185d; }
+        .status-descumprimento { background: #fee2e2; color: #991b1b; }
+        .status-concluido { background: #d1fae5; color: #065f46; }
+        .status-liberado { background: #e5e7eb; color: #374151; }
+
+        /* ===== TAGs ===== */
+        .tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .tag-green { background: #dcfce7; color: #166534; }
+        .tag-blue { background: #dbeafe; color: #1e40af; }
+        .tag-purple { background: #f3e8ff; color: #6b21a5; }
+        .tag-red { background: #fee2e2; color: #991b1b; }
+        .tag-yellow { background: #fef3c7; color: #92400e; }
+
+        /* ===== RELATÓRIOS ===== */
+        .relatorio-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px 20px;
+            border: 1px solid #e9edf2;
+            margin-bottom: 12px;
+        }
+        .relatorio-card h4 {
+            color: #1A2A4A;
+            margin-bottom: 10px;
+            font-size: 1rem;
             display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .relatorio-card p {
+            margin: 4px 0;
+            color: #475569;
+            font-size: 0.9rem;
+        }
+        .relatorio-card table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 8px;
+        }
+        .relatorio-card th,
+        .relatorio-card td {
+            padding: 6px 10px;
+            text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .relatorio-card th {
+            background: #f8fafc;
+            font-weight: 600;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #1e293b;
+        }
+        .relatorio-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
         }
 
-        .modal-content {
+        /* ===== OFICINAS ===== */
+        .oficina-card {
             background: white;
             border-radius: 16px;
-            padding: 30px;
-            max-width: 600px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-
-        .modal-content .modal-header {
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            border-left: 5px solid #2563EB;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 12px;
         }
-
-        .modal-content .modal-header h3 {
-            font-size: 18px;
+        .oficina-card.reverte {
+            border-left-color: #10b981;
+        }
+        .oficina-card .info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .oficina-card .info .titulo {
+            font-weight: 600;
             color: #1A2A4A;
         }
-
-        .modal-content .modal-header .close-btn {
-            font-size: 24px;
-            cursor: pointer;
-            color: #94a3b8;
+        .oficina-card .info .detalhes {
+            font-size: 0.8rem;
+            color: #64748b;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
-        .modal-content .modal-header .close-btn:hover {
-            color: #ef4444;
-        }
-
-        /* ============================================================
-           OFICINAS
-           ============================================================ */
         .jovens-checkbox-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -770,7 +899,6 @@
             border-radius: 8px;
             border: 1px solid #e2e8f0;
         }
-
         .jovens-checkbox-grid .jovem-checkbox {
             display: flex;
             align-items: center;
@@ -780,154 +908,82 @@
             cursor: pointer;
             font-size: 13px;
         }
-
         .jovens-checkbox-grid .jovem-checkbox:hover {
             background: #e2e8f0;
         }
-
         .jovens-checkbox-grid .jovem-checkbox input[type="checkbox"] {
+            accent-color: #2c3e66;
             margin-right: 4px;
         }
 
-        .oficina-card {
-            background: white;
-            border-radius: 10px;
-            padding: 14px 18px;
-            margin-bottom: 10px;
-            border: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .oficina-card.reverte {
-            border-left: 4px solid #22c55e;
-        }
-
-        .oficina-card .info .titulo {
-            font-weight: 600;
-            color: #1A2A4A;
-        }
-
-        .oficina-card .info .detalhes {
-            font-size: 13px;
-            color: #6b7280;
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .tag {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            background: #e2e8f0;
-            color: #475569;
-        }
-
-        .tag-green {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .tag-blue {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        /* ============================================================
-           META LA
-           ============================================================ */
+        /* ===== METAS LA ===== */
         .meta-card {
             background: white;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 8px;
+            border-radius: 12px;
+            padding: 14px 18px;
             border-left: 4px solid #f59e0b;
+            margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 8px;
         }
-
         .meta-card.vencido {
             border-left-color: #ef4444;
             background: #fef2f2;
         }
-
+        .meta-card .meta-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
         .meta-card .meta-info .nome {
             font-weight: 600;
+            color: #1A2A4A;
         }
-
         .meta-card .meta-info .acao {
-            font-size: 13px;
+            font-size: 0.9rem;
             color: #475569;
         }
-
         .meta-card .meta-info .prazo {
-            font-size: 12px;
-            color: #6b7280;
+            font-size: 0.8rem;
+            color: #64748b;
         }
-
         .meta-card .meta-badge {
-            padding: 2px 12px;
-            border-radius: 12px;
-            font-size: 11px;
+            font-size: 0.7rem;
             font-weight: 600;
+            padding: 2px 12px;
+            border-radius: 20px;
+        }
+        .meta-card .meta-badge.urgente {
             background: #fef3c7;
             color: #92400e;
         }
-
         .meta-card .meta-badge.vencido {
-            background: #fecaca;
+            background: #fee2e2;
             color: #991b1b;
         }
 
-        /* ============================================================
-           RELATÓRIOS
-           ============================================================ */
-        .relatorio-card {
-            background: white;
-            border-radius: 10px;
-            padding: 16px 20px;
-            margin-bottom: 12px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .relatorio-card h4 {
-            color: #1A2A4A;
-            margin-bottom: 8px;
-        }
-
-        .relatorio-card p {
-            font-size: 14px;
-            color: #475569;
-            margin: 4px 0;
-        }
-
-        /* ============================================================
-           FICHA INDIVIDUAL
-           ============================================================ */
+        /* ===== FICHA INDIVIDUAL ===== */
         .ficha-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 10px;
         }
-
         .ficha-grid .ficha-campo {
             padding: 6px 10px;
             background: #f8fafc;
             border-radius: 6px;
             font-size: 13px;
+            border-bottom: 1px solid #e9edf2;
         }
-
         .ficha-grid .ficha-campo strong {
             color: #1A2A4A;
+            display: block;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
         }
 
         .obs-item {
@@ -937,16 +993,13 @@
             margin-bottom: 8px;
             border-left: 3px solid #3b82f6;
         }
-
         .obs-item strong {
             color: #1A2A4A;
         }
-
         .obs-item small {
             color: #94a3b8;
             font-size: 12px;
         }
-
         .obs-item p {
             margin-top: 4px;
             color: #334155;
@@ -961,58 +1014,284 @@
             background: #f8fafc;
             border-radius: 6px;
             margin-bottom: 6px;
+            border: 1px solid #e2e8f0;
+        }
+        .doc-item span {
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        /* ============================================================
-           RESPONSIVIDADE
-           ============================================================ */
+        .atendimento-item {
+            padding: 10px 14px;
+            background: #f8fafc;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid #2563EB;
+        }
+        .atendimento-item strong {
+            color: #1A2A4A;
+        }
+        .atendimento-item small {
+            color: #64748b;
+            font-size: 0.75rem;
+        }
+        .atendimento-item p {
+            margin-top: 4px;
+            color: #475569;
+            font-size: 0.9rem;
+        }
+
+        /* ===== BARRA DE SELEÇÃO EM LOTE ===== */
+        .barra-selecao {
+            display: none;
+            background: #e0f2fe;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .barra-selecao .btn {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* ===== MODAIS ===== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: modalFadeIn 0.2s ease;
+        }
+        @keyframes modalFadeIn {
+            0% { opacity: 0; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-content .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 12px;
+        }
+        .modal-content .modal-header h3 {
+            font-size: 18px;
+            color: #1A2A4A;
+        }
+        .modal-content .modal-header .close-btn {
+            font-size: 24px;
+            cursor: pointer;
+            color: #94a3b8;
+            border: none;
+            background: none;
+            transition: 0.15s;
+        }
+        .modal-content .modal-header .close-btn:hover {
+            color: #ef4444;
+        }
+
+        .modal-content .form-group {
+            margin-bottom: 14px;
+        }
+        .modal-content .form-group label {
+            display: block;
+            font-weight: 600;
+            font-size: 14px;
+            color: #334155;
+            margin-bottom: 4px;
+        }
+        .modal-content .form-group input,
+        .modal-content .form-group select,
+        .modal-content .form-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #f8fafc;
+        }
+        .modal-content .form-group input:focus,
+        .modal-content .form-group select:focus,
+        .modal-content .form-group textarea:focus {
+            border-color: #2c3e66;
+            outline: none;
+        }
+
+        /* ===== PROFISSIONAIS ===== */
+        .profissional-item {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #2c3e66;
+        }
+        .profissional-item strong {
+            color: #1A2A4A;
+        }
+
+        /* ===== CONTADOR DE LISTA ===== */
+        #contadorContainer {
+            padding: 10px 15px;
+            font-weight: 600;
+            color: #1e2a4a;
+            background: #f1f5f9;
+            border-radius: 0 0 12px 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+        #contadorListaJovens {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        /* ===== STATUS DE IMPORTAÇÃO ===== */
+        #statusImportacao {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            z-index: 3000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            max-width: 400px;
+            font-weight: 500;
+        }
+
+        /* ===== UTILITÁRIOS ===== */
+        .flex { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .flex-center { display: flex; align-items: center; gap: 10px; }
+        .flex-wrap { flex-wrap: wrap; }
+        .flex-1 { flex: 1; }
+        .gap-4 { gap: 4px; }
+        .gap-8 { gap: 8px; }
+        .gap-12 { gap: 12px; }
+        .mt-10 { margin-top: 10px; }
+        .mt-20 { margin-top: 20px; }
+        .mb-10 { margin-bottom: 10px; }
+        .mb-20 { margin-bottom: 20px; }
+        .ml-auto { margin-left: auto; }
+        .text-center { text-align: center; }
+        .text-muted { color: #64748b; font-size: 0.85rem; }
+        .fw-600 { font-weight: 600; }
+        .w-100 { width: 100%; }
+        .relative { position: relative; }
+        .overflow-hidden { overflow: hidden; }
+        .rounded { border-radius: 8px; }
+        .shadow { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); }
+        .bg-white { background: white; }
+        .bg-light { background: #f8fafc; }
+        .hidden { display: none !important; }
+        .visible { display: block !important; }
+
+        /* ===== SCROLL PERSONALIZADO ===== */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* ===== RESPONSIVIDADE ===== */
+        @media (max-width: 1024px) {
+            .relatorio-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
+                width: 280px;
             }
-
             .sidebar.open {
                 transform: translateX(0);
             }
-
-            .content {
+            .main-content {
                 margin-left: 0;
-                padding: 12px;
             }
-
-            .content-header .hamburger {
+            .header-left .menu-toggle {
                 display: block;
             }
-
-            .cards-grid {
-                grid-template-columns: repeat(2, 1fr);
+            .header-left .page-title {
+                font-size: 1rem;
             }
-
+            .cards-grid {
+                grid-template-columns: 1fr 1fr;
+            }
             .form-grid {
                 grid-template-columns: 1fr;
             }
-
-            .content-header .page-title {
-                font-size: 18px;
+            .ficha-grid {
+                grid-template-columns: 1fr;
             }
-
+            .header-actions .user-badge span {
+                display: none;
+            }
+            .modal-content {
+                padding: 20px;
+                max-width: 95%;
+            }
+            .page {
+                padding: 16px;
+            }
+            .header {
+                padding: 12px 16px;
+            }
             .table-wrapper .table-toolbar .filtros {
                 flex-direction: column;
                 width: 100%;
             }
-
             .table-wrapper .table-toolbar .filtros input,
             .table-wrapper .table-toolbar .filtros select {
                 width: 100%;
             }
-
-            .modal-content {
-                padding: 20px;
-                margin: 10px;
-            }
-
-            .login-container {
-                padding: 24px;
+            .jovens-checkbox-grid {
+                grid-template-columns: 1fr 1fr;
             }
         }
 
@@ -1020,49 +1299,180 @@
             .cards-grid {
                 grid-template-columns: 1fr;
             }
-
-            .content-header .header-actions .btn {
+            .header-left .page-title {
+                font-size: 0.9rem;
+            }
+            .header-actions {
+                gap: 6px;
+            }
+            .header-actions .btn {
                 font-size: 12px;
                 padding: 6px 12px;
             }
+            table {
+                font-size: 0.75rem;
+            }
+            th, td {
+                padding: 6px 8px;
+            }
+            .login-box {
+                padding: 24px;
+            }
+            .meta-card {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .oficina-card {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .barra-selecao {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .jovens-checkbox-grid {
+                grid-template-columns: 1fr;
+            }
+            .form-actions {
+                flex-direction: column;
+            }
+            .form-actions .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .modal-content {
+                padding: 16px;
+            }
+            #statusImportacao {
+                left: 10px;
+                right: 10px;
+                bottom: 10px;
+                max-width: none;
+                font-size: 14px;
+            }
         }
 
-        /* ============================================================
-           SCROLL PERSONALIZADO
-           ============================================================ */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        /* ===== IMPRESSÃO ===== */
+        @media print {
+            .sidebar,
+            .header,
+            .tabs,
+            .btn,
+            .btn-sm,
+            .no-print,
+            footer,
+            .modal-overlay,
+            .modal,
+            .sidebar-overlay,
+            #statusImportacao {
+                display: none !important;
+            }
+            .main-content {
+                margin-left: 0 !important;
+                display: block !important;
+            }
+            .page {
+                display: block !important;
+                padding: 20px !important;
+            }
+            .page.active {
+                display: block !important;
+            }
+            .card {
+                box-shadow: none !important;
+                border: 1px solid #e2e8f0 !important;
+                break-inside: avoid;
+            }
+            table {
+                font-size: 10px !important;
+            }
+            th, td {
+                padding: 4px 6px !important;
+            }
+            .header-logo {
+                max-height: 60px !important;
+            }
+            .relatorio-card {
+                border: 1px solid #e2e8f0 !important;
+                box-shadow: none !important;
+                break-inside: avoid;
+            }
+            body {
+                background: white !important;
+                padding: 10px !important;
+            }
+            .ficha-grid {
+                grid-template-columns: 1fr 1fr !important;
+            }
+            .modal-content {
+                box-shadow: none !important;
+                border: 1px solid #e2e8f0 !important;
+            }
         }
 
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
+        /* ===== ANIMAÇÕES ADICIONAIS ===== */
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .slide-up {
+            animation: slideUp 0.3s ease;
         }
 
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .loading-shimmer {
+            background: linear-gradient(90deg, #f0f4f8 25%, #e2e8f0 50%, #f0f4f8 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        /* ===== LEITOR DIGITAL ===== */
+        .leitor-digital {
+            background: #f0f9ff;
+            border: 2px dashed #0ea5e9;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .leitor-digital input {
+            font-size: 1.5rem;
+            padding: 15px;
+            text-align: center;
+            letter-spacing: 4px;
+            width: 100%;
+            max-width: 300px;
+            border: 1px solid #d1d9e6;
             border-radius: 10px;
+            background: white;
+        }
+        .leitor-digital input:focus {
+            border-color: #0ea5e9;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
         }
 
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+        /* ===== PAINEL DUPLO ===== */
+        .painel-duplo {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
         }
 
-        /* ============================================================
-           UTILITÁRIOS
-           ============================================================ */
-        .text-center { text-align: center; }
-        .mt-10 { margin-top: 10px; }
-        .mt-20 { margin-top: 20px; }
-        .mb-10 { margin-bottom: 10px; }
-        .mb-20 { margin-bottom: 20px; }
-        .flex { display: flex; }
-        .flex-center { display: flex; align-items: center; gap: 10px; }
-        .flex-wrap { flex-wrap: wrap; }
-        .gap-8 { gap: 8px; }
-        .gap-12 { gap: 12px; }
-        .hidden { display: none !important; }
-        .w-100 { width: 100%; }
+        /* ===== GRAFICOS - CONTAINER ===== */
+        .graficos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin: 24px 0;
+        }
+        canvas {
+            max-width: 100%;
+            max-height: 250px;
+        }
     </style>
 </head>
 <body>
@@ -1071,9 +1481,9 @@
      TELA DE LOGIN
      ============================================================ -->
 <div id="telaLogin">
-    <div class="login-container">
+    <div class="login-box">
         <div class="logo">
-            <img id="logoLogin" src="" alt="Logo" style="display:none;">
+            <img id="logoLogin" src="" alt="Logo" style="display:none;" class="logo-login-img">
             <h1>⚖️ Medidas Socioeducativas</h1>
             <p>Sistema de Controle v2.1</p>
         </div>
@@ -1088,7 +1498,7 @@
             <input type="password" id="loginSenha" placeholder="Digite sua senha" autocomplete="current-password">
         </div>
         
-        <button class="btn-primary" id="loginBtn">Entrar</button>
+        <button class="btn" id="loginBtn">Entrar</button>
         
         <div class="erro" id="loginErro"></div>
         
@@ -1102,7 +1512,7 @@
      TELA DE CADASTRO DE USUÁRIO
      ============================================================ -->
 <div id="telaCadastro">
-    <div class="login-container">
+    <div class="login-box">
         <div class="logo">
             <h2>📝 Criar Conta</h2>
             <p>Preencha os dados para solicitar acesso</p>
@@ -1139,7 +1549,7 @@
             </select>
         </div>
         
-        <button class="btn-primary" id="cadastrarBtn">Solicitar Cadastro</button>
+        <button class="btn" id="cadastrarBtn">Solicitar Cadastro</button>
         
         <div class="erro" id="cadastroErro"></div>
         <div class="sucesso" id="cadastroSucesso"></div>
@@ -1155,69 +1565,86 @@
      ============================================================ -->
 <div class="main-content" id="mainContent">
 
-    <!-- ============================================================
-         SIDEBAR
-         ============================================================ -->
+    <!-- SIDEBAR -->
     <nav class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <img id="logoImg" src="" alt="Logo" style="display:none;">
-            <h3 id="nomeUsuarioHeader">Usuário</h3>
-            <div class="user-info" id="nivelUsuarioHeader">Nível</div>
+        <div class="sidebar-brand">
+            <i class="fas fa-balance-scale"></i>
+            <div>
+                <span>Socioeducativo</span>
+                <small>v2.1</small>
+            </div>
         </div>
         
-        <ul class="menu">
-            <li class="menu-item active" data-page="pageDashboard" onclick="navigateTo('pageDashboard')">
+        <div class="sidebar-user">
+            <div class="avatar" id="avatarInicial">U</div>
+            <div class="user-info">
+                <div class="name" id="nomeUsuarioHeader">Usuário</div>
+                <div class="role" id="nivelUsuarioHeader">Nível</div>
+            </div>
+            <span class="status-online"></span>
+        </div>
+        
+        <div class="sidebar-menu">
+            <div class="menu-category">Navegação</div>
+            
+            <button class="menu-item active" data-page="pageDashboard" onclick="navigateTo('pageDashboard')">
                 <i class="fas fa-chart-pie"></i> Dashboard
-            </li>
-            <li class="menu-item" data-page="pageCadastro" onclick="navigateTo('pageCadastro')">
+            </button>
+            <button class="menu-item" data-page="pageCadastro" onclick="navigateTo('pageCadastro')">
                 <i class="fas fa-user-plus"></i> Cadastrar Jovem
-            </li>
-            <li class="menu-item" data-page="pageLista" onclick="navigateTo('pageLista')">
+            </button>
+            <button class="menu-item" data-page="pageLista" onclick="navigateTo('pageLista')">
                 <i class="fas fa-list-ul"></i> Lista Geral
-            </li>
-            <li class="menu-item" data-page="pageAcompInd" onclick="navigateTo('pageAcompInd')">
+            </button>
+            <button class="menu-item" data-page="pageAcompInd" onclick="navigateTo('pageAcompInd')">
                 <i class="fas fa-user-circle"></i> Acompanhamento
-            </li>
-            <li class="menu-item" data-page="pageObservacoes" onclick="navigateTo('pageObservacoes')">
+            </button>
+            <button class="menu-item" data-page="pageObservacoes" onclick="navigateTo('pageObservacoes')">
                 <i class="fas fa-eye"></i> Observações
-            </li>
-            <li class="menu-item" data-page="pageOficinas" onclick="navigateTo('pageOficinas')">
+            </button>
+            
+            <div class="menu-category">Atividades</div>
+            
+            <button class="menu-item" data-page="pageOficinas" onclick="navigateTo('pageOficinas')">
                 <i class="fas fa-tools"></i> Oficinas
-            </li>
-            <li class="menu-item" data-page="pagePlanejamento" onclick="navigateTo('pagePlanejamento')">
+            </button>
+            <button class="menu-item" data-page="pagePlanejamento" onclick="navigateTo('pagePlanejamento')">
                 <i class="fas fa-calendar-plus"></i> Planejamento
-            </li>
-            <li class="menu-item" data-page="pageRelatorios" onclick="navigateTo('pageRelatorios')">
+            </button>
+            <button class="menu-item" data-page="pageRelatorios" onclick="navigateTo('pageRelatorios')">
                 <i class="fas fa-file-alt"></i> Relatórios
-            </li>
-            <li class="menu-item" data-page="pageLA" onclick="navigateTo('pageLA')">
+            </button>
+            <button class="menu-item" data-page="pageLA" onclick="navigateTo('pageLA')">
                 <i class="fas fa-handshake"></i> Ações LA
-            </li>
-            <li class="menu-item" data-page="pageUsuarios" onclick="navigateTo('pageUsuarios')">
+            </button>
+            
+            <div class="menu-category">Administração</div>
+            
+            <button class="menu-item" data-page="pageUsuarios" onclick="navigateTo('pageUsuarios')">
                 <i class="fas fa-users-cog"></i> Usuários
-            </li>
-            <li class="menu-item" data-page="pagePendentes" onclick="navigateTo('pagePendentes')">
+            </button>
+            <button class="menu-item" data-page="pagePendentes" onclick="navigateTo('pagePendentes')">
                 <i class="fas fa-user-clock"></i> Pendentes
-            </li>
-            <li class="menu-item" data-page="pageMensagens" onclick="navigateTo('pageMensagens')">
+            </button>
+            <button class="menu-item" data-page="pageMensagens" onclick="navigateTo('pageMensagens')">
                 <i class="fas fa-envelope"></i> Mensagens
-            </li>
-            <li class="menu-item" data-page="pageProfissionais" onclick="navigateTo('pageProfissionais')">
+            </button>
+            <button class="menu-item" data-page="pageProfissionais" onclick="navigateTo('pageProfissionais')">
                 <i class="fas fa-user-md"></i> Profissionais
-            </li>
-            <li class="menu-item" data-page="pageConfig" onclick="navigateTo('pageConfig')">
+            </button>
+            <button class="menu-item" data-page="pageConfig" onclick="navigateTo('pageConfig')">
                 <i class="fas fa-cog"></i> Configurações
-            </li>
-            <li class="menu-item" data-page="pageDashboardJovem" onclick="navigateTo('pageDashboardJovem')" style="display:none;">
+            </button>
+            <button class="menu-item" data-page="pageDashboardJovem" onclick="navigateTo('pageDashboardJovem')" style="display:none;">
                 <i class="fas fa-user"></i> Minhas Ações
-            </li>
-            
-            <div class="menu-divider"></div>
-            
-            <li class="logout-btn" id="logoutBtn">
+            </button>
+        </div>
+        
+        <div class="sidebar-footer">
+            <button class="logout-btn" id="logoutBtn">
                 <i class="fas fa-sign-out-alt"></i> Sair
-            </li>
-        </ul>
+            </button>
+        </div>
     </nav>
 
     <!-- OVERLAY DO SIDEBAR -->
@@ -1227,12 +1654,13 @@
          CONTEÚDO PRINCIPAL
          ============================================================ -->
     <div class="content">
+
         <!-- HEADER -->
-        <div class="content-header">
-            <div class="flex-center">
-                <span class="hamburger" onclick="toggleSidebar()">
+        <div class="header">
+            <div class="header-left">
+                <button class="menu-toggle" onclick="toggleSidebar()">
                     <i class="fas fa-bars"></i>
-                </span>
+                </button>
                 <span class="page-title" id="pageTitle">
                     <i class="fas fa-chart-pie"></i> Dashboard
                 </span>
@@ -1244,12 +1672,16 @@
                 <button class="btn btn-success-header" id="btnRegistrarPontoHeader" onclick="navigateTo('pageLista')">
                     <i class="fas fa-clock"></i> Registrar Ponto
                 </button>
-                <button class="btn btn-primary-header" onclick="importarPlanilha()">
+                <button class="btn btn-outline-header" onclick="importarPlanilha()">
                     <i class="fas fa-file-import"></i> Importar
                 </button>
                 <button class="btn btn-success-header" onclick="exportarExcel()">
                     <i class="fas fa-file-excel"></i> Exportar
                 </button>
+                <div class="user-badge">
+                    <i class="fas fa-user"></i>
+                    <span id="nomeUsuarioHeaderTopo">Usuário</span>
+                </div>
             </div>
         </div>
 
@@ -1292,13 +1724,15 @@
             
             <div class="form-container">
                 <div class="form-title"><i class="fas fa-fingerprint"></i> Registro por Digital</div>
-                <div class="flex" style="gap:10px; flex-wrap:wrap;">
-                    <input type="text" id="inputDigital" placeholder="Digite o código da digital" style="flex:1; min-width:200px; padding:10px 14px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:14px;">
-                    <button class="btn btn-save" id="btnPontoDigital">Registrar Ponto</button>
+                <div class="leitor-digital">
+                    <div class="flex" style="gap:10px; flex-wrap:wrap; justify-content:center;">
+                        <input type="text" id="inputDigital" placeholder="Digite o código da digital" style="flex:1; min-width:200px; padding:12px 16px; border:1.5px solid #e2e8f0; border-radius:10px; font-size:16px; text-align:center; letter-spacing:4px;">
+                        <button class="btn btn-save" id="btnPontoDigital"><i class="fas fa-fingerprint"></i> Registrar</button>
+                    </div>
                 </div>
             </div>
             
-            <div class="form-container mt-20">
+            <div class="form-container">
                 <div class="form-title"><i class="fas fa-clock"></i> Metas LA Próximas ao Vencimento</div>
                 <div id="listaMetasLAProximas">
                     <p style="color:#6b7280;">Carregando...</p>
@@ -1314,11 +1748,11 @@
                 <div class="form-title"><i class="fas fa-user-plus"></i> Cadastrar / Editar Jovem</div>
                 <div class="form-grid" id="camposGrid"></div>
                 
-                <!-- Ações LA (aparece apenas quando MEDIDA = LA) -->
+                <!-- Ações LA -->
                 <div id="containerAcoesLA" style="display:none; margin-top:16px; padding-top:16px; border-top:2px solid #e2e8f0;">
                     <div class="form-title" style="font-size:16px;"><i class="fas fa-handshake"></i> Ações da Liberdade Assistida</div>
                     <div class="flex" style="gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-                        <input type="text" id="novaAcaoLAInput" placeholder="Descreva a ação" style="flex:1; min-width:150px; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:6px;">
+                        <input type="text" id="novaAcaoLAInput" placeholder="Descreva a ação..." style="flex:1; min-width:150px; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:6px;">
                         <input type="date" id="novaAcaoPrazoInput" style="padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:6px;">
                         <button class="btn-sm btn-sm-success" onclick="adicionarAcaoLAForm()">+ Adicionar</button>
                     </div>
@@ -1378,7 +1812,7 @@
                         </button>
                     </div>
                     <div>
-                        <button class="btn-sm btn-sm-success" onclick="document.getElementById('btnAcoesLote').click();">
+                        <button class="btn-sm btn-sm-success" onclick="abrirModalAcoesLote()">
                             <i class="fas fa-arrow-right"></i> Ações em Lote
                         </button>
                     </div>
@@ -1388,7 +1822,7 @@
                 <div class="barra-selecao" id="barraSelecaoLote">
                     <span>👥 <span id="contadorSelecionados">0</span> jovens selecionados</span>
                     <button class="btn btn-sm btn-sm-danger" onclick="desmarcarTodos()">Desmarcar todos</button>
-                    <button class="btn btn-sm btn-sm-primary" id="btnAcoesLote" onclick="abrirModalAcoesLote()">Ações</button>
+                    <button class="btn btn-sm btn-sm-primary" onclick="abrirModalAcoesLote()">Ações</button>
                 </div>
                 
                 <div style="overflow-x:auto;">
@@ -1435,32 +1869,27 @@
                 <div id="fichaIndividual" style="display:none;">
                     <div class="form-title" id="fichaTitulo">📋 Ficha</div>
                     
-                    <!-- Dados Pessoais -->
                     <div style="background:#f8fafc; border-radius:10px; padding:16px; margin-bottom:16px;">
                         <h4 style="color:#1A2A4A; margin-bottom:10px;">👤 Dados Pessoais</h4>
                         <div id="fichaDadosPessoais"></div>
                     </div>
                     
-                    <!-- Frequência -->
                     <div style="background:#f8fafc; border-radius:10px; padding:16px; margin-bottom:16px;">
                         <h4 style="color:#1A2A4A; margin-bottom:10px;">📊 Frequência</h4>
                         <div id="fichaFrequencia"></div>
                     </div>
                     
-                    <!-- Oficinas -->
                     <div style="background:#f8fafc; border-radius:10px; padding:16px; margin-bottom:16px;">
                         <h4 style="color:#1A2A4A; margin-bottom:10px;">🎯 Oficinas Participadas</h4>
                         <div id="fichaOficinas"></div>
                     </div>
                     
-                    <!-- Documentos -->
                     <div style="background:#f8fafc; border-radius:10px; padding:16px; margin-bottom:16px;">
                         <h4 style="color:#1A2A4A; margin-bottom:10px;">📄 Documentos</h4>
                         <div id="fichaDocumentos"></div>
                         <button class="btn-sm btn-sm-primary mt-10" onclick="adicionarDocumento()">+ Adicionar Documento</button>
                     </div>
                     
-                    <!-- Observações -->
                     <div style="background:#f8fafc; border-radius:10px; padding:16px;">
                         <h4 style="color:#1A2A4A; margin-bottom:10px;">📝 Observações e Atendimentos</h4>
                         <div id="fichaObservacoes"></div>
@@ -1606,7 +2035,7 @@
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-save" id="salvarPlanejamentoBtn" onclick="salvarPlanejamento()"><i class="fas fa-save"></i> Salvar Planejamento</button>
+                    <button class="btn btn-save" onclick="salvarPlanejamento()"><i class="fas fa-save"></i> Salvar Planejamento</button>
                 </div>
             </div>
             
@@ -1625,7 +2054,6 @@
             <div class="form-container">
                 <div class="form-title"><i class="fas fa-file-alt"></i> Relatórios</div>
                 
-                <!-- Projeção de Horas -->
                 <div class="relatorio-card">
                     <h4>📊 Projeção de Horas - Próximas 3 Quinzenas</h4>
                     <div class="table-wrapper">
@@ -1636,7 +2064,6 @@
                     </div>
                 </div>
                 
-                <!-- Aniversariantes -->
                 <div class="relatorio-card">
                     <h4>🎂 Aniversariantes (Próximos 3 meses)</h4>
                     <div class="table-wrapper">
@@ -1647,25 +2074,21 @@
                     </div>
                 </div>
                 
-                <!-- Relatório LA -->
                 <div id="relatorioLA" class="relatorio-card">
                     <h4>⚖️ Relatório LA</h4>
                     <p style="color:#6b7280;">Carregando...</p>
                 </div>
                 
-                <!-- Relatório Frequência -->
                 <div id="relatorioFrequencia" class="relatorio-card">
                     <h4>📈 Relatório de Frequência</h4>
                     <p style="color:#6b7280;">Carregando...</p>
                 </div>
                 
-                <!-- Relatório Atendimentos -->
                 <div id="relatorioAtendimentos" class="relatorio-card">
                     <h4>👤 Relatório de Atendimentos</h4>
                     <p style="color:#6b7280;">Carregando...</p>
                 </div>
                 
-                <!-- Relatório Status -->
                 <div id="relatorioStatus" class="relatorio-card">
                     <h4>📊 Distribuição por Status</h4>
                     <p style="color:#6b7280;">Carregando...</p>
@@ -1881,11 +2304,8 @@
             </div>
         </div>
 
-        <!-- ============================================================
-             STATUS DE IMPORTAÇÃO
-             ============================================================ -->
-        <div id="statusImportacao" style="display:none; position:fixed; bottom:20px; right:20px; padding:12px 20px; border-radius:10px; z-index:3000; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-width:400px;">
-        </div>
+        <!-- STATUS DE IMPORTAÇÃO -->
+        <div id="statusImportacao" style="display:none;"></div>
 
     </div><!-- /.content -->
 </div><!-- /.main-content -->
@@ -1897,7 +2317,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3><i class="fas fa-exclamation-triangle" style="color:#ef4444;"></i> Confirmar Exclusão</h3>
-            <span class="close-btn" onclick="document.getElementById('modalConfirmExclusao').style.display='none'">&times;</span>
+            <button class="close-btn" onclick="document.getElementById('modalConfirmExclusao').style.display='none'">&times;</button>
         </div>
         <p id="textoConfirmExclusao">Tem certeza que deseja excluir este registro?</p>
         <p style="color:#ef4444; font-size:13px; margin-top:8px;">⚠️ Esta ação é irreversível!</p>
@@ -1915,7 +2335,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3><i class="fas fa-users"></i> Ações em Lote</h3>
-            <span class="close-btn" onclick="fecharModalAcoesLote()">&times;</span>
+            <button class="close-btn" onclick="fecharModalAcoesLote()">&times;</button>
         </div>
         <p><strong id="loteContadorSelecionados">0</strong> jovens selecionados</p>
         
@@ -1962,7 +2382,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3><i class="fas fa-file"></i> Adicionar Documento</h3>
-            <span class="close-btn" onclick="fecharModalDocumento()">&times;</span>
+            <button class="close-btn" onclick="fecharModalDocumento()">&times;</button>
         </div>
         <div class="form-group">
             <label style="font-weight:600;">Nome do Documento</label>
@@ -1995,7 +2415,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3><i class="fas fa-clock"></i> Registro Manual de Ponto</h3>
-            <span class="close-btn" onclick="document.getElementById('modalRegistroManual').style.display='none'">&times;</span>
+            <button class="close-btn" onclick="document.getElementById('modalRegistroManual').style.display='none'">&times;</button>
         </div>
         <div class="form-group">
             <label style="font-weight:600;">Jovem</label>
@@ -2029,7 +2449,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3><i class="fas fa-clock"></i> Configurar Horários de Acesso</h3>
-            <span class="close-btn" onclick="document.getElementById('modalHorarios').style.display='none'">&times;</span>
+            <button class="close-btn" onclick="document.getElementById('modalHorarios').style.display='none'">&times;</button>
         </div>
         <p>Configurando horários para: <strong id="nomeUserHorario"></strong></p>
         <div id="gridHorarios"></div>
@@ -2047,7 +2467,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3><i class="fas fa-link"></i> Vincular Jovem</h3>
-            <span class="close-btn" onclick="fecharModalVincular()">&times;</span>
+            <button class="close-btn" onclick="fecharModalVincular()">&times;</button>
         </div>
         <p>Selecione o jovem que será vinculado a esta conta:</p>
         <div class="form-group">
@@ -2069,7 +2489,7 @@
     <div class="modal-content" style="max-width:800px;">
         <div class="modal-header">
             <h3 id="fichaTituloModal">📋 Ficha do Jovem</h3>
-            <span class="close-btn" onclick="document.getElementById('modalFicha').style.display='none'">&times;</span>
+            <button class="close-btn" onclick="document.getElementById('modalFicha').style.display='none'">&times;</button>
         </div>
         <div id="fichaIndividualModal" style="max-height:70vh; overflow-y:auto;">
             <!-- Conteúdo da ficha será inserido aqui -->
@@ -2190,132 +2610,6 @@ function fileToBase64(file) {
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
-}
-
-// ============================================================
-// FUNÇÕES DE BUSCA DE PRESENÇA NAS ABAS MENSAIS (CORRIGIDAS)
-// ============================================================
-
-function buscarUltimaPresenca(jovemNome, mesesDados) {
-    if (!mesesDados || mesesDados.length === 0) return null;
-    
-    const nomeBusca = jovemNome.toUpperCase().trim();
-    let ultimaData = null;
-    
-    for (const mes of mesesDados) {
-        if (!mes.dados) continue;
-        
-        const linha = mes.dados.find(row => {
-            const nome = String(row['B'] || row['NOME'] || '').toUpperCase().trim();
-            return nome === nomeBusca || 
-                   nome.includes(nomeBusca) || 
-                   nomeBusca.includes(nome) ||
-                   (nomeBusca.length > 3 && nome.includes(nomeBusca.substring(0, 3)));
-        });
-        
-        if (!linha) continue;
-        
-        const colunas = Object.keys(linha);
-        for (const col of colunas) {
-            let valor = String(linha[col] || '').trim();
-            const isPresenca = valor.toUpperCase() === 'P' || 
-                              valor.toUpperCase() === 'PRESENÇA' ||
-                              valor.toUpperCase() === 'PRESENCA';
-            
-            if (isPresenca) {
-                const cabecalho = mes.cabecalhos && mes.cabecalhos[col];
-                if (cabecalho) {
-                    const data = new Date(cabecalho);
-                    if (!isNaN(data.getTime())) {
-                        if (!ultimaData || data > ultimaData) {
-                            ultimaData = data;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    return ultimaData;
-}
-
-function buscarHorasCumpridasNoMes(jovemNome, mesesDados, horasPorPresenca = 4) {
-    if (!mesesDados || mesesDados.length === 0) return 0;
-    
-    const nomeBusca = jovemNome.toUpperCase().trim();
-    let totalPresencas = 0;
-    
-    for (const mes of mesesDados) {
-        if (!mes.dados) continue;
-        
-        const linha = mes.dados.find(row => {
-            const nome = String(row['B'] || row['NOME'] || '').toUpperCase().trim();
-            return nome === nomeBusca || 
-                   nome.includes(nomeBusca) || 
-                   nomeBusca.includes(nome) ||
-                   (nomeBusca.length > 3 && nome.includes(nomeBusca.substring(0, 3)));
-        });
-        
-        if (!linha) continue;
-        
-        const colunas = Object.keys(linha);
-        for (const col of colunas) {
-            const valor = String(linha[col] || '').trim().toUpperCase();
-            if (valor === 'P' || valor === 'PRESENÇA' || valor === 'PRESENCA') {
-                totalPresencas++;
-            }
-        }
-    }
-    
-    return totalPresencas * horasPorPresenca;
-}
-
-function verificarPresencaEmTodasAbas(jovemNome, mesesDados) {
-    if (!mesesDados || mesesDados.length === 0) { 
-        return { temPresenca: false, ultimaData: null, totalPresencas: 0 }; 
-    }
-    
-    const nomeBusca = jovemNome.toUpperCase().trim();
-    let ultimaData = null;
-    let totalPresencas = 0;
-    
-    for (const mes of mesesDados) {
-        if (!mes.dados) continue;
-        
-        const linha = mes.dados.find(row => {
-            const nome = String(row['B'] || row['NOME'] || '').toUpperCase().trim();
-            return nome === nomeBusca || 
-                   nome.includes(nomeBusca) || 
-                   nomeBusca.includes(nome) ||
-                   (nomeBusca.length > 3 && nome.includes(nomeBusca.substring(0, 3)));
-        });
-        
-        if (!linha) continue;
-        
-        const colunas = Object.keys(linha);
-        for (const col of colunas) {
-            const valor = String(linha[col] || '').trim().toUpperCase();
-            if (valor === 'P' || valor === 'PRESENÇA' || valor === 'PRESENCA') {
-                totalPresencas++;
-                
-                const cabecalho = mes.cabecalhos && mes.cabecalhos[col];
-                if (cabecalho) {
-                    const data = new Date(cabecalho);
-                    if (!isNaN(data.getTime())) {
-                        if (!ultimaData || data > ultimaData) {
-                            ultimaData = data;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    return {
-        temPresenca: totalPresencas > 0,
-        ultimaData: ultimaData,
-        totalPresencas: totalPresencas
-    };
 }
 
 // ============================================================
@@ -2459,6 +2753,8 @@ async function fazerLogin() {
 
         document.getElementById('nomeUsuarioHeader').textContent = user.nome || user.email;
         document.getElementById('nivelUsuarioHeader').textContent = NIVEIS_ACESSO[user.nivel]?.nome || user.nivel;
+        document.getElementById('nomeUsuarioHeaderTopo').textContent = user.nome || user.email;
+        document.getElementById('avatarInicial').textContent = (user.nome || 'U')[0].toUpperCase();
 
         mostrarAbasPorNivel(user.nivel);
         carregarLogo();
@@ -2467,9 +2763,6 @@ async function fazerLogin() {
             carregarJovemPeloCPF(user.cpf);
         } else {
             await carregarTodosDados();
-            if (['gestor', 'tecnico', 'desenvolvedor'].includes(user.nivel)) {
-                setTimeout(() => exibirAvisoObservacoes(), 1500);
-            }
         }
         iniciarPolling();
         btn.disabled = false;
@@ -2614,20 +2907,26 @@ function mostrarAbasPorNivel(nivel) {
 // DASHBOARD
 // ============================================================
 function renderizarDashboard() {
-    const cards = document.getElementById('cardsDashboard');
-    if (!cards) return;
     const total = estado.jovens.length;
     const ativos = estado.jovens.filter(j => {
-        if (!j['MEDIDA'] || j['MEDIDA'] === 'Liberação' || j._statusRender === 'suspenso' || j._statusRender === 'descumprimento' || j._statusRender === 'irregular') return false;
-        return parseFloat(calcularSaldo(j)) > 0 || j['MEDIDA'] === 'LA';
+        const status = (j._statusRender || j.status || '').toLowerCase();
+        return ['regular', 'ativo'].includes(status);
     }).length;
-    const descumprimento = estado.jovens.filter(j => j._statusRender === 'descumprimento').length;
-    const irregulares = estado.jovens.filter(j => j._statusRender === 'irregular').length;
-    const suspensos = estado.jovens.filter(j => j._statusRender === 'suspenso').length;
-    const concluidos = estado.jovens.filter(j => j._statusRender === 'concluído').length;
-    const liberados = estado.jovens.filter(j => {
-        if (j['MEDIDA'] === 'Liberação') return true;
-        return parseFloat(calcularSaldo(j)) <= 0 && j['MEDIDA'] !== 'LA';
+    const irregulares = estado.jovens.filter(j => {
+        const status = (j._statusRender || j.status || '').toLowerCase();
+        return ['irregular'].includes(status);
+    }).length;
+    const descumprimento = estado.jovens.filter(j => {
+        const status = (j._statusRender || j.status || '').toLowerCase();
+        return ['descumprimento', 'em descumprimento'].includes(status);
+    }).length;
+    const suspensos = estado.jovens.filter(j => {
+        const status = (j._statusRender || j.status || '').toLowerCase();
+        return ['suspenso'].includes(status);
+    }).length;
+    const concluidos = estado.jovens.filter(j => {
+        const status = (j._statusRender || j.status || '').toLowerCase();
+        return ['concluído', 'finalizada', 'medida finalizada'].includes(status);
     }).length;
 
     document.getElementById('totalJovens').textContent = total;
@@ -2637,14 +2936,17 @@ function renderizarDashboard() {
     document.getElementById('suspensosJovens').textContent = suspensos;
     document.getElementById('concluidosJovens').textContent = concluidos;
 
-    cards.innerHTML = `
-        <div class="card card-info"><div class="card-icon"><i class="fas fa-users"></i></div><div class="card-value">${total}</div><div class="card-label">Total de Jovens</div></div>
-        <div class="card card-success"><div class="card-icon"><i class="fas fa-check-circle"></i></div><div class="card-value">${ativos}</div><div class="card-label">Ativos</div><div class="card-sub">Em cumprimento</div></div>
-        <div class="card" style="border-left-color:#f59e0b;"><div class="card-icon"><i class="fas fa-clock" style="color:#f59e0b;"></i></div><div class="card-value">${irregulares}</div><div class="card-label">Irregulares</div><div class="card-sub">7+ dias sem comparecer</div></div>
-        <div class="card card-danger"><div class="card-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="card-value">${descumprimento}</div><div class="card-label">Descumprimento</div><div class="card-sub">14+ dias sem comparecer</div></div>
-        <div class="card card-warning"><div class="card-icon"><i class="fas fa-pause-circle"></i></div><div class="card-value">${suspensos}</div><div class="card-label">Suspensos</div></div>
-        <div class="card" style="border-left:4px solid #1A2A4A;"><div class="card-icon"><i class="fas fa-flag-checkered"></i></div><div class="card-value">${concluidos}</div><div class="card-label">Concluídos</div></div>
-    `;
+    const cards = document.getElementById('cardsDashboard');
+    if (cards) {
+        cards.innerHTML = `
+            <div class="card card-info"><div class="card-icon"><i class="fas fa-users"></i></div><div class="card-value">${total}</div><div class="card-label">Total de Jovens</div></div>
+            <div class="card card-success"><div class="card-icon"><i class="fas fa-check-circle"></i></div><div class="card-value">${ativos}</div><div class="card-label">Ativos</div><div class="card-sub">Em cumprimento</div></div>
+            <div class="card" style="border-left-color:#f59e0b;"><div class="card-icon"><i class="fas fa-clock" style="color:#f59e0b;"></i></div><div class="card-value">${irregulares}</div><div class="card-label">Irregulares</div><div class="card-sub">7+ dias sem comparecer</div></div>
+            <div class="card card-danger"><div class="card-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="card-value">${descumprimento}</div><div class="card-label">Descumprimento</div><div class="card-sub">14+ dias sem comparecer</div></div>
+            <div class="card card-warning"><div class="card-icon"><i class="fas fa-pause-circle"></i></div><div class="card-value">${suspensos}</div><div class="card-label">Suspensos</div></div>
+            <div class="card" style="border-left:4px solid #1A2A4A;"><div class="card-icon"><i class="fas fa-flag-checkered"></i></div><div class="card-value">${concluidos}</div><div class="card-label">Concluídos</div></div>
+        `;
+    }
     renderizarGraficos();
 }
 
@@ -2660,31 +2962,7 @@ function renderizarGraficos() {
 }
 
 // ============================================================
-// FUNÇÕES PARA ABAS MENSAIS
-// ============================================================
-function obterUltimoMesDisponivel() {
-    const meses = [
-        'JULHO2026', 'JUNHO2026', 'MAIO2026', 'ABRIL2026', 'MARÇO2026',
-        'FEVEREIRO2026', 'JANEIRO2026', 'DEZEMBRO2025', 'NOVEMBRO2025',
-        'OUTUBRO2025', 'SETEMBRO2025', 'AGOSTO2025', 'JULHO2025',
-        'JUNHO2025', 'MAIO2025', 'ABRIL2025', 'MARÇO2025',
-        'FEVEREIRO2025', 'JANEIRO2025'
-    ];
-    
-    if (estado.mesesDados && estado.mesesDados.length > 0) {
-        for (const mes of meses) {
-            const dados = estado.mesesDados.find(m => m.nome === mes);
-            if (dados) return dados;
-        }
-    }
-    
-    const agora = new Date();
-    const mesAtual = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
-    return { nome: mesAtual, dados: null };
-}
-
-// ============================================================
-// LISTA GERAL E FILTROS (COM STATUS RECALCULADO - CORRIGIDO)
+// LISTA GERAL E FILTROS - CORRIGIDA (USA STATUS DA PLANILHA)
 // ============================================================
 function carregarLista() {
     const tbody = document.getElementById('listaCorpo');
@@ -2697,122 +2975,42 @@ function carregarLista() {
     const fGenero = document.getElementById('filtroGenero')?.value;
     const fIdade = document.getElementById('filtroIdade')?.value;
 
-    const mesesDados = estado.mesesDados || [];
-    
-    console.log(`📅 Meses carregados: ${mesesDados.length}`);
-    if (mesesDados.length > 0) {
-        console.log(`📅 Último mês: ${mesesDados[0].nome}`);
-        console.log(`📅 Total de registros no último mês: ${mesesDados[0].dados?.length || 0}`);
-    }
-
-    const HORAS_POR_PRESENCA = 4;
-
+    // USA O STATUS DA PLANILHA - NÃO RECALCULA
     let lista = estado.jovens.map(j => {
-        const nome = j['NOME'] || '';
-        const medida = j['MEDIDA'] || '';
-        const horasAtribuidas = parseFloat(j['HORAS']) || 0;
-        const isLA = medida === 'LA' || medida === 'L.A' || medida.includes('LA');
-        const isLiberacao = medida === 'Liberação';
-        
-        let ultimaPresenca = null;
-        let diasSemPresenca = 999;
-        let horasCumpridas = 0;
-        let totalPresencas = 0;
-        
-        if (nome) {
-            const resultadoPresenca = verificarPresencaEmTodasAbas(nome, mesesDados);
-            ultimaPresenca = resultadoPresenca.ultimaData;
-            totalPresencas = resultadoPresenca.totalPresencas;
-            horasCumpridas = totalPresencas * HORAS_POR_PRESENCA;
-            
-            if (ultimaPresenca) {
-                const agora = new Date();
-                const diffTime = Math.abs(agora - ultimaPresenca);
-                diasSemPresenca = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                console.log(`✅ ${nome} - Última presença: ${ultimaPresenca.toLocaleDateString('pt-BR')} (${diasSemPresenca} dias) - ${totalPresencas} presenças`);
-            } else {
-                console.log(`⚠️ ${nome} - Nenhuma presença encontrada nas abas mensais`);
-                const hist = j.historicoFrequencia || [];
-                if (hist.length > 0) {
-                    const entradas = hist.filter(h => h.tipo === 'entrada' || h.tipo === 'presenca');
-                    if (entradas.length > 0) {
-                        const ultimaData = new Date(Math.max(...entradas.map(h => new Date(h.data).getTime())));
-                        ultimaPresenca = ultimaData;
-                        const agora = new Date();
-                        diasSemPresenca = Math.floor((agora - ultimaData) / (1000 * 60 * 60 * 24));
-                        console.log(`   📊 Usando histórico: última presença em ${ultimaData.toLocaleDateString('pt-BR')}`);
-                    }
-                }
-            }
-        }
-
-        const saldo = Math.max(0, horasAtribuidas - horasCumpridas);
-
-        let status = 'regular';
-        let motivoStatus = '';
+        let status = j.status || 'regular';
+        let motivoStatus = j.motivoSuspensao || '';
         let corStatus = '';
         
-        if (j.status === 'suspenso') {
-            status = 'suspenso';
-            motivoStatus = j.motivoSuspensao || 'Suspenso por decisão';
-            corStatus = 'background:#8b5cf6; color:white;';
-        }
-        else if (isLiberacao) {
-            status = 'liberado';
-            motivoStatus = 'Medida Liberada';
-            corStatus = 'background:#e5e7eb; color:#374151;';
-        }
-        else if (horasAtribuidas > 0 && !isLA && saldo <= 0) {
-            status = 'concluído';
-            motivoStatus = 'Medida Finalizada';
-            corStatus = 'background:#10b981; color:white;';
-        }
-        else if (isLA) {
-            status = j.status || 'regular';
-            motivoStatus = j.motivoSuspensao || 'LA - status manual';
-            if (status === 'suspenso') {
-                corStatus = 'background:#8b5cf6; color:white;';
-            } else if (status === 'concluído') {
-                corStatus = 'background:#10b981; color:white;';
-            } else {
-                corStatus = 'background:#d1fae5; color:#065f46;';
+        const statusDisplay = {
+            'regular': { cor: 'background:#d1fae5; color:#065f46;', label: 'Regular' },
+            'ativo': { cor: 'background:#d1fae5; color:#065f46;', label: 'Ativo' },
+            'irregular': { cor: 'background:#fef3c7; color:#92400e;', label: 'Irregular' },
+            'descumprimento': { cor: 'background:#fee2e2; color:#991b1b;', label: 'Descumprimento' },
+            'em descumprimento': { cor: 'background:#fee2e2; color:#991b1b;', label: 'Descumprimento' },
+            'suspenso': { cor: 'background:#fce7f3; color:#be185d;', label: 'Suspenso' },
+            'concluído': { cor: 'background:#d1fae5; color:#065f46;', label: 'Concluído' },
+            'finalizada': { cor: 'background:#d1fae5; color:#065f46;', label: 'Finalizada' },
+            'liberado': { cor: 'background:#e5e7eb; color:#374151;', label: 'Liberado' },
+            'medida finalizada': { cor: 'background:#d1fae5; color:#065f46;', label: 'Finalizada' }
+        };
+        
+        const statusKey = status.toLowerCase().trim();
+        const statusInfo = statusDisplay[statusKey] || { cor: 'background:#e5e7eb; color:#374151;', label: status };
+        corStatus = statusInfo.cor;
+        
+        const horasAtribuidas = parseFloat(j['HORAS']) || 0;
+        const horasCumpridas = (j.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
+        const saldo = Math.max(0, horasAtribuidas - horasCumpridas);
+        
+        let ultimaPresenca = null;
+        const hist = j.historicoFrequencia || [];
+        if (hist.length > 0) {
+            const entradas = hist.filter(h => h.tipo === 'entrada' || h.tipo === 'presenca');
+            if (entradas.length > 0) {
+                ultimaPresenca = new Date(Math.max(...entradas.map(h => new Date(h.data).getTime())));
             }
         }
-        else {
-            if (!isLA && !isLiberacao) {
-                if (diasSemPresenca >= 14 && diasSemPresenca !== 999) {
-                    status = 'descumprimento';
-                    motivoStatus = '14+ dias sem comparecer';
-                    corStatus = 'background:#ef4444; color:white;';
-                }
-                else if (diasSemPresenca >= 7 && diasSemPresenca < 14) {
-                    status = 'irregular';
-                    motivoStatus = '7+ dias sem comparecer';
-                    corStatus = 'background:#f59e0b; color:white;';
-                }
-                else if (diasSemPresenca < 7 && diasSemPresenca !== 999) {
-                    status = 'regular';
-                    motivoStatus = 'Regular';
-                    corStatus = 'background:#d1fae5; color:#065f46;';
-                }
-                else {
-                    if (horasAtribuidas > 0) {
-                        status = 'regular';
-                        motivoStatus = 'Aguardando início';
-                        corStatus = 'background:#d1fae5; color:#065f46;';
-                    } else {
-                        status = j.status || 'regular';
-                        motivoStatus = 'Status anterior';
-                        corStatus = 'background:#d1fae5; color:#065f46;';
-                    }
-                }
-            } else {
-                status = j.status || 'regular';
-                motivoStatus = 'Status manual';
-                corStatus = 'background:#d1fae5; color:#065f46;';
-            }
-        }
-
+        
         j._statusRender = status;
         j._motivoStatus = motivoStatus;
         j._corStatus = corStatus;
@@ -2820,12 +3018,12 @@ function carregarLista() {
         j._horasCumpridas = horasCumpridas;
         j._saldo = saldo;
         j._ultimaPresenca = ultimaPresenca;
-        j._diasSemPresenca = diasSemPresenca;
-        j._totalPresencas = totalPresencas;
+        j._statusLabel = statusInfo.label;
 
         return j;
     });
 
+    // APLICA FILTROS
     lista = lista.filter(j => {
         if (fNome && !(j['NOME'] || '').toLowerCase().includes(fNome) && !(j['ID_DIGITAL'] || '').includes(fNome)) return false;
         if (fMedida && j['MEDIDA'] !== fMedida) return false;
@@ -2835,12 +3033,12 @@ function carregarLista() {
                 'ativo': ['regular', 'ativo'],
                 'suspenso': ['suspenso'],
                 'descumprimento': ['descumprimento', 'em descumprimento'],
-                'concluído': ['concluído', 'medida finalizada', 'liberado'],
+                'concluído': ['concluído', 'finalizada', 'medida finalizada'],
                 'irregular': ['irregular'],
-                'liberado': ['liberado', 'concluído']
+                'liberado': ['liberado']
             };
             const statusPermitidos = statusMap[fStatus] || [];
-            if (!statusPermitidos.includes(j._statusRender)) return false;
+            if (!statusPermitidos.some(s => j._statusRender.toLowerCase().includes(s))) return false;
         }
         if (fSaldo === 'critico' && j._saldo <= 0 && j['MEDIDA'] !== 'LA') return false;
         if (fSaldo === 'zerado' && j._saldo > 0 && j['MEDIDA'] !== 'LA') return false;
@@ -2884,12 +3082,12 @@ function carregarLista() {
         }
 
         let botoesStatus = '';
-        if (podeAlterarStatus && j._statusRender !== 'concluído' && j['MEDIDA'] !== 'Liberação' && j['MEDIDA'] !== 'LA') {
+        if (podeAlterarStatus && j._statusRender !== 'concluído' && j['MEDIDA'] !== 'Liberação') {
             const opcoes = ['regular', 'suspenso', 'descumprimento', 'concluído'];
             botoesStatus = `
                 <select onchange="alterarStatusManual('${j.id}', this.value)" style="padding:2px 6px; font-size:0.7rem; border:1px solid #d1d9e6; border-radius:4px; background:white;">
                     <option value="">Status</option>
-                    ${opcoes.map(s => `<option value="${s}" ${j._statusRender === s ? 'selected' : ''}>${s.toUpperCase()}</option>`).join('')}
+                    ${opcoes.map(s => `<option value="${s}" ${j._statusRender.toLowerCase() === s ? 'selected' : ''}>${s.toUpperCase()}</option>`).join('')}
                 </select>
             `;
         }
@@ -2909,24 +3107,20 @@ function carregarLista() {
         }
 
         const isSelecionado = estado.selecionadosLote.has(j.id);
-        let ultimoFormatado = 'Nunca';
-        if (j._ultimaPresenca) {
-            ultimoFormatado = j._ultimaPresenca.toLocaleDateString('pt-BR');
-            if (j._ultimaPresenca.getHours() > 0 || j._ultimaPresenca.getMinutes() > 0) {
-                ultimoFormatado += ' ' + j._ultimaPresenca.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-            }
-        }
 
         const statusDisplay = {
             'regular': 'Regular',
+            'ativo': 'Ativo',
             'suspenso': 'Suspenso',
             'descumprimento': 'Descumprimento',
+            'em descumprimento': 'Descumprimento',
             'concluído': 'Concluído',
+            'finalizada': 'Finalizada',
             'irregular': 'Irregular',
-            'liberado': 'Liberado'
+            'liberado': 'Liberado',
+            'medida finalizada': 'Finalizada'
         };
-
-        const presencasInfo = j._totalPresencas ? ` (${j._totalPresencas} presenças)` : '';
+        const statusLabel = statusDisplay[j._statusRender.toLowerCase()] || j._statusRender;
 
         return `<tr>
             <td><input type="checkbox" data-id="${j.id}" ${isSelecionado ? 'checked' : ''} onchange="toggleSelecionarJovem('${j.id}')"></td>
@@ -2936,9 +3130,9 @@ function carregarLista() {
             <td>${j['MEDIDA'] || '-'}</td>
             <td><strong>${j._horasAtribuidas}h</strong></td>
             <td>${renderSaldo}</td>
-            <td><span style="font-weight:600; padding:4px 12px; border-radius:20px; ${j._corStatus}">${(statusDisplay[j._statusRender] || j._statusRender).toUpperCase()}</span></td>
-            <td>${j._motivoStatus || ''}${presencasInfo}</td>
-            <td>${ultimoFormatado}</td>
+            <td><span style="font-weight:600; padding:4px 12px; border-radius:20px; ${j._corStatus}">${statusLabel.toUpperCase()}</span></td>
+            <td>${j._motivoStatus || ''}</td>
+            <td>${ultimo}</td>
             <td style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
                 ${botaoPonto}
                 <button onclick="editarJovem('${j.id}')" class="btn-sm btn-sm-primary"><i class="fas fa-edit"></i></button>
@@ -2955,7 +3149,7 @@ function carregarLista() {
 }
 
 // ============================================================
-// EXPORTAR EXCEL (CORRIGIDO - INCLUI TODOS OS JOVENS)
+// EXPORTAR EXCEL - CORRIGIDA (NÃO FILTRA JOVENS VÁLIDOS)
 // ============================================================
 function exportarExcel() {
     const palavrasIgnorar = [
@@ -2967,41 +3161,42 @@ function exportarExcel() {
         'TER', 'QUIN', 'SÁB', 'REFERENCIA', 'NOME', 'MEDIDA', 'MESES', 'HORAS',
         'NASC', 'LEGENDA', 'STATUS', 'SITUAÇÃO',
         'AGUARDANDO DOCUMENTOS DE ENCERRAMENTO',
-        'ACOLHIMENTO', 'CÓDIGOS', 'RENDA TOTAL', 'BENEFÍCIO'
+        'ACOLHIMENTO', 'CÓDIGOS', 'RENDA TOTAL', 'BENEFÍCIO',
+        'P - PRESENÇA', 'A - AUSENCIA', 'J - JUSTIFICADO',
+        'TERÇA', 'QUINTA', 'SÁBADO', 'LEGENDA'
     ];
 
     const jovensValidos = estado.jovens.filter(j => {
         const nome = (j['NOME'] || '').trim();
         const medida = (j['MEDIDA'] || '').trim();
-        const referencia = (j['REFERENCIA'] || '').trim();
-        const status = j._statusRender || j.status || '';
         
-        const nomeUpper = nome.toUpperCase();
-        if (palavrasIgnorar.some(p => nomeUpper.includes(p))) return false;
         if (!nome || nome.length < 2) return false;
+        
+        const nomeUpper = nome.toUpperCase().trim();
+        if (palavrasIgnorar.some(p => nomeUpper.includes(p))) return false;
+        
         const apenasNumeros = /^\d+$/.test(nome.replace(/[.,\s-]/g, ''));
         if (apenasNumeros && nome.length > 3) return false;
         
+        if (/^\d{2}\/\d{2}\/\d{4}/.test(nome)) return false;
+        
         const medidasValidas = ['PSC', 'LA', 'L.A', 'INTERNAÇÃO', 'LIBERAÇÃO', 'PSC/LA', 'LA/PSC', 'A.T', 'AT'];
         const temMedida = medidasValidas.some(m => medida.toUpperCase().includes(m));
-        const temReferencia = referencia && referencia.length >= 2 && !palavrasIgnorar.some(p => referencia.toUpperCase().includes(p));
-        const statusValidos = ['ativo', 'regular', 'descumprimento', 'irregular', 'suspenso', 'concluído', 'liberado', 'finalizada'];
+        
+        const statusValidos = ['ativo', 'regular', 'descumprimento', 'em descumprimento', 
+                               'irregular', 'suspenso', 'concluído', 'finalizada', 'liberado'];
+        const status = j._statusRender || j.status || '';
         const temStatus = statusValidos.some(s => status.toLowerCase().includes(s));
         
-        return (temMedida || temReferencia) && temStatus;
+        const referencia = (j['REFERENCIA'] || '').trim();
+        const temReferencia = referencia && referencia.length >= 2;
+        
+        return temMedida || temReferencia || temStatus;
     });
 
     console.log(`📊 Total de jovens no sistema: ${estado.jovens.length}`);
     console.log(`📊 Jovens válidos para exportação: ${jovensValidos.length}`);
     console.log(`📊 Jovens excluídos: ${estado.jovens.length - jovensValidos.length}`);
-    
-    const excluidos = estado.jovens.filter(j => !jovensValidos.includes(j));
-    if (excluidos.length > 0 && excluidos.length < 20) {
-        console.log('🚫 Jovens excluídos:');
-        excluidos.forEach(j => {
-            console.log(`   - ${j['NOME']} | Medida: ${j['MEDIDA']} | Status: ${j._statusRender || j.status}`);
-        });
-    }
 
     if (jovensValidos.length === 0) {
         alert('⚠️ Não há dados válidos para exportar. Verifique se os jovens têm NOME e MEDIDA preenchidos.');
@@ -3028,9 +3223,6 @@ function exportarExcel() {
         row['HORAS_ATRIBUIDAS'] = j._horasAtribuidas || parseFloat(j['HORAS']) || 0;
         row['HORAS_CUMPRIDAS'] = j._horasCumpridas || 0;
         row['SALDO'] = j._saldo || 0;
-        row['DIAS_SEM_PRESENCA'] = j._diasSemPresenca || 0;
-        row['TOTAL_PRESENCAS'] = j._totalPresencas || 0;
-        row['ULTIMA_PRESENCA'] = j._ultimaPresenca ? j._ultimaPresenca.toISOString().split('T')[0] : '';
         
         if (j['ID_DIGITAL']) {
             row['ID_DIGITAL'] = j['ID_DIGITAL'];
@@ -3060,7 +3252,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA (CORRIGIDO - INCLUI TODOS OS JOVENS)
+// IMPORTAR PLANILHA - CORRIGIDA (NÃO IMPORTA LEGENDAS)
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -3079,54 +3271,8 @@ async function importarPlanilha() {
             const data = await file.arrayBuffer();
             const wb = XLSX.read(data, { cellStyles: true });
             
-            processarAbasMensais(wb);
-            
             const ws = wb.Sheets['GERAL'] || wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: '' });
-
-            const colMap = {};
-            const headers = Object.keys(rows[0] || {});
-            
-            console.log(`🔍 Colunas encontradas: ${headers.join(', ')}`);
-            
-            const camposMapeamento = {
-                'NOME': ['NOME', 'NOMES', 'NOME COMPLETO', 'NOM'],
-                'REFERENCIA': ['REFERENCIA', 'REFERÊNCIA', 'REF'],
-                'MEDIDA': ['MEDIDA', 'MEDIDAS'],
-                'HORAS': ['HORAS', 'HORA'],
-                'CPF': ['CPF'],
-                'NASC.': ['NASC.', 'NASCIMENTO', 'DATA NASC'],
-                'IDADE': ['IDADE', 'IDADES'],
-                'GÊNERO': ['GÊNERO', 'GENERO', 'SEXO'],
-                'TELEFONE': ['TELEFONE', 'FONE', 'CONTATO'],
-                'ENDEREÇO': ['ENDEREÇO', 'ENDERECO', 'RUA', 'AVENIDA'],
-                'BAIRRO': ['BAIRRO'],
-                'STATUS': ['STATUS', 'SITUAÇÃO', 'SITUACAO']
-            };
-            
-            for (const [campo, possibilidades] of Object.entries(camposMapeamento)) {
-                for (const h of headers) {
-                    const hUpper = h.toUpperCase().trim();
-                    if (possibilidades.some(p => hUpper.includes(p.toUpperCase()) || p.toUpperCase().includes(hUpper))) {
-                        colMap[campo] = h;
-                        break;
-                    }
-                }
-            }
-            
-            if (!colMap['NOME']) {
-                for (const h of headers) {
-                    const val = String(rows[0][h] || '').trim();
-                    if (val && val.length > 2 && !/^\d+$/.test(val)) {
-                        colMap['NOME'] = h;
-                        break;
-                    }
-                }
-            }
-            
-            console.log(`✅ Colunas mapeadas:`, colMap);
-
-            let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
 
             const palavrasIgnorar = [
                 'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
@@ -3135,18 +3281,60 @@ async function importarPlanilha() {
                 'PACTUAÇÃO PIA', 'TOTAL', 'SUBTOTAL', 'MESES CORRIDOS', 'CUMPRIDAS',
                 'PENDENTE', 'IMM', 'VALE TRANSPORTE', 'PIA', 'MSE',
                 'TER', 'QUIN', 'SÁB', 'REFERENCIA', 'NOME', 'MEDIDA', 'MESES', 'HORAS',
-                'AGUARDANDO DOCUMENTOS DE ENCERRAMENTO'
+                'AGUARDANDO DOCUMENTOS DE ENCERRAMENTO',
+                'P - PRESENÇA', 'A - AUSENCIA', 'J - JUSTIFICADO',
+                'LEGENDA', 'CÓDIGOS', 'RENDA', 'BENEFÍCIO'
             ];
+
+            const statusMap = {
+                'REGULAR': 'regular',
+                'ATIVO': 'regular',
+                'IRREGULAR': 'irregular',
+                'DESCUMPRIMENTO': 'descumprimento',
+                'EM DESCUMPRIMENTO': 'descumprimento',
+                'SUSPENSO': 'suspenso',
+                'FINALIZADA': 'concluído',
+                'MEDIDA FINALIZADA': 'concluído',
+                'CONCLUÍDO': 'concluído',
+                'CONCLUIDO': 'concluído',
+                'LIBERADO': 'liberado',
+                'PEDIR EXT.': 'concluído',
+                'EXT. ANDAMENTO': 'regular',
+                'AGUARDANDO': 'regular'
+            };
+
+            let colNome = null;
+            const headers = Object.keys(rows[0] || {});
+            
+            for (const h of headers) {
+                const hUpper = h.toUpperCase().trim();
+                if (hUpper === 'NOME' || hUpper === 'NOMES' || hUpper === 'NOME COMPLETO' || hUpper.includes('NOME')) {
+                    colNome = h;
+                    break;
+                }
+            }
+            
+            if (!colNome) {
+                for (const h of headers) {
+                    const hUpper = h.toUpperCase().trim();
+                    if (hUpper.includes('NOME') || hUpper.includes('NOM')) {
+                        colNome = h;
+                        break;
+                    }
+                }
+            }
+            
+            console.log(`🔍 Coluna de NOME detectada: "${colNome}"`);
+
+            let importados = 0, atualizados = 0, erros = 0, ignorados = 0;
 
             for (const row of rows) {
                 try {
                     let nome = '';
                     
-                    if (colMap['NOME'] && row[colMap['NOME']] !== undefined && row[colMap['NOME']] !== '') {
-                        nome = String(row[colMap['NOME']] || '').trim();
-                    }
-                    
-                    if (!nome || nome === 'undefined' || nome === '') {
+                    if (colNome && row[colNome] !== undefined && row[colNome] !== '') {
+                        nome = String(row[colNome] || '').trim();
+                    } else {
                         for (const h of headers) {
                             const val = String(row[h] || '').trim();
                             if (val && val.length > 2) {
@@ -3161,13 +3349,13 @@ async function importarPlanilha() {
                         }
                     }
 
-                    if (!nome || nome === 'undefined' || nome === '') {
-                        ignorados++;
-                        continue;
-                    }
-
                     const nomeUpper = nome.toUpperCase().trim();
                     let deveIgnorar = false;
+                    
+                    if (!nome || nome.length < 3) {
+                        deveIgnorar = true;
+                    }
+                    
                     for (const palavra of palavrasIgnorar) {
                         if (nomeUpper.includes(palavra)) {
                             deveIgnorar = true;
@@ -3175,9 +3363,47 @@ async function importarPlanilha() {
                         }
                     }
                     
+                    if (/^\d+$/.test(nome.replace(/[.,\s-]/g, '')) && nome.length > 3) {
+                        deveIgnorar = true;
+                    }
+                    
+                    if (/^\d{2}\/\d{2}\/\d{4}/.test(nome)) {
+                        deveIgnorar = true;
+                    }
+                    
                     if (deveIgnorar) {
                         ignorados++;
                         continue;
+                    }
+
+                    let statusImportado = null;
+                    let colStatus = null;
+                    for (const h of headers) {
+                        const hUpper = h.toUpperCase().trim();
+                        if (hUpper === 'STATUS' || hUpper === 'SITUAÇÃO' || hUpper === 'SITUACAO') {
+                            colStatus = h;
+                            break;
+                        }
+                    }
+                    
+                    if (colStatus && row[colStatus] !== undefined && row[colStatus] !== '') {
+                        const statusRaw = String(row[colStatus]).toUpperCase().trim();
+                        for (const [key, value] of Object.entries(statusMap)) {
+                            if (statusRaw.includes(key) || key.includes(statusRaw)) {
+                                statusImportado = value;
+                                break;
+                            }
+                        }
+                        if (!statusImportado) {
+                            const validStatus = ['regular', 'suspenso', 'descumprimento', 'concluído', 'irregular', 'liberado'];
+                            if (validStatus.includes(statusRaw.toLowerCase())) {
+                                statusImportado = statusRaw.toLowerCase();
+                            }
+                        }
+                    }
+                    
+                    if (!statusImportado) {
+                        statusImportado = 'regular';
                     }
 
                     let jovemExistente = null;
@@ -3186,88 +3412,46 @@ async function importarPlanilha() {
                     jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nomeExato);
                     
                     if (!jovemExistente) {
-                        const cpfPlanilha = String(row[colMap['CPF']] || row['CPF'] || '').replace(/\D/g, '');
-                        if (cpfPlanilha && cpfPlanilha.length >= 11) {
-                            jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
-                        }
-                    }
-                    
-                    if (!jovemExistente && nome.length > 3) {
-                        jovemExistente = estado.jovens.find(j => {
-                            const jNome = (j['NOME'] || '').toUpperCase().trim();
-                            return jNome === nomeExato || 
-                                   jNome.includes(nomeExato) || 
-                                   nomeExato.includes(jNome) ||
-                                   (nomeExato.length > 5 && jNome.length > 5 && 
-                                    (nomeExato.includes(jNome.substring(0, 5)) || 
-                                     jNome.includes(nomeExato.substring(0, 5))));
-                        });
-                    }
-
-                    let statusImportado = null;
-                    if (colMap['STATUS'] && row[colMap['STATUS']]) {
-                        const statusRaw = String(row[colMap['STATUS']]).toUpperCase().trim();
-                        const statusMap = {
-                            'REGULAR': 'regular',
-                            'ATIVO': 'regular',
-                            'IRREGULAR': 'irregular',
-                            'DESCUMPRIMENTO': 'descumprimento',
-                            'EM DESCUMPRIMENTO': 'descumprimento',
-                            'SUSPENSO': 'suspenso',
-                            'FINALIZADA': 'concluído',
-                            'MEDIDA FINALIZADA': 'concluído',
-                            'CONCLUÍDO': 'concluído',
-                            'CONCLUIDO': 'concluído',
-                            'LIBERADO': 'liberado',
-                            'PEDIR EXT.': 'concluído',
-                            'EXT. ANDAMENTO': 'regular'
-                        };
-                        
-                        for (const [key, value] of Object.entries(statusMap)) {
-                            if (statusRaw.includes(key) || key.includes(statusRaw)) {
-                                statusImportado = value;
+                        let cpfCol = null;
+                        for (const h of headers) {
+                            if (h.toUpperCase().trim() === 'CPF') {
+                                cpfCol = h;
                                 break;
                             }
                         }
-                        
-                        if (!statusImportado) {
-                            const validStatus = ['regular', 'suspenso', 'descumprimento', 'concluído', 'irregular', 'liberado'];
-                            if (validStatus.includes(statusRaw.toLowerCase())) {
-                                statusImportado = statusRaw.toLowerCase();
+                        if (cpfCol && row[cpfCol]) {
+                            const cpf = String(row[cpfCol]).replace(/\D/g, '');
+                            if (cpf.length >= 11) {
+                                jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpf);
                             }
                         }
-                    }
-
-                    if (!statusImportado) {
-                        statusImportado = 'regular';
                     }
 
                     if (jovemExistente) {
                         const jovemId = jovemExistente.id;
-                        const historicoFrequencia = jovemExistente.historicoFrequencia || [];
-                        const observacoes = jovemExistente.observacoes || [];
-                        const documentos = jovemExistente.documentos || [];
-                        const acoesLA = jovemExistente.acoesLA || [];
-                        const profissionalLA = jovemExistente.profissionalLA || '';
-
                         const jovemAtualizado = {
                             id: jovemId,
-                            profissionalLA: profissionalLA,
-                            historicoFrequencia: historicoFrequencia,
-                            observacoes: observacoes,
-                            documentos: documentos,
-                            acoesLA: acoesLA,
-                            status: statusImportado
+                            status: statusImportado,
+                            historicoFrequencia: jovemExistente.historicoFrequencia || [],
+                            observacoes: jovemExistente.observacoes || [],
+                            documentos: jovemExistente.documentos || [],
+                            acoesLA: jovemExistente.acoesLA || [],
+                            profissionalLA: jovemExistente.profissionalLA || ''
                         };
                         
-                        CAMPOS.forEach(([key]) => {
-                            const colName = colMap[key];
+                        for (const [key] of CAMPOS) {
                             let valor = '';
-                            
-                            if (colName && row[colName] !== undefined && row[colName] !== '') {
-                                valor = String(row[colName] || '').trim();
-                            } else if (row[key] !== undefined && row[key] !== '') {
-                                valor = String(row[key] || '').trim();
+                            let colEncontrada = null;
+                            for (const h of headers) {
+                                const hUpper = h.toUpperCase().trim();
+                                const keyUpper = key.toUpperCase().trim();
+                                if (hUpper === keyUpper || hUpper.includes(keyUpper) || keyUpper.includes(hUpper)) {
+                                    colEncontrada = h;
+                                    break;
+                                }
+                            }
+                            if (colEncontrada && row[colEncontrada] !== undefined && row[colEncontrada] !== '') {
+                                valor = String(row[colEncontrada] || '').trim();
                             } else if (jovemExistente[key] !== undefined && jovemExistente[key] !== '') {
                                 valor = jovemExistente[key];
                             }
@@ -3285,11 +3469,11 @@ async function importarPlanilha() {
                             }
                             
                             jovemAtualizado[key] = valor;
-                        });
+                        }
                         
-                        jovemAtualizado['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || jovemExistente['ID_DIGITAL'] || '').trim();
-                        jovemAtualizado['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || jovemExistente['REFERENCIA'] || '').trim();
-                        if (nome) jovemAtualizado['NOME'] = nome;
+                        jovemAtualizado['ID_DIGITAL'] = '';
+                        jovemAtualizado['REFERENCIA'] = '';
+                        jovemAtualizado['NOME'] = nome;
 
                         await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
                         const index = estado.jovens.findIndex(j => j.id === jovemId);
@@ -3302,21 +3486,26 @@ async function importarPlanilha() {
                         const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                         const novoJovem = {
                             id: novoId,
-                            status: statusImportado || 'regular',
+                            status: statusImportado,
                             historicoFrequencia: [],
                             observacoes: [],
                             documentos: [],
                             acoesLA: []
                         };
                         
-                        CAMPOS.forEach(([key]) => {
-                            const colName = colMap[key];
+                        for (const [key] of CAMPOS) {
                             let valor = '';
-                            
-                            if (colName && row[colName] !== undefined && row[colName] !== '') {
-                                valor = String(row[colName] || '').trim();
-                            } else if (row[key] !== undefined && row[key] !== '') {
-                                valor = String(row[key] || '').trim();
+                            let colEncontrada = null;
+                            for (const h of headers) {
+                                const hUpper = h.toUpperCase().trim();
+                                const keyUpper = key.toUpperCase().trim();
+                                if (hUpper === keyUpper || hUpper.includes(keyUpper) || keyUpper.includes(hUpper)) {
+                                    colEncontrada = h;
+                                    break;
+                                }
+                            }
+                            if (colEncontrada && row[colEncontrada] !== undefined && row[colEncontrada] !== '') {
+                                valor = String(row[colEncontrada] || '').trim();
                             }
                             
                             if (key === 'GÊNERO' && valor) {
@@ -3332,10 +3521,10 @@ async function importarPlanilha() {
                             }
                             
                             novoJovem[key] = valor;
-                        });
+                        }
                         
-                        novoJovem['ID_DIGITAL'] = String(row[colMap['ID_DIGITAL']] || row['ID DIGITAL'] || '').trim();
-                        novoJovem['REFERENCIA'] = String(row[colMap['REFERENCIA']] || row['REFERENCIA'] || '').trim();
+                        novoJovem['ID_DIGITAL'] = '';
+                        novoJovem['REFERENCIA'] = '';
                         novoJovem['NOME'] = nome;
 
                         if (novoJovem['NOME']) {
@@ -3355,12 +3544,11 @@ async function importarPlanilha() {
             }
             
             await carregarTodosDados();
-            await verificarDescumprimentoAutomatico();
             
             let mensagem = `✅ Importação concluída!`;
             if (importados > 0) mensagem += ` ${importados} novos adicionados.`;
             if (atualizados > 0) mensagem += ` ${atualizados} atualizados.`;
-            if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas.`;
+            if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas (legendas).`;
             if (erros > 0) mensagem += ` ⚠️ ${erros} erros.`;
             
             statusDiv.style.background = '#d1fae5';
@@ -3382,116 +3570,17 @@ async function importarPlanilha() {
 }
 
 // ============================================================
-// PROCESSAR ABAS MENSAIS (CORRIGIDO)
+// VERIFICAR DESCUMPRIMENTO AUTOMÁTICO - DESATIVADO
 // ============================================================
-function processarAbasMensais(wb) {
-    const mesesDados = [];
-    const mesesNomes = [
-        'JULHO2026', 'JUNHO2026', 'MAIO2026', 'ABRIL2026', 'MARÇO2026',
-        'FEVEREIRO2026', 'JANEIRO2026', 'DEZEMBRO2025', 'NOVEMBRO2025',
-        'OUTUBRO2025', 'SETEMBRO2025', 'AGOSTO2025', 'JULHO2025',
-        'JUNHO2025', 'MAIO2025', 'ABRIL2025', 'MARÇO2025',
-        'FEVEREIRO2025', 'JANEIRO2025'
-    ];
-
-    for (const nomeMes of mesesNomes) {
-        const sheet = wb.Sheets[nomeMes];
-        if (!sheet) continue;
-
-        const dados = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
-        if (!dados || dados.length === 0) continue;
-
-        const cabecalhos = {};
-        const primeiraLinha = dados[0] || {};
-        const colunas = Object.keys(primeiraLinha);
-        
-        for (const col of colunas) {
-            const valor = String(primeiraLinha[col] || '').trim();
-            const data = new Date(valor);
-            if (!isNaN(data.getTime())) {
-                cabecalhos[col] = valor;
-            }
-        }
-
-        const temPresencas = dados.some(row => {
-            const colunas = Object.keys(row);
-            return colunas.some(col => {
-                const valor = String(row[col] || '').trim().toUpperCase();
-                return valor === 'P' || valor === 'PRESENÇA' || valor === 'PRESENCA';
-            });
-        });
-
-        if (temPresencas || dados.length > 5) {
-            mesesDados.push({
-                nome: nomeMes,
-                dados: dados,
-                cabecalhos: cabecalhos
-            });
-            console.log(`📅 Aba ${nomeMes} carregada: ${dados.length} registros`);
-        }
-    }
-
-    estado.mesesDados = mesesDados;
-    console.log(`📅 Total de abas mensais carregadas: ${mesesDados.length}`);
-    return mesesDados;
+async function verificarDescumprimentoAutomatico() {
+    // FUNÇÃO DESATIVADA - NÃO RECALCULA STATUS AUTOMATICAMENTE
+    console.log('ℹ️ Verificação automática de descumprimento DESATIVADA.');
+    return;
 }
 
 // ============================================================
-// CORRIGIR SALDO MANUALMENTE
+// DEMAIS FUNÇÕES (mantidas do original)
 // ============================================================
-window.corrigirSaldoManual = async function(jovemId) {
-    const jovem = estado.jovens.find(j => j.id === jovemId);
-    if (!jovem) {
-        alert('Jovem não encontrado.');
-        return;
-    }
-    
-    const horasAtribuidas = parseFloat(jovem['HORAS']) || 0;
-    const horasCumpridasAtual = jovem._horasCumpridas || 0;
-    const saldoAtual = jovem._saldo || 0;
-    
-    const novoSaldo = prompt(
-        `Corrigir Saldo de Horas\n\n` +
-        `Jovem: ${jovem['NOME']}\n` +
-        `Horas Atribuídas: ${horasAtribuidas}h\n` +
-        `Horas Cumpridas atual: ${horasCumpridasAtual.toFixed(1)}h\n` +
-        `Saldo atual: ${saldoAtual.toFixed(1)}h\n\n` +
-        `Digite o NOVO SALDO (horas restantes):`,
-        saldoAtual.toFixed(1)
-    );
-    
-    if (novoSaldo === null) return;
-    const novoSaldoNum = parseFloat(novoSaldo.replace(',', '.'));
-    if (isNaN(novoSaldoNum) || novoSaldoNum < 0) {
-        alert('Digite um número válido (0 ou maior).');
-        return;
-    }
-    
-    const novasHorasCumpridas = Math.max(0, horasAtribuidas - novoSaldoNum);
-    
-    if (!confirm(`Confirmar alteração?\n\nNovo Saldo: ${novoSaldoNum.toFixed(1)}h\nNovas Horas Cumpridas: ${novasHorasCumpridas.toFixed(1)}h`)) {
-        return;
-    }
-    
-    try {
-        jovem._horasCumpridas = novasHorasCumpridas;
-        jovem._saldo = novoSaldoNum;
-        
-        if (!jovem.observacoes) jovem.observacoes = [];
-        jovem.observacoes.push({
-            data: new Date().toISOString(),
-            profissional: estado.usuarioAtual?.nome || 'Sistema',
-            texto: `📊 Saldo corrigido manualmente: ${saldoAtual.toFixed(1)}h → ${novoSaldoNum.toFixed(1)}h (Horas cumpridas: ${horasCumpridasAtual.toFixed(1)}h → ${novasHorasCumpridas.toFixed(1)}h)`
-        });
-        
-        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-        await carregarTodosDados();
-        alert('✅ Saldo corrigido com sucesso!');
-    } catch (err) {
-        alert('Erro ao corrigir saldo: ' + err.message);
-    }
-};
-
 function atualizarContadorLista(total) {
     let contadorContainer = document.getElementById('contadorContainer');
     if (!contadorContainer) {
@@ -3537,9 +3626,6 @@ function atualizarContadorLista(total) {
     }
 }
 
-// ============================================================
-// FUNÇÕES AUXILIARES
-// ============================================================
 function parseNum(val) {
     if (!val) return 0;
     const n = parseFloat(String(val).replace(',', '.'));
@@ -3554,7 +3640,255 @@ function calcularSaldo(jovem) {
 }
 
 // ============================================================
-// STATUS - ALTERAÇÃO MANUAL
+// FUNÇÕES DE FORMULÁRIO E CADASTRO
+// ============================================================
+function renderizarCamposFormulario() {
+    const grid = document.getElementById('camposGrid');
+    if (!grid || grid.innerHTML !== "") return;
+
+    grid.innerHTML = CAMPOS.map(([key, label, type, options]) => {
+        if (type === 'select' && options) {
+            return `<div class="campo"><label>${label}</label><select id="campo_${key}" onchange="if(this.id==='campo_MEDIDA') toggleAcoesLA()">${options.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
+        }
+        return `<div class="campo"><label>${label}</label><input type="${type}" id="campo_${key}"></div>`;
+    }).join('');
+
+    const containerAcoes = document.getElementById('containerAcoesLA');
+    if (containerAcoes) {
+        containerAcoes.style.display = 'none';
+    }
+}
+
+window.toggleAcoesLA = function() {
+    const medida = document.getElementById('campo_MEDIDA')?.value;
+    const container = document.getElementById('containerAcoesLA');
+    if (container) {
+        container.style.display = medida === 'LA' ? 'block' : 'none';
+    }
+}
+
+window.adicionarAcaoLAForm = function() {
+    const input = document.getElementById('novaAcaoLAInput');
+    const prazoInput = document.getElementById('novaAcaoPrazoInput');
+    if (input.value.trim() === '') return alert('Descreva a ação.');
+    if (!prazoInput.value) return alert('Defina a data de vencimento.');
+    estado.acoesLATemporarias.push({
+        id: Date.now(),
+        texto: input.value.trim(),
+        realizado: false,
+        data: new Date().toISOString(),
+        prazo: prazoInput.value
+    });
+    input.value = '';
+    prazoInput.value = '';
+    atualizarListaAcoesLAForm();
+};
+
+window.atualizarListaAcoesLAForm = function() {
+    const ul = document.getElementById('listaAcoesLAForm');
+    if (!ul) return;
+    ul.innerHTML = estado.acoesLATemporarias.map(a => `<li style="margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding:4px 0;">
+        <span>${a.texto} <span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span></span>
+        <span style="color:red; cursor:pointer; font-weight:bold; margin-left:10px;" onclick="removerAcaoLAForm(${a.id})">✕</span>
+    </li>`).join('');
+};
+
+window.removerAcaoLAForm = function(id) {
+    estado.acoesLATemporarias = estado.acoesLATemporarias.filter(a => a.id !== id);
+    atualizarListaAcoesLAForm();
+};
+
+async function salvarJovem() {
+    const nome = document.getElementById('campo_NOME')?.value.trim();
+    if (!nome) return alert('Preencha pelo menos o nome.');
+
+    const jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase() === nome.toUpperCase() && j.id !== window._editarId);
+    const jovem = {
+        id: window._editarId || (jovemExistente ? jovemExistente.id : 'j_' + Date.now()),
+        status: window._editarId ? estado.jovens.find(j => j.id === window._editarId)?.status : 'ativo'
+    };
+
+    CAMPOS.forEach(([key]) => {
+        const el = document.getElementById(`campo_${key}`);
+        if (el) jovem[key] = el.value.trim();
+    });
+    jovem['ID_DIGITAL'] = document.getElementById('campo_ID_DIGITAL')?.value.trim() || '';
+
+    if (!jovem.historicoFrequencia) jovem.historicoFrequencia = [];
+    if (!jovem.observacoes) jovem.observacoes = [];
+    if (!jovem.documentos) jovem.documentos = [];
+
+    if (jovem['MEDIDA'] === 'LA') {
+        jovem.acoesLA = [...estado.acoesLATemporarias];
+    }
+
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        if (!window._editarId && !jovemExistente) await upstash('SADD', 'jovens:all', jovem.id);
+        estado.jovens = estado.jovens.filter(j => j.id !== jovem.id);
+        estado.jovens.push(jovem);
+
+        atualizarInterfaceCompleta();
+        limparFormulario();
+        alert('Jovem salvo com sucesso!');
+    } catch (err) {
+        alert('Erro ao salvar: ' + err.message);
+    }
+}
+
+function limparFormulario() {
+    CAMPOS.forEach(([key]) => {
+        const el = document.getElementById(`campo_${key}`);
+        if (el) el.value = '';
+    });
+    if (document.getElementById('campo_ID_DIGITAL')) document.getElementById('campo_ID_DIGITAL').value = '';
+    estado.acoesLATemporarias = [];
+    atualizarListaAcoesLAForm();
+    toggleAcoesLA();
+    window._editarId = null;
+}
+
+// ============================================================
+// SELEÇÃO EM LOTE
+// ============================================================
+function toggleSelecionarTodos() {
+    const checkboxes = document.querySelectorAll('#listaCorpo input[type="checkbox"]');
+    const selecionarTodos = document.getElementById('selecionarTodos');
+    checkboxes.forEach(cb => {
+        cb.checked = selecionarTodos.checked;
+        if (selecionarTodos.checked) {
+            estado.selecionadosLote.add(cb.dataset.id);
+        } else {
+            estado.selecionadosLote.delete(cb.dataset.id);
+        }
+    });
+    atualizarBarraSelecao();
+}
+
+function toggleSelecionarJovem(id) {
+    const cb = document.querySelector(`#listaCorpo input[data-id="${id}"]`);
+    if (!cb) return;
+    if (cb.checked) {
+        estado.selecionadosLote.add(id);
+    } else {
+        estado.selecionadosLote.delete(id);
+    }
+    atualizarBarraSelecao();
+}
+
+function atualizarBarraSelecao() {
+    const barra = document.getElementById('barraSelecaoLote');
+    const contador = document.getElementById('contadorSelecionados');
+    const btnAcoes = document.getElementById('btnAcoesLote');
+    const total = estado.selecionadosLote.size;
+
+    if (total > 0) {
+        barra.style.display = 'flex';
+        btnAcoes.style.display = 'inline-flex';
+        contador.textContent = total;
+    } else {
+        barra.style.display = 'none';
+        btnAcoes.style.display = 'none';
+    }
+}
+
+function desmarcarTodos() {
+    estado.selecionadosLote.clear();
+    document.querySelectorAll('#listaCorpo input[type="checkbox"]').forEach(cb => cb.checked = false);
+    document.getElementById('selecionarTodos').checked = false;
+    atualizarBarraSelecao();
+}
+
+function abrirModalAcoesLote() {
+    if (estado.selecionadosLote.size === 0) {
+        alert('Selecione pelo menos um jovem.');
+        return;
+    }
+    document.getElementById('loteContadorSelecionados').textContent = estado.selecionadosLote.size;
+    document.getElementById('loteAcaoSelect').value = '';
+    document.getElementById('loteOpcoesStatus').style.display = 'none';
+    document.getElementById('loteMotivoSuspensao').style.display = 'none';
+    document.getElementById('modalAcoesLote').style.display = 'flex';
+}
+
+function fecharModalAcoesLote() {
+    document.getElementById('modalAcoesLote').style.display = 'none';
+}
+
+async function executarAcaoLote() {
+    const acao = document.getElementById('loteAcaoSelect').value;
+    if (!acao) return alert('Selecione uma ação.');
+
+    const ids = Array.from(estado.selecionadosLote);
+    const jovens = estado.jovens.filter(j => ids.includes(j.id));
+
+    if (acao === 'excluir') {
+        if (!confirm(`Tem certeza que deseja excluir PERMANENTEMENTE ${jovens.length} jovens?`)) return;
+        try {
+            for (const j of jovens) {
+                await upstash('DEL', `jovem:${j.id}`);
+                await upstash('SREM', 'jovens:all', j.id);
+            }
+            estado.jovens = estado.jovens.filter(j => !ids.includes(j.id));
+            desmarcarTodos();
+            fecharModalAcoesLote();
+            await carregarTodosDados();
+            alert(`✅ ${jovens.length} jovens excluídos com sucesso!`);
+        } catch (err) {
+            alert('Erro ao excluir: ' + err.message);
+        }
+        return;
+    }
+
+    if (acao === 'alterar_status') {
+        const novoStatus = document.getElementById('loteNovoStatus').value;
+        if (!novoStatus) return alert('Selecione o novo status.');
+
+        let motivo = '';
+        if (novoStatus === 'suspenso') {
+            motivo = document.getElementById('loteMotivoInput').value.trim();
+            if (!motivo) return alert('Informe o motivo da suspensão.');
+        }
+
+        if (!confirm(`Tem certeza que deseja alterar o status de ${jovens.length} jovens para "${novoStatus.toUpperCase()}"?`)) return;
+
+        try {
+            for (const j of jovens) {
+                j.status = novoStatus;
+                if (novoStatus === 'suspenso') {
+                    j.motivoSuspensao = motivo;
+                    j.dataSuspensao = new Date().toISOString();
+                    j.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
+                } else if (novoStatus === 'descumprimento') {
+                    j.dataDescumprimento = new Date().toISOString();
+                } else if (novoStatus === 'ativo' || novoStatus === 'regular') {
+                    j.motivoSuspensao = '';
+                    j.dataSuspensao = '';
+                    j.dataDescumprimento = '';
+                }
+                if (!j.observacoes) j.observacoes = [];
+                j.observacoes.push({
+                    data: new Date().toISOString(),
+                    profissional: estado.usuarioAtual?.nome || 'Sistema',
+                    texto: `📌 Status alterado em lote para "${novoStatus.toUpperCase()}"${motivo ? ' - Motivo: ' + motivo : ''}`
+                });
+                await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
+            }
+            desmarcarTodos();
+            fecharModalAcoesLote();
+            await carregarTodosDados();
+            alert(`✅ Status de ${jovens.length} jovens alterado para "${novoStatus.toUpperCase()}" com sucesso!`);
+        } catch (err) {
+            alert('Erro ao alterar status: ' + err.message);
+        }
+        return;
+    }
+
+    alert('Ação não reconhecida.');
+}
+
+// ============================================================
+// FUNÇÕES DE ESTILO - STATUS E ALTERAÇÃO MANUAL
 // ============================================================
 window.editarJovem = function(id) {
     if (!id) {
@@ -3702,105 +4036,6 @@ window.marcarDescumprimentoManual = async function(jovemId) {
         alert('Erro: ' + err.message);
     }
 };
-
-// ============================================================
-// VERIFICAR DESCUMPRIMENTO AUTOMÁTICO (CORRIGIDO)
-// ============================================================
-async function verificarDescumprimentoAutomatico() {
-    const agora = new Date();
-    let alterado = false;
-    const mesesDados = estado.mesesDados || [];
-    const HORAS_POR_PRESENCA = 4;
-    
-    for (const j of estado.jovens) {
-        const medida = j['MEDIDA'] || '';
-        const isLA = medida === 'LA' || medida === 'L.A' || medida.includes('LA');
-        const isLiberacao = medida === 'Liberação';
-        
-        if (isLiberacao || j.status === 'suspenso' || j.status === 'concluído') continue;
-        
-        let ultimaPresenca = null;
-        let diasSemPresenca = 999;
-        let totalPresencas = 0;
-        
-        if (j['NOME']) {
-            const resultado = verificarPresencaEmTodasAbas(j['NOME'], mesesDados);
-            ultimaPresenca = resultado.ultimaData;
-            totalPresencas = resultado.totalPresencas;
-            
-            if (ultimaPresenca) {
-                diasSemPresenca = Math.floor((agora - ultimaPresenca) / (1000 * 60 * 60 * 24));
-            }
-        }
-        
-        if (diasSemPresenca === 999) {
-            const hist = j.historicoFrequencia || [];
-            const entradas = hist.filter(h => h.tipo === 'entrada' || h.tipo === 'presenca');
-            if (entradas.length > 0) {
-                const ultimaData = new Date(Math.max(...entradas.map(h => new Date(h.data).getTime())));
-                ultimaPresenca = ultimaData;
-                diasSemPresenca = Math.floor((agora - ultimaData) / (1000 * 60 * 60 * 24));
-            }
-        }
-        
-        if (isLA) {
-            if (j.status === 'descumprimento' && diasSemPresenca < 14) {
-                j.status = 'regular';
-                j.dataDescumprimento = '';
-                if (!j.observacoes) j.observacoes = [];
-                j.observacoes.push({
-                    data: new Date().toISOString(),
-                    profissional: 'Sistema (Automático)',
-                    texto: `🔄 Status LA alterado para "Regular" - presença registrada.`
-                });
-                await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
-                alterado = true;
-            }
-            continue;
-        }
-        
-        if (diasSemPresenca >= 14 && j.status !== 'descumprimento') {
-            j.status = 'descumprimento';
-            j.dataDescumprimento = new Date().toISOString();
-            if (!j.observacoes) j.observacoes = [];
-            j.observacoes.push({
-                data: new Date().toISOString(),
-                profissional: 'Sistema (Automático)',
-                texto: `🔴 Status alterado automaticamente para "Descumprimento" - ${diasSemPresenca} dias sem comparecer.`
-            });
-            await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
-            alterado = true;
-        }
-        else if (diasSemPresenca < 14 && diasSemPresenca >= 7 && j.status !== 'irregular' && j.status !== 'descumprimento') {
-            j.status = 'irregular';
-            j.dataDescumprimento = '';
-            if (!j.observacoes) j.observacoes = [];
-            j.observacoes.push({
-                data: new Date().toISOString(),
-                profissional: 'Sistema (Automático)',
-                texto: `🟠 Status alterado automaticamente para "Irregular" - ${diasSemPresenca} dias sem comparecer.`
-            });
-            await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
-            alterado = true;
-        }
-        else if (diasSemPresenca < 7 && j.status !== 'regular' && j.status !== 'suspenso') {
-            j.status = 'regular';
-            j.dataDescumprimento = '';
-            if (!j.observacoes) j.observacoes = [];
-            j.observacoes.push({
-                data: new Date().toISOString(),
-                profissional: 'Sistema (Automático)',
-                texto: `🔄 Status alterado automaticamente para "Regular" - presença normalizada.`
-            });
-            await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
-            alterado = true;
-        }
-    }
-    
-    if (alterado) {
-        await carregarTodosDados();
-    }
-}
 
 // ============================================================
 // METAS LA PRÓXIMAS AO VENCIMENTO
@@ -4021,7 +4256,6 @@ window.registrarPontoNaLinha = async function(jovemId) {
     try {
         await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
         await carregarTodosDados();
-        await verificarDescumprimentoAutomatico();
     } catch (err) {
         alert('Erro: ' + err.message);
     }
@@ -4130,7 +4364,6 @@ async function salvarRegistroManual() {
         await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
         document.getElementById('modalRegistroManual').style.display = 'none';
         await carregarTodosDados();
-        await verificarDescumprimentoAutomatico();
         alert(`✅ Registro salvo para ${jovem['NOME']}`);
     } catch (err) {
         alert('Erro: ' + err.message);
@@ -4198,7 +4431,6 @@ async function salvarOficina() {
         document.querySelectorAll('#listaJovensOficina input').forEach(cb => cb.checked = false);
         alert('✅ Oficina salva!');
         await carregarTodosDados();
-        await verificarDescumprimentoAutomatico();
     } catch (err) {
         alert('Erro: ' + err.message);
     }
@@ -4882,19 +5114,6 @@ window.abrirFichaModal = function(id) {
 };
 
 // ============================================================
-// IMPRIMIR FICHA INDIVIDUAL
-// ============================================================
-window.imprimirFichaIndividual = function() {
-    const id = document.getElementById('selectJovemAcomp').value;
-    if (!id) { alert('Selecione um jovem primeiro.'); return; }
-    const jovem = estado.jovens.find(j => j.id === id);
-    if (!jovem) { alert('Jovem não encontrado.'); return; }
-    const win = window.open('', '_blank');
-    if (!win) { alert('Por favor, permita pop-ups para imprimir a ficha.'); return; }
-    // Código de impressão da ficha...
-};
-
-// ============================================================
 // USUÁRIOS, PROFISSIONAIS, EXCLUSÃO, ETC.
 // ============================================================
 function renderizarUsuarios() {
@@ -5386,7 +5605,6 @@ function renderizarDashboardJovem() {
         return;
     }
     const jovem = estado.jovens[0];
-    // Implementação similar ao carregarLista para jovem específico
 }
 
 window.abrirRelatorioRevertencia = function() {
@@ -5428,15 +5646,12 @@ window.abrirRelatorioRevertencia = function() {
     if (win) { win.document.write(html); win.document.close(); }
 };
 
-function exibirAvisoObservacoes() {}
-
 function iniciarPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(async () => {
         if (estado.usuarioAtual && estado.usuarioAtual.nivel !== 'jovem') {
             try {
                 await carregarTodosDados();
-                await verificarDescumprimentoAutomatico();
             } catch (e) {
                 console.error('Erro no polling:', e);
             }
@@ -5466,287 +5681,6 @@ async function cadastrarUsuario() {
     } catch (err) {
         document.getElementById('cadastroErro').textContent = 'Erro: ' + err.message;
     }
-}
-
-function salvarNovaSenhaAlt() {
-    const s1 = document.getElementById('novaSenhaInputAlt').value;
-    const s2 = document.getElementById('confirmarNovaSenhaInputAlt').value;
-    if (!s1 || s1.length < 6) return alert('Senha deve ter no mínimo 6 caracteres.');
-    if (s1 !== s2) return alert('As senhas não coincidem.');
-    salvarNovaSenha();
-}
-
-function salvarLogoAlt() {
-    const fileInput = document.getElementById('novaLogoInputAlt');
-    if (fileInput && fileInput.files[0]) {
-        salvarLogo();
-    }
-}
-
-function injetarHTMLDinamico() {}
-
-// ============================================================
-// FORMULÁRIO DE CADASTRO
-// ============================================================
-function renderizarCamposFormulario() {
-    const grid = document.getElementById('camposGrid');
-    if (!grid || grid.innerHTML !== "") return;
-
-    grid.innerHTML = CAMPOS.map(([key, label, type, options]) => {
-        if (type === 'select' && options) {
-            return `<div class="campo"><label>${label}</label><select id="campo_${key}" onchange="if(this.id==='campo_MEDIDA') toggleAcoesLA()">${options.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
-        }
-        return `<div class="campo"><label>${label}</label><input type="${type}" id="campo_${key}"></div>`;
-    }).join('');
-
-    const containerAcoes = document.getElementById('containerAcoesLA');
-    if (containerAcoes) {
-        containerAcoes.style.display = 'none';
-    }
-}
-
-window.toggleAcoesLA = function() {
-    const medida = document.getElementById('campo_MEDIDA')?.value;
-    const container = document.getElementById('containerAcoesLA');
-    if (container) {
-        container.style.display = medida === 'LA' ? 'block' : 'none';
-    }
-}
-
-window.adicionarAcaoLAForm = function() {
-    const input = document.getElementById('novaAcaoLAInput');
-    const prazoInput = document.getElementById('novaAcaoPrazoInput');
-    if (input.value.trim() === '') return alert('Descreva a ação.');
-    if (!prazoInput.value) return alert('Defina a data de vencimento.');
-    estado.acoesLATemporarias.push({
-        id: Date.now(),
-        texto: input.value.trim(),
-        realizado: false,
-        data: new Date().toISOString(),
-        prazo: prazoInput.value
-    });
-    input.value = '';
-    prazoInput.value = '';
-    atualizarListaAcoesLAForm();
-};
-
-window.atualizarListaAcoesLAForm = function() {
-    const ul = document.getElementById('listaAcoesLAForm');
-    if (!ul) return;
-    ul.innerHTML = estado.acoesLATemporarias.map(a => `<li style="margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding:4px 0;">
-        <span>${a.texto} <span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span></span>
-        <span style="color:red; cursor:pointer; font-weight:bold; margin-left:10px;" onclick="removerAcaoLAForm(${a.id})">✕</span>
-    </li>`).join('');
-};
-
-window.removerAcaoLAForm = function(id) {
-    estado.acoesLATemporarias = estado.acoesLATemporarias.filter(a => a.id !== id);
-    atualizarListaAcoesLAForm();
-};
-
-async function salvarJovem() {
-    const nome = document.getElementById('campo_NOME')?.value.trim();
-    if (!nome) return alert('Preencha pelo menos o nome.');
-
-    const jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase() === nome.toUpperCase() && j.id !== window._editarId);
-    const jovem = {
-        id: window._editarId || (jovemExistente ? jovemExistente.id : 'j_' + Date.now()),
-        status: window._editarId ? estado.jovens.find(j => j.id === window._editarId)?.status : 'ativo'
-    };
-
-    CAMPOS.forEach(([key]) => {
-        const el = document.getElementById(`campo_${key}`);
-        if (el) jovem[key] = el.value.trim();
-    });
-    jovem['ID_DIGITAL'] = document.getElementById('campo_ID_DIGITAL')?.value.trim() || '';
-
-    if (!jovem.historicoFrequencia) jovem.historicoFrequencia = [];
-    if (!jovem.observacoes) jovem.observacoes = [];
-    if (!jovem.documentos) jovem.documentos = [];
-
-    if (jovem['MEDIDA'] === 'LA') {
-        jovem.acoesLA = [...estado.acoesLATemporarias];
-    }
-
-    try {
-        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-        if (!window._editarId && !jovemExistente) await upstash('SADD', 'jovens:all', jovem.id);
-        estado.jovens = estado.jovens.filter(j => j.id !== jovem.id);
-        estado.jovens.push(jovem);
-
-        atualizarInterfaceCompleta();
-        limparFormulario();
-        alert('Jovem salvo com sucesso!');
-    } catch (err) {
-        alert('Erro ao salvar: ' + err.message);
-    }
-}
-
-function limparFormulario() {
-    CAMPOS.forEach(([key]) => {
-        const el = document.getElementById(`campo_${key}`);
-        if (el) el.value = '';
-    });
-    if (document.getElementById('campo_ID_DIGITAL')) document.getElementById('campo_ID_DIGITAL').value = '';
-    estado.acoesLATemporarias = [];
-    atualizarListaAcoesLAForm();
-    toggleAcoesLA();
-    window._editarId = null;
-}
-
-// ============================================================
-// SELEÇÃO EM LOTE
-// ============================================================
-function toggleSelecionarTodos() {
-    const checkboxes = document.querySelectorAll('#listaCorpo input[type="checkbox"]');
-    const selecionarTodos = document.getElementById('selecionarTodos');
-    checkboxes.forEach(cb => {
-        cb.checked = selecionarTodos.checked;
-        if (selecionarTodos.checked) {
-            estado.selecionadosLote.add(cb.dataset.id);
-        } else {
-            estado.selecionadosLote.delete(cb.dataset.id);
-        }
-    });
-    atualizarBarraSelecao();
-}
-
-function toggleSelecionarJovem(id) {
-    const cb = document.querySelector(`#listaCorpo input[data-id="${id}"]`);
-    if (!cb) return;
-    if (cb.checked) {
-        estado.selecionadosLote.add(id);
-    } else {
-        estado.selecionadosLote.delete(id);
-    }
-    atualizarBarraSelecao();
-}
-
-function atualizarBarraSelecao() {
-    const barra = document.getElementById('barraSelecaoLote');
-    const contador = document.getElementById('contadorSelecionados');
-    const btnAcoes = document.getElementById('btnAcoesLote');
-    const total = estado.selecionadosLote.size;
-
-    if (total > 0) {
-        barra.style.display = 'flex';
-        btnAcoes.style.display = 'inline-flex';
-        contador.textContent = total;
-    } else {
-        barra.style.display = 'none';
-        btnAcoes.style.display = 'none';
-    }
-}
-
-function desmarcarTodos() {
-    estado.selecionadosLote.clear();
-    document.querySelectorAll('#listaCorpo input[type="checkbox"]').forEach(cb => cb.checked = false);
-    document.getElementById('selecionarTodos').checked = false;
-    atualizarBarraSelecao();
-}
-
-function abrirModalAcoesLote() {
-    if (estado.selecionadosLote.size === 0) {
-        alert('Selecione pelo menos um jovem.');
-        return;
-    }
-    document.getElementById('loteContadorSelecionados').textContent = estado.selecionadosLote.size;
-    document.getElementById('loteAcaoSelect').value = '';
-    document.getElementById('loteOpcoesStatus').style.display = 'none';
-    document.getElementById('loteMotivoSuspensao').style.display = 'none';
-    document.getElementById('modalAcoesLote').style.display = 'flex';
-}
-
-function fecharModalAcoesLote() {
-    document.getElementById('modalAcoesLote').style.display = 'none';
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('loteAcaoSelect')?.addEventListener('change', function() {
-        const statusDiv = document.getElementById('loteOpcoesStatus');
-        if (this.value === 'alterar_status') {
-            statusDiv.style.display = 'block';
-        } else {
-            statusDiv.style.display = 'none';
-        }
-    });
-
-    document.getElementById('loteNovoStatus')?.addEventListener('change', function() {
-        const motivoDiv = document.getElementById('loteMotivoSuspensao');
-        motivoDiv.style.display = this.value === 'suspenso' ? 'block' : 'none';
-    });
-});
-
-async function executarAcaoLote() {
-    const acao = document.getElementById('loteAcaoSelect').value;
-    if (!acao) return alert('Selecione uma ação.');
-
-    const ids = Array.from(estado.selecionadosLote);
-    const jovens = estado.jovens.filter(j => ids.includes(j.id));
-
-    if (acao === 'excluir') {
-        if (!confirm(`Tem certeza que deseja excluir PERMANENTEMENTE ${jovens.length} jovens?`)) return;
-        try {
-            for (const j of jovens) {
-                await upstash('DEL', `jovem:${j.id}`);
-                await upstash('SREM', 'jovens:all', j.id);
-            }
-            estado.jovens = estado.jovens.filter(j => !ids.includes(j.id));
-            desmarcarTodos();
-            fecharModalAcoesLote();
-            await carregarTodosDados();
-            alert(`✅ ${jovens.length} jovens excluídos com sucesso!`);
-        } catch (err) {
-            alert('Erro ao excluir: ' + err.message);
-        }
-        return;
-    }
-
-    if (acao === 'alterar_status') {
-        const novoStatus = document.getElementById('loteNovoStatus').value;
-        if (!novoStatus) return alert('Selecione o novo status.');
-
-        let motivo = '';
-        if (novoStatus === 'suspenso') {
-            motivo = document.getElementById('loteMotivoInput').value.trim();
-            if (!motivo) return alert('Informe o motivo da suspensão.');
-        }
-
-        if (!confirm(`Tem certeza que deseja alterar o status de ${jovens.length} jovens para "${novoStatus.toUpperCase()}"?`)) return;
-
-        try {
-            for (const j of jovens) {
-                j.status = novoStatus;
-                if (novoStatus === 'suspenso') {
-                    j.motivoSuspensao = motivo;
-                    j.dataSuspensao = new Date().toISOString();
-                    j.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
-                } else if (novoStatus === 'descumprimento') {
-                    j.dataDescumprimento = new Date().toISOString();
-                } else if (novoStatus === 'ativo' || novoStatus === 'regular') {
-                    j.motivoSuspensao = '';
-                    j.dataSuspensao = '';
-                    j.dataDescumprimento = '';
-                }
-                if (!j.observacoes) j.observacoes = [];
-                j.observacoes.push({
-                    data: new Date().toISOString(),
-                    profissional: estado.usuarioAtual?.nome || 'Sistema',
-                    texto: `📌 Status alterado em lote para "${novoStatus.toUpperCase()}"${motivo ? ' - Motivo: ' + motivo : ''}`
-                });
-                await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
-            }
-            desmarcarTodos();
-            fecharModalAcoesLote();
-            await carregarTodosDados();
-            alert(`✅ Status de ${jovens.length} jovens alterado para "${novoStatus.toUpperCase()}" com sucesso!`);
-        } catch (err) {
-            alert('Erro ao alterar status: ' + err.message);
-        }
-        return;
-    }
-
-    alert('Ação não reconhecida.');
 }
 
 // ============================================================
