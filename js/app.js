@@ -312,6 +312,14 @@ async function carregarTodosDados() {
                 }
             }
         }
+        
+        console.log('Dados carregados:', {
+            jovens: estado.jovens.length,
+            usuarios: estado.usuarios.length,
+            profissionais: estado.profissionais.length,
+            oficinas: estado.oficinas.length
+        });
+        
         atualizarInterfaceCompleta();
     } catch (err) {
         console.error('Erro ao carregar dados:', err);
@@ -340,6 +348,7 @@ async function carregarJovemPeloCPF(cpfOuId) {
 }
 
 function atualizarInterfaceCompleta() {
+    console.log('Atualizando interface completa...');
     renderizarCamposFormulario();
     carregarLista();
     renderizarDashboard();
@@ -429,7 +438,22 @@ function mostrarAbasPorNivel(nivel) {
 // ============================================================
 function renderizarDashboard() {
     const cards = document.getElementById('cardsDashboard');
-    if (!cards) return;
+    if (!cards) {
+        console.error('Elemento cardsDashboard não encontrado');
+        return;
+    }
+    
+    if (estado.jovens.length === 0) {
+        cards.innerHTML = `
+            <div class="card" style="grid-column: 1 / -1; text-align:center; padding:40px;">
+                <div class="card-icon" style="font-size:3rem; color:#94a3b8;"><i class="fas fa-users"></i></div>
+                <p style="color:#6b7280; font-size:1.1rem; margin-top:10px;">Nenhum jovem cadastrado</p>
+                <p style="color:#94a3b8; font-size:0.9rem;">Importe uma planilha ou cadastre um novo jovem</p>
+            </div>
+        `;
+        return;
+    }
+    
     const total = estado.jovens.length;
     
     const regular = estado.jovens.filter(j => j.status === 'REGULAR').length;
@@ -466,7 +490,7 @@ function renderizarGraficos() {
             medidas[m] = (medidas[m] || 0) + 1;
         });
         const ctx1 = document.getElementById('graficoMedidas')?.getContext('2d');
-        if (ctx1) {
+        if (ctx1 && Object.keys(medidas).length > 0) {
             estado.graficos.medidas = new Chart(ctx1, {
                 type: 'bar',
                 data: {
@@ -483,7 +507,7 @@ function renderizarGraficos() {
             if (generos[g] !== undefined) generos[g]++;
         });
         const ctx2 = document.getElementById('graficoGenero')?.getContext('2d');
-        if (ctx2) {
+        if (ctx2 && (generos.M > 0 || generos.F > 0 || generos.NB > 0)) {
             estado.graficos.genero = new Chart(ctx2, {
                 type: 'pie',
                 data: {
@@ -502,7 +526,7 @@ function renderizarGraficos() {
             else if (idade >= 19) idades['19+']++;
         });
         const ctx3 = document.getElementById('graficoIdade')?.getContext('2d');
-        if (ctx3) {
+        if (ctx3 && (idades['12-15'] > 0 || idades['16-18'] > 0 || idades['19+'] > 0)) {
             estado.graficos.idade = new Chart(ctx3, {
                 type: 'bar',
                 data: {
@@ -516,7 +540,7 @@ function renderizarGraficos() {
         const reverte = estado.oficinas.filter(o => o.reverte).length;
         const naoReverte = estado.oficinas.length - reverte;
         const ctx5 = document.getElementById('graficoReverte')?.getContext('2d');
-        if (ctx5) {
+        if (ctx5 && (reverte > 0 || naoReverte > 0)) {
             estado.graficos.reverte = new Chart(ctx5, {
                 type: 'pie',
                 data: {
@@ -641,6 +665,158 @@ function limparFormulario() {
 }
 
 // ============================================================
+// SELEÇÃO EM LOTE
+// ============================================================
+function toggleSelecionarTodos() {
+    const checkboxes = document.querySelectorAll('#listaCorpo input[type="checkbox"]');
+    const selecionarTodos = document.getElementById('selecionarTodos');
+    checkboxes.forEach(cb => {
+        cb.checked = selecionarTodos.checked;
+        if (selecionarTodos.checked) {
+            estado.selecionadosLote.add(cb.dataset.id);
+        } else {
+            estado.selecionadosLote.delete(cb.dataset.id);
+        }
+    });
+    atualizarBarraSelecao();
+}
+
+function toggleSelecionarJovem(id) {
+    const cb = document.querySelector(`#listaCorpo input[data-id="${id}"]`);
+    if (!cb) return;
+    if (cb.checked) {
+        estado.selecionadosLote.add(id);
+    } else {
+        estado.selecionadosLote.delete(id);
+    }
+    atualizarBarraSelecao();
+}
+
+function atualizarBarraSelecao() {
+    const barra = document.getElementById('barraSelecaoLote');
+    const contador = document.getElementById('contadorSelecionados');
+    const btnAcoes = document.getElementById('btnAcoesLote');
+    const total = estado.selecionadosLote.size;
+
+    if (total > 0) {
+        barra.style.display = 'flex';
+        btnAcoes.style.display = 'inline-flex';
+        contador.textContent = total;
+    } else {
+        barra.style.display = 'none';
+        btnAcoes.style.display = 'none';
+    }
+}
+
+function desmarcarTodos() {
+    estado.selecionadosLote.clear();
+    document.querySelectorAll('#listaCorpo input[type="checkbox"]').forEach(cb => cb.checked = false);
+    document.getElementById('selecionarTodos').checked = false;
+    atualizarBarraSelecao();
+}
+
+function abrirModalAcoesLote() {
+    if (estado.selecionadosLote.size === 0) {
+        alert('Selecione pelo menos um jovem.');
+        return;
+    }
+    document.getElementById('loteContadorSelecionados').textContent = estado.selecionadosLote.size;
+    document.getElementById('loteAcaoSelect').value = '';
+    document.getElementById('loteOpcoesStatus').style.display = 'none';
+    document.getElementById('loteMotivoSuspensao').style.display = 'none';
+    document.getElementById('modalAcoesLote').style.display = 'flex';
+}
+
+function fecharModalAcoesLote() {
+    document.getElementById('modalAcoesLote').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('loteAcaoSelect')?.addEventListener('change', function() {
+        const statusDiv = document.getElementById('loteOpcoesStatus');
+        if (this.value === 'alterar_status') {
+            statusDiv.style.display = 'block';
+        } else {
+            statusDiv.style.display = 'none';
+        }
+    });
+
+    document.getElementById('loteNovoStatus')?.addEventListener('change', function() {
+        const motivoDiv = document.getElementById('loteMotivoSuspensao');
+        motivoDiv.style.display = this.value === 'SUSPENSO' ? 'block' : 'none';
+    });
+});
+
+async function executarAcaoLote() {
+    const acao = document.getElementById('loteAcaoSelect').value;
+    if (!acao) return alert('Selecione uma ação.');
+
+    const ids = Array.from(estado.selecionadosLote);
+    const jovens = estado.jovens.filter(j => ids.includes(j.id));
+
+    if (acao === 'excluir') {
+        if (!confirm(`Tem certeza que deseja excluir PERMANENTEMENTE ${jovens.length} jovens?`)) return;
+        try {
+            for (const j of jovens) {
+                await upstash('DEL', `jovem:${j.id}`);
+                await upstash('SREM', 'jovens:all', j.id);
+            }
+            estado.jovens = estado.jovens.filter(j => !ids.includes(j.id));
+            desmarcarTodos();
+            fecharModalAcoesLote();
+            await carregarTodosDados();
+            alert(`✅ ${jovens.length} jovens excluídos com sucesso!`);
+        } catch (err) {
+            alert('Erro ao excluir: ' + err.message);
+        }
+        return;
+    }
+
+    if (acao === 'alterar_status') {
+        const novoStatus = document.getElementById('loteNovoStatus').value;
+        if (!novoStatus) return alert('Selecione o novo status.');
+
+        let motivo = '';
+        if (novoStatus === 'SUSPENSO') {
+            motivo = document.getElementById('loteMotivoInput').value.trim();
+            if (!motivo) return alert('Informe o motivo da suspensão.');
+        }
+
+        if (!confirm(`Tem certeza que deseja alterar o status de ${jovens.length} jovens para "${novoStatus}"?`)) return;
+
+        try {
+            for (const j of jovens) {
+                j.status = novoStatus;
+                if (novoStatus === 'SUSPENSO') {
+                    j.motivoSuspensao = motivo;
+                    j.dataSuspensao = new Date().toISOString();
+                    j.suspensoPor = estado.usuarioAtual?.nome || 'Sistema';
+                } else {
+                    j.motivoSuspensao = '';
+                    j.dataSuspensao = '';
+                }
+                if (!j.observacoes) j.observacoes = [];
+                j.observacoes.push({
+                    data: new Date().toISOString(),
+                    profissional: estado.usuarioAtual?.nome || 'Sistema',
+                    texto: `📌 Status alterado em lote para "${novoStatus}"${motivo ? ' - Motivo: ' + motivo : ''}`
+                });
+                await upstash('SET', `jovem:${j.id}`, JSON.stringify(j));
+            }
+            desmarcarTodos();
+            fecharModalAcoesLote();
+            await carregarTodosDados();
+            alert(`✅ Status de ${jovens.length} jovens alterado para "${novoStatus}" com sucesso!`);
+        } catch (err) {
+            alert('Erro ao alterar status: ' + err.message);
+        }
+        return;
+    }
+
+    alert('Ação não reconhecida.');
+}
+
+// ============================================================
 // FUNÇÕES AUXILIARES
 // ============================================================
 function parseNum(val) {
@@ -730,6 +906,181 @@ window.alterarStatusManual = async function(jovemId, novoStatus) {
         alert('Erro ao alterar status: ' + err.message);
     }
 };
+
+// ============================================================
+// LISTA GERAL E FILTROS
+// ============================================================
+function carregarLista() {
+    const tbody = document.getElementById('listaCorpo');
+    if (!tbody) {
+        console.error('Elemento listaCorpo não encontrado');
+        return;
+    }
+
+    if (estado.jovens.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:#6b7280;">Nenhum jovem cadastrado. Importe uma planilha ou cadastre um novo jovem.</td></tr>`;
+        return;
+    }
+
+    const fNome = (document.getElementById('filtroNome')?.value || '').toLowerCase();
+    const fMedida = document.getElementById('filtroMedida')?.value;
+    const fStatus = document.getElementById('filtroStatus')?.value;
+    const fSaldo = document.getElementById('filtroSaldo')?.value;
+    const fGenero = document.getElementById('filtroGenero')?.value;
+    const fIdade = document.getElementById('filtroIdade')?.value;
+
+    let lista = estado.jovens.filter(j => {
+        if (fNome && !(j['NOME'] || '').toLowerCase().includes(fNome) && !(j['ID_DIGITAL'] || '').includes(fNome)) return false;
+        if (fMedida && j['MEDIDA'] !== fMedida) return false;
+        if (fStatus && j.status !== fStatus) return false;
+        if (fSaldo === 'critico' && parseFloat(calcularSaldo(j)) <= 0 && j['MEDIDA'] !== 'LA') return false;
+        if (fSaldo === 'zerado' && parseFloat(calcularSaldo(j)) > 0 && j['MEDIDA'] !== 'LA') return false;
+        if (fGenero && j['GÊNERO'] !== fGenero) return false;
+        if (fIdade) {
+            const idade = parseInt(j['IDADE']) || 0;
+            if (fIdade === '12-15' && (idade < 12 || idade > 15)) return false;
+            if (fIdade === '16-18' && (idade < 16 || idade > 18)) return false;
+            if (fIdade === '19+' && idade < 19) return false;
+        }
+        return true;
+    }).sort((a, b) => (a['NOME'] || '').localeCompare((b['NOME'] || ''), 'pt-BR'));
+
+    atualizarContadorLista(lista.length);
+
+    const podeAlterarStatus = NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel);
+
+    tbody.innerHTML = lista.map(j => {
+        const hist = j.historicoFrequencia || [];
+        const ultimo = hist.length > 0 ? new Date(Math.max(...hist.map(h => new Date(h.data)))).toLocaleDateString('pt-BR') : 'Nunca';
+
+        let bgStatus = j.status === 'SUSPENSO' ? 'background:#fce7f3; color:#be185d;' :
+            j.status === 'EM DESCUMPRIMENTO' ? 'background:#fee2e2; color:#991b1b;' :
+            j.status === 'IRREGULAR' ? 'background:#fef3c7; color:#92400e;' :
+            j.status === 'MEDIDA FINALIZADA' ? 'background:#d1fae5; color:#065f46;' :
+            j.status === 'REGULAR' ? 'background:#dbeafe; color:#1e40af;' :
+            j.status === 'LIBERADO' ? 'background:#e5e7eb; color:#374151;' :
+            'background:#f1f5f9; color:#475569;';
+
+        const renderSaldo = j['MEDIDA'] === 'LA' ? `Ações: ${j.acoesLA?.filter(a=>a.realizado).length || 0}/${j.acoesLA?.length || 0}` : `${calcularSaldo(j)}h`;
+
+        const hoje = new Date();
+        const hojeStr = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+        let temEntradaAberta = false;
+
+        const podeRegistrarPonto = j['MEDIDA'] !== 'Liberação' &&
+            j.status !== 'SUSPENSO' &&
+            j.status !== 'MEDIDA FINALIZADA' &&
+            j.status !== 'IRREGULAR' &&
+            j.status !== 'EM DESCUMPRIMENTO';
+
+        if (podeRegistrarPonto && j['MEDIDA'] !== 'LA') {
+            for (let i = hist.length - 1; i >= 0; i--) {
+                if (hist[i].tipo === 'entrada') {
+                    const eDia = new Date(new Date(hist[i].data).getFullYear(), new Date(hist[i].data).getMonth(), new Date(hist[i].data).getDate()).getTime();
+                    if (eDia === hojeStr) { temEntradaAberta = true; break; }
+                }
+                if (hist[i].tipo === 'saida') {
+                    const sDia = new Date(new Date(hist[i].data).getFullYear(), new Date(hist[i].data).getMonth(), new Date(hist[i].data).getDate()).getTime();
+                    if (sDia === hojeStr) break;
+                }
+            }
+        }
+
+        let botoesStatus = '';
+        if (podeAlterarStatus) {
+            const opcoes = ['REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO', 'SUSPENSO', 'MEDIDA FINALIZADA', 'LIBERADO'];
+            botoesStatus = `
+                <select onchange="alterarStatusManual('${j.id}', this.value)" style="padding:2px 6px; font-size:0.7rem; border:1px solid #d1d9e6; border-radius:4px; background:white;">
+                    <option value="">Status</option>
+                    ${opcoes.map(s => `<option value="${s}" ${j.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                </select>
+            `;
+        }
+
+        let motivoStatus = '';
+        if (j.status === 'SUSPENSO' && j.motivoSuspensao) {
+            motivoStatus = `<span title="${j.motivoSuspensao}" style="cursor:help; font-size:0.75rem; color:#be185d;">${j.motivoSuspensao.substring(0, 20)}${j.motivoSuspensao.length > 20 ? '...' : ''}</span>`;
+        } else if (j.status === 'EM DESCUMPRIMENTO') {
+            motivoStatus = `<span style="font-size:0.75rem; color:#991b1b;">14+ dias sem comparecer</span>`;
+        } else if (j.status === 'IRREGULAR') {
+            motivoStatus = `<span style="font-size:0.75rem; color:#92400e;">7+ dias sem comparecer</span>`;
+        }
+
+        let botaoPonto = '';
+        if (podeRegistrarPonto) {
+            botaoPonto = `<button onclick="registrarPontoNaLinha('${j.id}')" class="btn-sm ${temEntradaAberta ? 'btn-sm-warning' : 'btn-sm-success'}">${temEntradaAberta ? '🚪 Saída' : '🚪 Entrada'}</button>`;
+        }
+
+        const isSelecionado = estado.selecionadosLote.has(j.id);
+
+        return `<tr>
+            <td><input type="checkbox" data-id="${j.id}" ${isSelecionado ? 'checked' : ''} onchange="toggleSelecionarJovem('${j.id}')"></td>
+            <td>${j['NOME'] || j['REFERENCIA'] || '-'}</td>
+            <td>${j['ID_DIGITAL'] || '-'}</td>
+            <td>${j['IDADE'] || '-'}</td>
+            <td>${j['MEDIDA'] || '-'}</td>
+            <td>${renderSaldo}</td>
+            <td><span style="font-weight:600; padding:4px 12px; border-radius:20px; ${bgStatus}">${j.status || 'REGULAR'}</span></td>
+            <td>${motivoStatus}</td>
+            <td>${ultimo}</td>
+            <td style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+                ${botaoPonto}
+                <button onclick="editarJovem('${j.id}')" class="btn-sm btn-sm-primary"><i class="fas fa-edit"></i></button>
+                <button onclick="abrirFichaModal('${j.id}')" class="btn-sm btn-sm-info"><i class="fas fa-file-alt"></i></button>
+                ${botoesStatus}
+                <button onclick="abrirModalExclusao('jovem', '${j.id}', '${j['NOME']}')" class="btn-sm btn-sm-danger"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+
+    document.getElementById('selecionarTodos').checked = false;
+    atualizarBarraSelecao();
+}
+
+function atualizarContadorLista(total) {
+    let contadorContainer = document.getElementById('contadorContainer');
+    if (!contadorContainer) {
+        const tabelaWrapper = document.querySelector('#pageLista .table-wrapper');
+        if (tabelaWrapper) {
+            contadorContainer = document.createElement('div');
+            contadorContainer.id = 'contadorContainer';
+            tabelaWrapper.appendChild(contadorContainer);
+        }
+    }
+
+    if (contadorContainer) {
+        const filtrosAtivos = [];
+        const fNome = document.getElementById('filtroNome')?.value?.trim() || '';
+        const fMedida = document.getElementById('filtroMedida')?.value || '';
+        const fStatus = document.getElementById('filtroStatus')?.value || '';
+        const fSaldo = document.getElementById('filtroSaldo')?.value || '';
+        const fGenero = document.getElementById('filtroGenero')?.value || '';
+        const fIdade = document.getElementById('filtroIdade')?.value || '';
+
+        if (fNome) filtrosAtivos.push(`Nome: "${fNome}"`);
+        if (fMedida) filtrosAtivos.push(`Medida: ${fMedida}`);
+        if (fStatus) filtrosAtivos.push(`Status: ${fStatus}`);
+        if (fSaldo === 'critico') filtrosAtivos.push('Saldo: Crítico');
+        if (fSaldo === 'zerado') filtrosAtivos.push('Saldo: Zerado');
+        if (fGenero) filtrosAtivos.push(`Gênero: ${fGenero}`);
+        if (fIdade) filtrosAtivos.push(`Idade: ${fIdade}`);
+
+        let textoFiltros = '';
+        if (filtrosAtivos.length > 0) {
+            textoFiltros = ` <span style="font-weight: 400; color: #6b7280; font-size: 0.85rem;">| Filtros: ${filtrosAtivos.join(', ')}</span>`;
+        }
+
+        contadorContainer.innerHTML = `
+            <div id="contadorListaJovens" style="padding: 10px 15px; font-weight: 600; color: #1e2a4a; background: #f1f5f9; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap:wrap; gap:8px;">
+                <span>👥 Total de jovens: <strong style="color: #2c3e66; font-size: 1.1rem;">${total}</strong></span>
+                <span style="font-size: 0.85rem; color: #6b7280;">
+                    ${total === 1 ? '1 jovem exibido' : `${total} jovens exibidos`}
+                    ${textoFiltros}
+                </span>
+            </div>
+        `;
+    }
+}
 
 // ============================================================
 // OBSERVAÇÕES E AÇÕES MANUAIS
@@ -2518,14 +2869,20 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA (SEM AUTOMAÇÕES - USANDO COLUNA STATUS)
+// IMPORTAR PLANILHA (COMPLETO E CORRIGIDO)
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
-    input.type = 'file'; input.accept = '.xlsx,.xls,.csv';
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    
     input.onchange = async (e) => {
         const file = e.target.files[0];
-        if (!file) return;
+        if (!file) {
+            alert('Nenhum arquivo selecionado.');
+            return;
+        }
+        
         const statusDiv = document.getElementById('statusImportacao');
         statusDiv.style.display = 'block';
         statusDiv.style.background = '#fffbeb';
@@ -2537,16 +2894,42 @@ async function importarPlanilha() {
             const wb = XLSX.read(data, { cellStyles: true, type: 'array' });
             const ws = wb.Sheets[wb.SheetNames[0]];
             
+            if (!ws) {
+                throw new Error('Planilha vazia ou formato inválido.');
+            }
+            
             const rows = XLSX.utils.sheet_to_json(ws, { 
                 raw: false, 
                 defval: '',
                 header: 'A'
             });
             
-            const headers = rows[0] || {};
-            const dataRows = rows.slice(1).filter(row => {
+            if (!rows || rows.length === 0) {
+                throw new Error('Planilha vazia.');
+            }
+            
+            // Pular linhas de cabeçalho vazias no início
+            let startRow = 0;
+            for (let i = 0; i < Math.min(5, rows.length); i++) {
+                const row = rows[i];
+                const hasData = Object.values(row).some(val => val && val.toString().trim() !== '');
+                if (hasData) {
+                    startRow = i;
+                    break;
+                }
+            }
+            
+            const headers = rows[startRow] || {};
+            const dataRows = rows.slice(startRow + 1).filter(row => {
                 return Object.values(row).some(val => val && val.toString().trim() !== '');
             });
+
+            if (dataRows.length === 0) {
+                throw new Error('Nenhuma linha de dados encontrada na planilha.');
+            }
+
+            console.log('Cabeçalhos encontrados:', headers);
+            console.log('Linhas de dados:', dataRows.length);
 
             // ================================================================
             // MAPEAR COLUNAS
@@ -2592,6 +2975,8 @@ async function importarPlanilha() {
                 NOME_SOCIAL: findColumnIndex(['QUAL NOME SOCIAL?', 'NOME SOCIAL', 'NOME SOCIAL?']),
                 STATUS: findColumnIndex(['STATUS', 'SITUAÇÃO', 'SITUACAO'])
             };
+
+            console.log('Mapeamento de colunas:', colMap);
 
             const campoParaColuna = {
                 'REFERENCIA': colMap.REFERENCIA,
@@ -2651,17 +3036,22 @@ async function importarPlanilha() {
                     }
                     
                     const nomeUpper = nome.toUpperCase().trim();
-                    if (nomeUpper.includes('NOVOS ADOLESCENTES') || 
-                        nomeUpper.includes('REGULAR') || 
-                        nomeUpper.includes('IRREGULAR') || 
-                        nomeUpper.includes('EM DESCUMPRIMENTO') ||
-                        nomeUpper.includes('CÓDIGOS FAMILIARES') ||
-                        nomeUpper.includes('PACTUAÇÃO') ||
-                        nomeUpper.includes('MEDIDA FINALIZADA') ||
-                        nomeUpper.includes('LEGENDA') ||
-                        nomeUpper.includes('TOTAL') ||
-                        nomeUpper === 'NOME' ||
-                        nomeUpper === 'REFERENCIA') {
+                    // Pular linhas que são cabeçalhos ou legendas
+                    const palavrasIgnorar = [
+                        'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
+                        'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'MEDIDA FINALIZADA', 'LEGENDA',
+                        'TOTAL', 'NOME', 'REFERENCIA', 'SITUAÇÃO', 'STATUS'
+                    ];
+                    
+                    let ignorar = false;
+                    for (const palavra of palavrasIgnorar) {
+                        if (nomeUpper.includes(palavra)) {
+                            ignorar = true;
+                            break;
+                        }
+                    }
+                    
+                    if (ignorar) {
                         ignorados++;
                         continue;
                     }
@@ -2745,6 +3135,7 @@ async function importarPlanilha() {
                     }
 
                     if (jovemExistente) {
+                        // Atualizar jovem existente - preservando dados importantes
                         const jovemId = jovemExistente.id;
                         
                         const historicoFrequencia = jovemExistente.historicoFrequencia || [];
@@ -2762,16 +3153,19 @@ async function importarPlanilha() {
                             acoesLA: acoesLA
                         };
                         
+                        // Copiar dados da planilha
                         for (const [key, value] of Object.entries(dadosJovem)) {
                             jovemAtualizado[key] = value;
                         }
                         
+                        // Preservar campos que não vieram da planilha
                         for (const [key] of CAMPOS) {
                             if (!jovemAtualizado[key] && jovemExistente[key] !== undefined) {
                                 jovemAtualizado[key] = jovemExistente[key];
                             }
                         }
                         
+                        // Aplicar status da planilha
                         if (statusPlanilha) {
                             jovemAtualizado.status = statusPlanilha;
                         } else if (!jovemAtualizado.status) {
@@ -2788,6 +3182,7 @@ async function importarPlanilha() {
                         atualizados++;
                         
                     } else {
+                        // Criar novo jovem
                         const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                         const novoJovem = { 
                             id: novoId, 
@@ -2818,6 +3213,9 @@ async function importarPlanilha() {
                 }
             }
 
+            // ================================================================
+            // RECARREGAR DADOS E ATUALIZAR INTERFACE
+            // ================================================================
             await carregarTodosDados();
             
             let mensagem = `✅ Importação concluída!`;
@@ -2831,13 +3229,23 @@ async function importarPlanilha() {
             statusDiv.style.color = '#065f46';
             statusDiv.textContent = mensagem;
             
+            // Forçar atualização da interface
+            carregarLista();
+            renderizarDashboard();
+            renderizarAcompanhamento();
+            popularSelectAcompInd();
+            
+            alert(mensagem);
+            
         } catch (err) {
             statusDiv.style.background = '#fee2e2';
             statusDiv.style.color = '#991b1b';
             statusDiv.textContent = '❌ Erro: ' + err.message;
             console.error('Erro na importação:', err);
+            alert('Erro na importação: ' + err.message);
         }
     };
+    
     input.click();
 }
 
@@ -2866,6 +3274,8 @@ function iniciarPolling() {
 // INICIALIZAÇÃO
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM carregado, inicializando sistema...');
+    
     document.getElementById('loginBtn').addEventListener('click', fazerLogin);
     document.getElementById('loginSenha').addEventListener('keypress', e => { if (e.key === 'Enter') fazerLogin(); });
     document.getElementById('logoutBtn').addEventListener('click', deslogarSistema);
