@@ -221,22 +221,42 @@
             <div id="mensagemPonto" style="margin-top: 10px; font-weight: 600;"></div>
         </div>
         <div class="filtros-bar" id="filtrosFrequencia">
-            <div class="filtro-group"><label>Buscar</label><input type="text" id="filtroNome" oninput="carregarLista()" placeholder="Nome/ID"></div>
-            <div class="filtro-group"><label>Medida</label><select id="filtroMedida" onchange="carregarLista()"><option value="">Todas</option><option value="LA">LA</option><option value="PSC">PSC</option><option value="Internação">Internação</option><option value="Liberação">Liberação</option></select></div>
-            <div class="filtro-group"><label>Status</label><select id="filtroStatus" onchange="carregarLista()"><option value="">Todos</option><option value="REGULAR">REGULAR</option><option value="IRREGULAR">IRREGULAR</option><option value="EM DESCUMPRIMENTO">EM DESCUMPRIMENTO</option><option value="SUSPENSO">SUSPENSO</option><option value="MEDIDA FINALIZADA">MEDIDA FINALIZADA</option><option value="LIBERADO">LIBERADO</option></select></div>
-            <div class="filtro-group"><label>Saldo</label><select id="filtroSaldo" onchange="carregarLista()"><option value="">Todos</option><option value="critico">Crítico (>0h)</option><option value="zerado">Zerado</option></select></div>
-            <div class="filtro-group"><label>Gênero</label><select id="filtroGenero" onchange="carregarLista()"><option value="">Todos</option><option value="M">Masculino</option><option value="F">Feminino</option><option value="NB">Não-binário</option></select></div>
-            <div class="filtro-group"><label>Idade</label><select id="filtroIdade" onchange="carregarLista()"><option value="">Todas</option><option value="12-15">12 a 15</option><option value="16-18">16 a 18</option><option value="19+">19+</option></select></div>
+            <div class="filtro-group">
+                <label>Buscar</label>
+                <input type="text" id="filtroNome" oninput="carregarLista()" placeholder="Nome/ID">
+            </div>
+            <div class="filtro-group">
+                <label>Medida</label>
+                <div class="filtro-checkbox-group" id="filtroMedida"></div>
+            </div>
+            <div class="filtro-group">
+                <label>Status</label>
+                <div class="filtro-checkbox-group" id="filtroStatus"></div>
+            </div>
+            <div class="filtro-group">
+                <label>Saldo</label>
+                <select id="filtroSaldo" onchange="carregarLista()">
+                    <option value="">Todos</option>
+                    <option value="critico">Crítico (>0h)</option>
+                    <option value="zerado">Zerado</option>
+                </select>
+            </div>
+            <div class="filtro-group">
+                <label>Gênero</label>
+                <div class="filtro-checkbox-group" id="filtroGenero"></div>
+            </div>
+            <div class="filtro-group">
+                <label>Idade</label>
+                <div class="filtro-checkbox-group" id="filtroIdade"></div>
+            </div>
         </div>
         <div class="flex" style="margin-bottom:16px;">
             <input type="text" id="buscaFrequencia" placeholder="🔍 Buscar rápido..." style="flex:1; padding:8px 16px; border:1px solid #d1d9e6; border-radius:40px;">
             <button id="exportarExcelBtn" class="btn-success"><i class="fas fa-file-excel"></i> Exportar</button>
             <button id="registroManualBtn" class="btn-secondary"><i class="fas fa-clock"></i> Registro Manual</button>
-            <!-- Ações em Lote -->
             <button id="btnAcoesLote" class="btn-warning" onclick="abrirModalAcoesLote()" style="display:none;"><i class="fas fa-tasks"></i> Ações em Lote</button>
         </div>
-        <!-- Barra de seleção em lote -->
-        <div id="barraSelecaoLote" style="display:none; background:#e8f0fe; padding:12px 20px; border-radius:12px; margin-bottom:16px; display:none; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div id="barraSelecaoLote" style="display:none; background:#e8f0fe; padding:12px 20px; border-radius:12px; margin-bottom:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
             <div>
                 <span id="contadorSelecionados">0</span> jovens selecionados
                 <button class="btn-sm btn-sm-outline" onclick="desmarcarTodos()" style="margin-left:10px;">Desmarcar todos</button>
@@ -253,7 +273,9 @@
                     <th>ID Digital</th>
                     <th>Idade</th>
                     <th>Medida</th>
-                    <th>Saldo (h)</th>
+                    <th>Horas Atribuídas</th>
+                    <th>Horas Cumpridas</th>
+                    <th>Saldo</th>
                     <th>Status</th>
                     <th>Motivo</th>
                     <th>Último</th>
@@ -291,6 +313,13 @@
                 <h3>🛠️ Oficinas Participadas</h3>
                 <div id="fichaOficinas"></div>
             </div>
+            <div class="card" style="border-left-color:#8b5cf6; background:#f5f3ff; margin-bottom:20px;">
+                <h3>📋 Avaliações Profissionais</h3>
+                <div style="display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
+                    <button onclick="abrirModalAvaliacao()" class="btn-primary">➕ Nova Avaliação</button>
+                </div>
+                <div id="fichaAvaliacoes"></div>
+            </div>
             <div class="card" style="border-left-color:#f59e0b; background:#fffbeb; margin-bottom:20px;">
                 <h3>📁 Documentos</h3>
                 <div style="display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
@@ -323,12 +352,22 @@
             <div class="card card-aviso" style="border-left-color:#f59e0b;">
                 <h3>🟡 7 dias sem comparecer</h3>
                 <p style="font-size:0.8rem; color:#92400e; margin-bottom:10px;">Clique em "Marcar IRREGULAR" para alterar o status manualmente.</p>
-                <div class="table-wrapper" style="margin:0;"><table><thead><tr><th>Jovem</th><th>Último</th><th>Dias</th><th>Ação</th></tr></thead><tbody id="tabela7dias"></tbody></table></div>
+                <div class="table-wrapper" style="margin:0;">
+                    <table>
+                        <thead><tr><th>Jovem</th><th>Status</th><th>Último</th><th>Dias</th><th>Ação</th></tr></thead>
+                        <tbody id="tabela7dias"></tbody>
+                    </table>
+                </div>
             </div>
             <div class="card card-alerta" style="border-left-color:#ef4444;">
                 <h3>🔴 14+ dias - Opção de Descumprimento</h3>
                 <p style="font-size:0.8rem; color:#991b1b; margin-bottom:10px;">Clique em "Marcar EM DESCUMPRIMENTO" para alterar o status manualmente.</p>
-                <div class="table-wrapper" style="margin:0;"><table><thead><tr><th>Jovem</th><th>Último</th><th>Dias</th><th>Ação</th></tr></thead><tbody id="tabela14dias"></tbody></table></div>
+                <div class="table-wrapper" style="margin:0;">
+                    <table>
+                        <thead><tr><th>Jovem</th><th>Status</th><th>Último</th><th>Dias</th><th>Ação</th></tr></thead>
+                        <tbody id="tabela14dias"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -393,6 +432,12 @@
     <!-- Relatórios -->
     <div class="page" id="pageRelatorios">
         <h2 style="color: #1A2A4A; margin-bottom: 20px;"><i class="fas fa-file-alt" style="color: #2563EB;"></i> Relatórios</h2>
+        
+        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
+            <button onclick="imprimirRelatorioCompleto()" class="btn-primary"><i class="fas fa-print"></i> Imprimir Relatório Completo</button>
+            <button onclick="exportarRelatorioCompleto()" class="btn-success"><i class="fas fa-file-pdf"></i> Exportar Relatório</button>
+        </div>
+        
         <div class="painel-duplo">
             <div class="card">
                 <h3>📈 Projeção Quinzenal (Próximos 3 Meses)</h3>
@@ -401,14 +446,34 @@
             </div>
             <div class="card">
                 <h3>🎂 Aniversariantes (Próximos 3 Meses)</h3>
-                <div class="table-wrapper" style="margin:0;"><table id="tabelaAniversariantes"><thead><tr><th>Jovem</th><th>Nasc.</th><th>Data do Aniversário</th><th>Idade que fará</th></tr></thead><tbody></tbody></table></div>
+                <div class="table-wrapper" style="margin:0;">
+                    <table id="tabelaAniversariantes">
+                        <thead><tr><th>Jovem</th><th>Status</th><th>Nasc.</th><th>Data do Aniversário</th><th>Idade que fará</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
         </div>
+        
         <div class="card" style="margin-top:20px; border-left-color:#10b981; background:#ecfdf5;">
             <h3>🌱 Relatório de Oficinas Revertidas em Benefício Social</h3>
             <p style="font-size:0.8rem; color:#065f46; margin-bottom:10px;">Oficinas que geraram benefício direto à sociedade.</p>
             <button class="btn-success" onclick="abrirRelatorioRevertencia()">📊 Visualizar Relatório Completo</button>
             <div id="relatorioRevertenciaPreview" style="margin-top:15px;"></div>
+        </div>
+        
+        <div class="card" style="margin-top:20px; border-left-color:#8b5cf6; background:#f5f3ff;">
+            <h3>📋 Avaliações Profissionais</h3>
+            <p style="font-size:0.8rem; color:#6b7280; margin-bottom:10px;">Todas as avaliações registradas pelos profissionais.</p>
+            <button class="btn-primary" onclick="abrirRelatorioAvaliacoes()">📊 Visualizar Avaliações</button>
+            <div id="relatorioAvaliacoesPreview" style="margin-top:15px;"></div>
+        </div>
+        
+        <div class="card" style="margin-top:20px; border-left-color:#f59e0b; background:#fffbeb;">
+            <h3>⚖️ Ações de Liberdade Assistida</h3>
+            <p style="font-size:0.8rem; color:#92400e; margin-bottom:10px;">Acompanhamento das ações de LA.</p>
+            <button class="btn-warning" onclick="abrirRelatorioLA()">📊 Visualizar Ações LA</button>
+            <div id="relatorioLAPreview" style="margin-top:15px;"></div>
         </div>
     </div>
 
@@ -679,6 +744,42 @@
         <div class="modal-actions">
             <button class="btn-secondary" onclick="fecharModalAcoesLote()">Cancelar</button>
             <button class="btn-danger" onclick="executarAcaoLote()" id="loteExecutarBtn">Executar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Avaliação Profissional -->
+<div class="modal-overlay" id="modalAvaliacao">
+    <div class="modal-box" style="max-width:600px;">
+        <h2>📋 Nova Avaliação Profissional</h2>
+        <div class="campo">
+            <label>Profissional</label>
+            <select id="avaliacaoProfissional">
+                <option value="">Selecione um profissional...</option>
+            </select>
+        </div>
+        <div class="campo">
+            <label>Data da Avaliação</label>
+            <input type="date" id="avaliacaoData">
+        </div>
+        <div class="campo">
+            <label>Área / Especialidade</label>
+            <select id="avaliacaoArea">
+                <option value="Pedagogia">Pedagogia</option>
+                <option value="Psicologia">Psicologia</option>
+                <option value="Assistência Social">Assistência Social</option>
+                <option value="Saúde">Saúde</option>
+                <option value="Educação Física">Educação Física</option>
+                <option value="Outra">Outra</option>
+            </select>
+        </div>
+        <div class="campo">
+            <label>Conteúdo da Avaliação</label>
+            <textarea id="avaliacaoConteudo" rows="5" placeholder="Descreva detalhadamente a avaliação..."></textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="fecharModalAvaliacao()">Cancelar</button>
+            <button class="btn-primary" onclick="salvarAvaliacao()">Salvar Avaliação</button>
         </div>
     </div>
 </div>
