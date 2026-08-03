@@ -55,6 +55,7 @@ let estado = {
     oficinas: [],
     planejamentos: [],
     mensagens: [],
+    avaliacoes: [],
     online: false,
     usuarioAtual: null,
     graficos: {},
@@ -67,6 +68,7 @@ let estado = {
 let intervaloCronometro = null;
 let pollingInterval = null;
 let _jovemDocAtual = null;
+let _avaliacaoJovemId = null;
 
 // ============================================================
 // UPSTASH HELPERS
@@ -292,6 +294,7 @@ async function carregarTodosDados() {
         estado.usuarios = [];
         estado.planejamentos = [];
         estado.mensagens = [];
+        estado.avaliacoes = [];
 
         const queries = [
             { key: 'jovens:all', prefix: 'jovem:', arr: 'jovens' },
@@ -299,7 +302,8 @@ async function carregarTodosDados() {
             { key: 'oficinas:all', prefix: 'oficina:', arr: 'oficinas' },
             { key: 'users:all', prefix: 'user:', arr: 'usuarios' },
             { key: 'planejamentos:all', prefix: 'planejamento:', arr: 'planejamentos' },
-            { key: 'mensagens:all', prefix: 'mensagem:', arr: 'mensagens' }
+            { key: 'mensagens:all', prefix: 'mensagem:', arr: 'mensagens' },
+            { key: 'avaliacoes:all', prefix: 'avaliacao:', arr: 'avaliacoes' }
         ];
 
         for (let q of queries) {
@@ -317,7 +321,8 @@ async function carregarTodosDados() {
             jovens: estado.jovens.length,
             usuarios: estado.usuarios.length,
             profissionais: estado.profissionais.length,
-            oficinas: estado.oficinas.length
+            oficinas: estado.oficinas.length,
+            avaliacoes: estado.avaliacoes.length
         });
         
         atualizarInterfaceCompleta();
@@ -364,6 +369,8 @@ function atualizarInterfaceCompleta() {
     renderizarAcoesLA();
     atualizarContadorLista(estado.jovens.length);
     listarMetasLAProximas();
+    popularSelectProfissionaisAvaliacao();
+    renderizarFiltrosCheckbox();
 }
 
 // ============================================================
@@ -395,6 +402,28 @@ function mostrarAbasPorNivel(nivel) {
 
     const first = paginasPermitidas[0];
     if (first) navigateTo(first);
+}
+
+// ============================================================
+// FUNÇÕES AUXILIARES
+// ============================================================
+function parseNum(val) {
+    if (!val) return 0;
+    const n = parseFloat(String(val).replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+}
+
+function calcularSaldo(jovem) {
+    if (jovem['MEDIDA'] === 'LA') return 0;
+    const horasTotal = parseNum(jovem['HORAS']);
+    const horasFeitas = (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
+    const ajusteManual = parseNum(jovem.ajusteSaldo) || 0;
+    return Math.max(0, horasTotal - horasFeitas + ajusteManual).toFixed(1);
+}
+
+function calcularHorasCumpridas(jovem) {
+    if (jovem['MEDIDA'] === 'LA') return 0;
+    return (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0).toFixed(1);
 }
 
 // ============================================================
@@ -597,6 +626,7 @@ async function salvarJovem() {
     if (!jovem.historicoFrequencia) jovem.historicoFrequencia = [];
     if (!jovem.observacoes) jovem.observacoes = [];
     if (!jovem.documentos) jovem.documentos = [];
+    if (!jovem.avaliacoes) jovem.avaliacoes = [];
 
     if (jovem['MEDIDA'] === 'LA') {
         jovem.acoesLA = [...estado.acoesLATemporarias];
@@ -781,22 +811,6 @@ async function executarAcaoLote() {
 }
 
 // ============================================================
-// FUNÇÕES AUXILIARES
-// ============================================================
-function parseNum(val) {
-    if (!val) return 0;
-    const n = parseFloat(String(val).replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-}
-
-function calcularSaldo(jovem) {
-    if (jovem['MEDIDA'] === 'LA') return 0;
-    const horasTotal = parseNum(jovem['HORAS']);
-    const horasFeitas = (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
-    return Math.max(0, horasTotal - horasFeitas).toFixed(1);
-}
-
-// ============================================================
 // STATUS - ALTERAÇÃO MANUAL
 // ============================================================
 window.editarJovem = function(id) {
@@ -872,8 +886,62 @@ window.alterarStatusManual = async function(jovemId, novoStatus) {
 };
 
 // ============================================================
-// LISTA GERAL E FILTROS
+// LISTA GERAL E FILTROS - COM CHECKBOX MÚLTIPLA
 // ============================================================
+function renderizarFiltrosCheckbox() {
+    // Filtro de Medida
+    const medidasContainer = document.getElementById('filtroMedida');
+    if (medidasContainer) {
+        const medidas = ['LA', 'PSC', 'Internação', 'Liberação'];
+        medidasContainer.innerHTML = medidas.map(m => 
+            `<label style="margin-right:10px; font-weight:400; font-size:0.8rem; display:inline-block;">
+                <input type="checkbox" value="${m}" onchange="carregarLista()"> ${m}
+            </label>`
+        ).join('');
+    }
+
+    // Filtro de Status
+    const statusContainer = document.getElementById('filtroStatus');
+    if (statusContainer) {
+        const status = ['REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO', 'SUSPENSO', 'MEDIDA FINALIZADA', 'LIBERADO'];
+        statusContainer.innerHTML = status.map(s => 
+            `<label style="margin-right:10px; font-weight:400; font-size:0.8rem; display:inline-block;">
+                <input type="checkbox" value="${s}" onchange="carregarLista()"> ${s}
+            </label>`
+        ).join('');
+    }
+
+    // Filtro de Gênero
+    const generoContainer = document.getElementById('filtroGenero');
+    if (generoContainer) {
+        const generos = ['M', 'F', 'NB'];
+        const labels = {'M':'Masculino', 'F':'Feminino', 'NB':'Não-binário'};
+        generoContainer.innerHTML = generos.map(g => 
+            `<label style="margin-right:10px; font-weight:400; font-size:0.8rem; display:inline-block;">
+                <input type="checkbox" value="${g}" onchange="carregarLista()"> ${labels[g] || g}
+            </label>`
+        ).join('');
+    }
+
+    // Filtro de Idade
+    const idadeContainer = document.getElementById('filtroIdade');
+    if (idadeContainer) {
+        const idades = ['12-15', '16-18', '19+'];
+        idadeContainer.innerHTML = idades.map(i => 
+            `<label style="margin-right:10px; font-weight:400; font-size:0.8rem; display:inline-block;">
+                <input type="checkbox" value="${i}" onchange="carregarLista()"> ${i}
+            </label>`
+        ).join('');
+    }
+}
+
+function getFiltrosSelecionados(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
 function carregarLista() {
     const tbody = document.getElementById('listaCorpo');
     if (!tbody) {
@@ -882,29 +950,33 @@ function carregarLista() {
     }
 
     if (estado.jovens.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:#6b7280;">Nenhum jovem cadastrado. Importe uma planilha ou cadastre um novo jovem.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px; color:#6b7280;">Nenhum jovem cadastrado. Importe uma planilha ou cadastre um novo jovem.</td></tr>`;
         return;
     }
 
     const fNome = (document.getElementById('filtroNome')?.value || '').toLowerCase();
-    const fMedida = document.getElementById('filtroMedida')?.value;
-    const fStatus = document.getElementById('filtroStatus')?.value;
+    const fMedida = getFiltrosSelecionados('filtroMedida');
+    const fStatus = getFiltrosSelecionados('filtroStatus');
     const fSaldo = document.getElementById('filtroSaldo')?.value;
-    const fGenero = document.getElementById('filtroGenero')?.value;
-    const fIdade = document.getElementById('filtroIdade')?.value;
+    const fGenero = getFiltrosSelecionados('filtroGenero');
+    const fIdade = getFiltrosSelecionados('filtroIdade');
 
     let lista = estado.jovens.filter(j => {
         if (fNome && !(j['NOME'] || '').toLowerCase().includes(fNome) && !(j['ID_DIGITAL'] || '').includes(fNome)) return false;
-        if (fMedida && j['MEDIDA'] !== fMedida) return false;
-        if (fStatus && j.status !== fStatus) return false;
+        if (fMedida.length > 0 && !fMedida.includes(j['MEDIDA'])) return false;
+        if (fStatus.length > 0 && !fStatus.includes(j.status)) return false;
         if (fSaldo === 'critico' && parseFloat(calcularSaldo(j)) <= 0 && j['MEDIDA'] !== 'LA') return false;
         if (fSaldo === 'zerado' && parseFloat(calcularSaldo(j)) > 0 && j['MEDIDA'] !== 'LA') return false;
-        if (fGenero && j['GÊNERO'] !== fGenero) return false;
-        if (fIdade) {
+        if (fGenero.length > 0 && !fGenero.includes(j['GÊNERO'])) return false;
+        if (fIdade.length > 0) {
             const idade = parseInt(j['IDADE']) || 0;
-            if (fIdade === '12-15' && (idade < 12 || idade > 15)) return false;
-            if (fIdade === '16-18' && (idade < 16 || idade > 18)) return false;
-            if (fIdade === '19+' && idade < 19) return false;
+            let idadeMatch = false;
+            for (const range of fIdade) {
+                if (range === '12-15' && idade >= 12 && idade <= 15) idadeMatch = true;
+                if (range === '16-18' && idade >= 16 && idade <= 18) idadeMatch = true;
+                if (range === '19+' && idade >= 19) idadeMatch = true;
+            }
+            if (!idadeMatch) return false;
         }
         return true;
     }).sort((a, b) => (a['NOME'] || '').localeCompare((b['NOME'] || ''), 'pt-BR'));
@@ -925,7 +997,10 @@ function carregarLista() {
             j.status === 'LIBERADO' ? 'background:#e5e7eb; color:#374151;' :
             'background:#f1f5f9; color:#475569;';
 
-        const renderSaldo = j['MEDIDA'] === 'LA' ? `Ações: ${j.acoesLA?.filter(a=>a.realizado).length || 0}/${j.acoesLA?.length || 0}` : `${calcularSaldo(j)}h`;
+        const horasAtribuidas = j['HORAS'] || 0;
+        const horasCumpridas = calcularHorasCumpridas(j);
+        const saldo = calcularSaldo(j);
+        const renderSaldo = j['MEDIDA'] === 'LA' ? `Ações: ${j.acoesLA?.filter(a=>a.realizado).length || 0}/${j.acoesLA?.length || 0}` : `${saldo}h`;
 
         const hoje = new Date();
         const hojeStr = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
@@ -977,6 +1052,8 @@ function carregarLista() {
             <td>${j['ID_DIGITAL'] || '-'}</td>
             <td>${j['IDADE'] || '-'}</td>
             <td>${j['MEDIDA'] || '-'}</td>
+            <td>${horasAtribuidas}h</td>
+            <td>${horasCumpridas}h</td>
             <td>${renderSaldo}</td>
             <td><span style="font-weight:600; padding:4px 12px; border-radius:20px; ${bgStatus}">${j.status || 'REGULAR'}</span></td>
             <td>${motivoStatus}</td>
@@ -1007,34 +1084,10 @@ function atualizarContadorLista(total) {
     }
 
     if (contadorContainer) {
-        const filtrosAtivos = [];
-        const fNome = document.getElementById('filtroNome')?.value?.trim() || '';
-        const fMedida = document.getElementById('filtroMedida')?.value || '';
-        const fStatus = document.getElementById('filtroStatus')?.value || '';
-        const fSaldo = document.getElementById('filtroSaldo')?.value || '';
-        const fGenero = document.getElementById('filtroGenero')?.value || '';
-        const fIdade = document.getElementById('filtroIdade')?.value || '';
-
-        if (fNome) filtrosAtivos.push(`Nome: "${fNome}"`);
-        if (fMedida) filtrosAtivos.push(`Medida: ${fMedida}`);
-        if (fStatus) filtrosAtivos.push(`Status: ${fStatus}`);
-        if (fSaldo === 'critico') filtrosAtivos.push('Saldo: Crítico');
-        if (fSaldo === 'zerado') filtrosAtivos.push('Saldo: Zerado');
-        if (fGenero) filtrosAtivos.push(`Gênero: ${fGenero}`);
-        if (fIdade) filtrosAtivos.push(`Idade: ${fIdade}`);
-
-        let textoFiltros = '';
-        if (filtrosAtivos.length > 0) {
-            textoFiltros = ` <span style="font-weight: 400; color: #6b7280; font-size: 0.85rem;">| Filtros: ${filtrosAtivos.join(', ')}</span>`;
-        }
-
         contadorContainer.innerHTML = `
             <div id="contadorListaJovens" style="padding: 10px 15px; font-weight: 600; color: #1e2a4a; background: #f1f5f9; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap:wrap; gap:8px;">
                 <span>👥 Total de jovens: <strong style="color: #2c3e66; font-size: 1.1rem;">${total}</strong></span>
-                <span style="font-size: 0.85rem; color: #6b7280;">
-                    ${total === 1 ? '1 jovem exibido' : `${total} jovens exibidos`}
-                    ${textoFiltros}
-                </span>
+                <span style="font-size: 0.85rem; color: #6b7280;">${total === 1 ? '1 jovem exibido' : `${total} jovens exibidos`}</span>
             </div>
         `;
     }
@@ -1049,7 +1102,6 @@ function renderizarAcompanhamento() {
     const tabela14 = document.getElementById('tabela14dias');
     if (!tabela7 || !tabela14) return;
 
-    // Jovens com 7+ dias sem comparecer (excluindo liberados, suspensos e finalizados)
     const semComparecimento = estado.jovens.filter(j => {
         if (j['MEDIDA'] === 'Liberação' || j.status === 'SUSPENSO' || j.status === 'MEDIDA FINALIZADA' || j.status === 'LIBERADO') return false;
         const hist = j.historicoFrequencia || [];
@@ -1075,6 +1127,7 @@ function renderizarAcompanhamento() {
         const dias = hist.length > 0 ? Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) : '?';
         return `<tr>
             <td>${j['NOME'] || '-'}</td>
+            <td>${j.status || 'REGULAR'}</td>
             <td>${ultimo}</td>
             <td>${dias}</td>
             <td>
@@ -1082,7 +1135,7 @@ function renderizarAcompanhamento() {
                 <button onclick="marcarIrregular('${j.id}')" class="btn-sm btn-sm-warning"><i class="fas fa-exclamation-circle"></i> Marcar IRREGULAR</button>
             </td>
         </tr>`;
-    }).join('') || '<tr><td colspan="4" style="text-align:center; color:#6b7280;">✅ Nenhum jovem com 7+ dias sem comparecer.</td></tr>';
+    }).join('') || '<tr><td colspan="5" style="text-align:center; color:#6b7280;">✅ Nenhum jovem com 7+ dias sem comparecer.</td></tr>';
 
     tabela14.innerHTML = sem14.map(j => {
         const hist = j.historicoFrequencia || [];
@@ -1090,6 +1143,7 @@ function renderizarAcompanhamento() {
         const dias = hist.length > 0 ? Math.floor((agora - new Date(Math.max(...hist.map(h => new Date(h.data))))) / (1000 * 60 * 60 * 24)) : '?';
         return `<tr>
             <td>${j['NOME'] || '-'}</td>
+            <td>${j.status || 'REGULAR'}</td>
             <td>${ultimo}</td>
             <td>${dias}</td>
             <td>
@@ -1097,7 +1151,7 @@ function renderizarAcompanhamento() {
                 <button onclick="marcarDescumprimento('${j.id}')" class="btn-sm btn-sm-danger"><i class="fas fa-exclamation-triangle"></i> Marcar EM DESCUMPRIMENTO</button>
             </td>
         </tr>`;
-    }).join('') || '<tr><td colspan="4" style="text-align:center; color:#10b981;">✅ Nenhum jovem com 14+ dias sem comparecer.</td></tr>';
+    }).join('') || '<tr><td colspan="5" style="text-align:center; color:#10b981;">✅ Nenhum jovem com 14+ dias sem comparecer.</td></tr>';
 }
 
 window.marcarIrregular = async function(jovemId) {
@@ -1299,6 +1353,833 @@ window.removerAcaoLaGeral = async function(jovemId, acaoId) {
 };
 
 // ============================================================
+// AVALIAÇÕES PROFISSIONAIS
+// ============================================================
+function popularSelectProfissionaisAvaliacao() {
+    const select = document.getElementById('avaliacaoProfissional');
+    if (!select) return;
+    const profs = estado.profissionais.filter(p => p.nome);
+    select.innerHTML = '<option value="">Selecione um profissional...</option>' +
+        profs.map(p => `<option value="${p.id}">${p.nome}${p.funcao ? ' - ' + p.funcao : ''}${p.registro ? ' (Reg: ' + p.registro + ')' : ''}</option>`).join('');
+}
+
+window.abrirModalAvaliacao = function() {
+    const jovemId = document.getElementById('selectJovemAcomp').value;
+    if (!jovemId) {
+        alert('Selecione um jovem primeiro.');
+        return;
+    }
+    _avaliacaoJovemId = jovemId;
+    document.getElementById('avaliacaoData').value = new Date().toISOString().split('T')[0];
+    document.getElementById('avaliacaoConteudo').value = '';
+    popularSelectProfissionaisAvaliacao();
+    document.getElementById('modalAvaliacao').style.display = 'flex';
+};
+
+window.fecharModalAvaliacao = function() {
+    document.getElementById('modalAvaliacao').style.display = 'none';
+    _avaliacaoJovemId = null;
+};
+
+window.salvarAvaliacao = async function() {
+    const jovemId = _avaliacaoJovemId;
+    if (!jovemId) { alert('Selecione um jovem primeiro.'); return; }
+    
+    const profissionalId = document.getElementById('avaliacaoProfissional').value;
+    const data = document.getElementById('avaliacaoData').value;
+    const area = document.getElementById('avaliacaoArea').value;
+    const conteudo = document.getElementById('avaliacaoConteudo').value.trim();
+    
+    if (!profissionalId) { alert('Selecione um profissional.'); return; }
+    if (!data) { alert('Selecione a data da avaliação.'); return; }
+    if (!conteudo) { alert('Digite o conteúdo da avaliação.'); return; }
+    
+    const profissional = estado.profissionais.find(p => p.id === profissionalId);
+    if (!profissional) { alert('Profissional não encontrado.'); return; }
+    
+    const avaliacao = {
+        id: 'av_' + Date.now(),
+        jovemId: jovemId,
+        profissionalId: profissionalId,
+        profissionalNome: profissional.nome,
+        profissionalFuncao: profissional.funcao || '',
+        profissionalRegistro: profissional.registro || '',
+        data: data,
+        area: area,
+        conteudo: conteudo,
+        criadoEm: new Date().toISOString()
+    };
+    
+    try {
+        await upstash('SET', `avaliacao:${avaliacao.id}`, JSON.stringify(avaliacao));
+        await upstash('SADD', 'avaliacoes:all', avaliacao.id);
+        estado.avaliacoes.push(avaliacao);
+        
+        const jovem = estado.jovens.find(j => j.id === jovemId);
+        if (jovem) {
+            if (!jovem.avaliacoes) jovem.avaliacoes = [];
+            jovem.avaliacoes.push(avaliacao.id);
+            await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        }
+        
+        fecharModalAvaliacao();
+        carregarFichaIndividual();
+        alert('✅ Avaliação salva com sucesso!');
+    } catch (err) {
+        alert('Erro ao salvar avaliação: ' + err.message);
+    }
+};
+
+window.excluirAvaliacao = async function(avaliacaoId) {
+    if (!confirm('Tem certeza que deseja excluir esta avaliação?')) return;
+    try {
+        await upstash('DEL', `avaliacao:${avaliacaoId}`);
+        await upstash('SREM', 'avaliacoes:all', avaliacaoId);
+        estado.avaliacoes = estado.avaliacoes.filter(a => a.id !== avaliacaoId);
+        
+        const jovem = estado.jovens.find(j => j.avaliacoes && j.avaliacoes.includes(avaliacaoId));
+        if (jovem) {
+            jovem.avaliacoes = jovem.avaliacoes.filter(id => id !== avaliacaoId);
+            await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        }
+        
+        carregarFichaIndividual();
+        alert('✅ Avaliação excluída com sucesso!');
+    } catch (err) {
+        alert('Erro ao excluir avaliação: ' + err.message);
+    }
+};
+
+// ============================================================
+// ACOMPANHAMENTO INDIVIDUAL - FICHA COM AVALIAÇÕES
+// ============================================================
+function popularSelectAcompInd() {
+    const select = document.getElementById('selectJovemAcomp');
+    if (!select) return;
+    select.innerHTML = '<option value="">Selecione um jovem...</option>' +
+        estado.jovens.sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR'))
+        .map(j => `<option value="${j.id}">${j['NOME'] || j['REFERENCIA']} - ${j['MEDIDA'] || ''} ${j.status === 'SUSPENSO' ? '🔴' : j.status === 'EM DESCUMPRIMENTO' ? '⚠️' : j.status === 'MEDIDA FINALIZADA' ? '✅' : ''}</option>`).join('');
+}
+
+window.carregarFichaIndividual = function() {
+    const id = document.getElementById('selectJovemAcomp').value;
+    const container = document.getElementById('fichaIndividual');
+    const btnPrint = document.getElementById('btnImprimirFicha');
+
+    if (!id) {
+        container.style.display = 'none';
+        if (btnPrint) btnPrint.style.display = 'none';
+        return;
+    }
+    const jovem = estado.jovens.find(j => j.id === id);
+    if (!jovem) return;
+
+    container.style.display = 'block';
+    if (btnPrint) btnPrint.style.display = 'inline-block';
+
+    let acoesLAHTML = '';
+    if (jovem['MEDIDA'] === 'LA') {
+        const acoes = jovem.acoesLA || [];
+        const profs = estado.usuarios.filter(u => u.nivel === 'tecnico' || u.nivel === 'gestor');
+        const profAtual = estado.usuarios.find(u => u.id === jovem.profissionalLA);
+        acoesLAHTML = `
+            <h3 style="margin-top:20px; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚖️ Acompanhamento LA</h3>
+            <div style="margin-bottom:15px;">
+                <label style="font-weight:bold;">Profissional Responsável:</label>
+                <select onchange="vincularProfissionalLA('${jovem.id}', this.value)" style="padding:5px; border-radius:5px; margin-left:10px; border:1px solid #d1d9e6;">
+                    <option value="">Não atribuído</option>
+                    ${profs.map(p => `<option value="${p.id}" ${jovem.profissionalLA === p.id ? 'selected' : ''}>${p.nome}</option>`).join('')}
+                </select>
+                ${profAtual ? `<span style="margin-left:15px; color:#10b981;">✅ Atribuído a: ${profAtual.nome}</span>` : ''}
+            </div>
+            <ul style="list-style:none; padding:0;">
+                ${acoes.map(a => `
+                    <li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-radius:8px; flex-wrap:wrap; gap:8px;">
+                        <span style="${a.realizado ? 'text-decoration:line-through; color:#10b981;' : ''}">
+                            ${a.texto} ${a.prazo ? `<span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span>` : ''}
+                        </span>
+                        <div>
+                            <span style="font-size:0.7rem; color:#6b7280; margin-right:10px;">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
+                            <button class="btn-sm ${a.realizado ? 'btn-sm-success' : 'btn-sm-warning'}" onclick="toggleAcaoLA('${jovem.id}', ${a.id})">
+                                ${a.realizado ? '✅ Feito' : 'Marcar Feito'}
+                            </button>
+                        </div>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+    }
+
+    const dadosDiv = document.getElementById('fichaDadosPessoais');
+    if (dadosDiv) {
+        dadosDiv.innerHTML = `
+            <div class="ficha-grid">
+                ${CAMPOS.map(([key, label]) => `<div class="ficha-campo"><strong>${label}:</strong> ${jovem[key] || '-'}</div>`).join('')}
+                <div class="ficha-campo"><strong>ID Digital:</strong> ${jovem['ID_DIGITAL'] || '-'}</div>
+                <div class="ficha-campo"><strong>Horas Atribuídas:</strong> ${jovem['HORAS'] || 0}h</div>
+                <div class="ficha-campo"><strong>Horas Cumpridas:</strong> ${calcularHorasCumpridas(jovem)}h</div>
+                <div class="ficha-campo"><strong>Saldo:</strong> ${calcularSaldo(jovem)}h</div>
+                ${jovem.motivoSuspensao ? `<div class="ficha-campo" style="grid-column:1/-1; background:#fce7f3; padding:8px; border-radius:4px;"><strong style="color:#be185d;">Motivo da Suspensão:</strong> ${jovem.motivoSuspensao}</div>` : ''}
+                ${jovem.status === 'EM DESCUMPRIMENTO' ? `<div class="ficha-campo" style="grid-column:1/-1; background:#fee2e2; padding:8px; border-radius:4px;"><strong style="color:#991b1b;">⚠️ Status: EM DESCUMPRIMENTO</strong></div>` : ''}
+                ${jovem.status === 'IRREGULAR' ? `<div class="ficha-campo" style="grid-column:1/-1; background:#fef3c7; padding:8px; border-radius:4px;"><strong style="color:#92400e;">🟡 Status: IRREGULAR</strong></div>` : ''}
+            </div>
+            ${acoesLAHTML}
+        `;
+    }
+
+    const freqDiv = document.getElementById('fichaFrequencia');
+    if (freqDiv) {
+        const hist = jovem.historicoFrequencia || [];
+        const totalHoras = hist.reduce((s, h) => s + parseNum(h.horas), 0);
+        freqDiv.innerHTML = `
+            <p><strong>Total de frequências:</strong> ${hist.length} registros</p>
+            <p><strong>Total de horas:</strong> ${totalHoras.toFixed(1)}h</p>
+            <p><strong>Saldo restante:</strong> ${calcularSaldo(jovem)}h</p>
+            ${hist.length > 0 ? `
+                <table style="margin-top:12px; width:100%;">
+                    <thead><tr><th>Tipo</th><th>Data/Hora</th><th>Horas</th><th>Observação</th></tr></thead>
+                    <tbody>
+                        ${hist.map(h => `<tr>
+                            <td>${h.tipo === 'saida' ? '🚪 Saída' : '🚪 Entrada'}</td>
+                            <td>${new Date(h.data).toLocaleDateString('pt-BR')} ${new Date(h.data).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</td>
+                            <td>${h.tipo === 'saida' ? '-' : (parseNum(h.horas) || 0) + 'h'}</td>
+                            <td>${h.observacao || '-'}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            ` : '<p style="color:#6b7280;">Nenhum registro de frequência.</p>'}
+        `;
+    }
+
+    const ofDiv = document.getElementById('fichaOficinas');
+    if (ofDiv) {
+        const oficinasParticipadas = estado.oficinas.filter(o => (o.jovensIds || []).includes(jovem.id));
+        ofDiv.innerHTML = oficinasParticipadas.length > 0 ?
+            `<table style="margin-top:12px; width:100%;"><thead><tr><th>Data</th><th>Conteúdo</th><th>Benefício Social</th></tr></thead><tbody>
+                ${oficinasParticipadas.map(o => `<tr><td>${new Date(o.data).toLocaleDateString('pt-BR')}</td><td>${o.conteudo}</td><td>${o.reverte ? '✅ Sim' : 'Não'}</td></tr>`).join('')}
+            </tbody></table>` :
+            '<p style="color:#6b7280;">Nenhuma oficina registrada.</p>';
+    }
+
+    const docDiv = document.getElementById('fichaDocumentos');
+    if (docDiv) {
+        const docs = jovem.documentos || [];
+        docDiv.innerHTML = docs.length > 0 ?
+            docs.map((d, i) => `<div class="doc-item"><span>📄 ${d.nome} (${d.tipo})</span><div>${d.base64 ? `<a href="${d.base64}" download="${d.nome}" class="btn-sm btn-sm-primary" style="text-decoration:none;">📥 Baixar</a>` : ''}<button onclick="removerDocumento('${id}', ${i})" class="btn-sm btn-sm-danger">🗑️</button></div></div>`).join('') :
+            '<p style="color:#6b7280;">Nenhum documento anexado.</p>';
+    }
+
+    const obsDiv = document.getElementById('fichaObservacoes');
+    if (obsDiv) {
+        const obs = jovem.observacoes || [];
+        obsDiv.innerHTML = obs.length > 0 ?
+            obs.map(o => `<div class="obs-item"><strong>${o.profissional || 'Sistema'}</strong> - <small>${new Date(o.data).toLocaleDateString('pt-BR')} ${new Date(o.data).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</small><p>${o.texto}</p></div>`).join('') :
+            '<p style="color:#6b7280;">Nenhuma observação registrada.</p>';
+    }
+
+    // ============================================================
+    // AVALIAÇÕES PROFISSIONAIS NA FICHA
+    // ============================================================
+    const avalDiv = document.getElementById('fichaAvaliacoes');
+    if (avalDiv) {
+        const avaliacoes = estado.avaliacoes.filter(a => a.jovemId === jovem.id);
+        avalDiv.innerHTML = avaliacoes.length > 0 ?
+            avaliacoes.map(a => `
+                <div class="obs-item" style="border-left-color:#8b5cf6; background:#f5f3ff;">
+                    <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                        <strong>${a.profissionalNome}</strong>
+                        <span style="font-size:0.8rem; color:#6b7280;">${a.area} - ${new Date(a.data).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    ${a.profissionalFuncao ? `<span style="font-size:0.8rem; color:#6b7280;">${a.profissionalFuncao}${a.profissionalRegistro ? ' - Reg: ' + a.profissionalRegistro : ''}</span>` : ''}
+                    <p style="margin-top:8px; white-space:pre-wrap;">${a.conteudo}</p>
+                    <div style="margin-top:6px;">
+                        <button onclick="excluirAvaliacao('${a.id}')" class="btn-sm btn-sm-danger">🗑️ Excluir</button>
+                    </div>
+                </div>
+            `).join('') :
+            '<p style="color:#6b7280;">Nenhuma avaliação registrada.</p>';
+    }
+
+    _jovemDocAtual = jovem.id;
+};
+
+window.toggleAcaoLA = async function(jovemId, acaoId) {
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) return;
+    const acao = jovem.acoesLA.find(a => a.id === acaoId);
+    if (!acao) return;
+    acao.realizado = !acao.realizado;
+    await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+    carregarFichaIndividual();
+    carregarLista();
+    listarMetasLAProximas();
+};
+
+window.vincularProfissionalLA = async function(jovemId, profId) {
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) return;
+    jovem.profissionalLA = profId;
+    await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+    carregarFichaIndividual();
+    alert('Profissional vinculado com sucesso!');
+};
+
+window.salvarObsAcomp = async function() {
+    const jovemId = document.getElementById('selectJovemAcomp').value;
+    const texto = document.getElementById('obsAcompTexto').value.trim();
+    if (!texto) return alert('Digite a observação.');
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) return;
+    jovem.observacoes = jovem.observacoes || [];
+    jovem.observacoes.push({
+        data: new Date().toISOString(),
+        profissional: estado.usuarioAtual?.nome || 'Sistema',
+        texto: texto
+    });
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        document.getElementById('obsAcompTexto').value = '';
+        carregarFichaIndividual();
+        alert('Observação salva!');
+    } catch (err) {
+        alert('Erro: ' + err.message);
+    }
+};
+
+// ============================================================
+// RELATÓRIOS DETALHADOS
+// ============================================================
+function renderizarRelatorios() {
+    // Projeção Quinzenal
+    const tbody1 = document.querySelector('#tabelaProjecao tbody');
+    if (tbody1) {
+        const agora = new Date();
+        const HORAS_POR_QUINZENA = 8;
+        let saldos = estado.jovens
+            .filter(j => j['MEDIDA'] && j['MEDIDA'] !== 'Liberação' && j['MEDIDA'] !== 'LA' && j.status !== 'SUSPENSO' && j.status !== 'EM DESCUMPRIMENTO' && j.status !== 'MEDIDA FINALIZADA')
+            .map(j => {
+                const horasTotal = parseNum(j['HORAS']);
+                const horasFeitas = (j.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
+                return Math.max(0, horasTotal - horasFeitas);
+            });
+
+        tbody1.innerHTML = '';
+        for (let mes = 0; mes < 3; mes++) {
+            const dataMes = new Date(agora.getFullYear(), agora.getMonth() + mes, 1);
+            const mesNome = dataMes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+            const diasMes = new Date(dataMes.getFullYear(), dataMes.getMonth() + 1, 0).getDate();
+
+            const ativosQ1 = saldos.filter(s => s > 0).length;
+            const horasQ1 = saldos.reduce((sum, s) => sum + Math.min(s, HORAS_POR_QUINZENA), 0);
+            saldos = saldos.map(s => Math.max(0, s - HORAS_POR_QUINZENA));
+            const q1Inicio = new Date(dataMes.getFullYear(), dataMes.getMonth(), 1);
+            const q1Fim = new Date(dataMes.getFullYear(), dataMes.getMonth(), 15);
+            tbody1.innerHTML += `<tr><td>1ª Quin. ${mesNome}</td><td>${q1Inicio.toLocaleDateString('pt-BR')} - ${q1Fim.toLocaleDateString('pt-BR')}</td><td>${ativosQ1}</td><td>${horasQ1}h</td></tr>`;
+
+            const ativosQ2 = saldos.filter(s => s > 0).length;
+            const horasQ2 = saldos.reduce((sum, s) => sum + Math.min(s, HORAS_POR_QUINZENA), 0);
+            saldos = saldos.map(s => Math.max(0, s - HORAS_POR_QUINZENA));
+            const q2Inicio = new Date(dataMes.getFullYear(), dataMes.getMonth(), 16);
+            const q2Fim = new Date(dataMes.getFullYear(), dataMes.getMonth(), diasMes);
+            tbody1.innerHTML += `<tr><td>2ª Quin. ${mesNome}</td><td>${q2Inicio.toLocaleDateString('pt-BR')} - ${q2Fim.toLocaleDateString('pt-BR')}</td><td>${ativosQ2}</td><td>${horasQ2}h</td></tr>`;
+        }
+    }
+
+    // Aniversariantes com status
+    const tbody2 = document.querySelector('#tabelaAniversariantes tbody');
+    if (tbody2) {
+        const agora = new Date();
+        const anoAtual = agora.getFullYear();
+        const mesAtual = agora.getMonth();
+        const aniversariantes = estado.jovens.map(j => {
+            const nascStr = j['NASC.'];
+            if (!nascStr) return null;
+            const nasc = new Date(nascStr);
+            if (isNaN(nasc.getTime())) return null;
+            const mesNasc = nasc.getMonth();
+            const diaNasc = nasc.getDate() + 1;
+            let mesTarget = mesNasc;
+            let anoTarget = anoAtual;
+            if (mesNasc < mesAtual || (mesNasc === mesAtual && diaNasc < agora.getDate())) anoTarget = anoAtual + 1;
+            const diffMeses = (anoTarget - anoAtual) * 12 + (mesTarget - mesAtual);
+            if (diffMeses < 0 || diffMeses >= 3) return null;
+            return {
+                nome: j['NOME'] || j['REFERENCIA'] || 'Sem nome',
+                status: j.status || 'REGULAR',
+                nasc: nasc,
+                diaNasc: diaNasc,
+                mesTarget: mesTarget,
+                anoTarget: anoTarget,
+                idadeQueFara: anoTarget - nasc.getFullYear(),
+                dataEvento: new Date(anoTarget, mesTarget, diaNasc)
+            };
+        }).filter(Boolean).sort((a, b) => a.dataEvento - b.dataEvento);
+        
+        tbody2.innerHTML = aniversariantes.length > 0 ? aniversariantes.map(a => {
+            let bgStatus = a.status === 'SUSPENSO' ? 'badge-suspenso' :
+                a.status === 'EM DESCUMPRIMENTO' ? 'badge-descumprimento' :
+                a.status === 'IRREGULAR' ? 'badge-irregular' :
+                a.status === 'MEDIDA FINALIZADA' ? 'badge-finalizada' :
+                a.status === 'REGULAR' ? 'badge-regular' :
+                a.status === 'LIBERADO' ? 'badge-liberado' :
+                'badge-regular';
+            return `<tr>
+                <td>${a.nome}</td>
+                <td><span class="badge ${bgStatus}">${a.status}</span></td>
+                <td>${a.nasc.toLocaleDateString('pt-BR')}</td>
+                <td>${String(a.diaNasc).padStart(2, '0')}/${String(a.mesTarget + 1).padStart(2, '0')}/${a.anoTarget}</td>
+                <td>${a.idadeQueFara} anos</td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="5" style="text-align:center; color:#6b7280;">Nenhum aniversariante nos próximos 3 meses.</td></tr>';
+    }
+}
+
+// ============================================================
+// RELATÓRIO DE AVALIAÇÕES PROFISSIONAIS
+// ============================================================
+window.abrirRelatorioAvaliacoes = function() {
+    if (estado.avaliacoes.length === 0) {
+        alert('Nenhuma avaliação registrada.');
+        return;
+    }
+    
+    let logoBase64 = window._logoBase64 || '';
+    if (!logoBase64) {
+        const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
+        if (logoImg && logoImg.src && logoImg.src.startsWith('data:image')) {
+            logoBase64 = logoImg.src;
+        }
+    }
+    
+    let html = `<html><head><title>Relatório de Avaliações Profissionais</title><style>
+        body{font-family:'Segoe UI',Arial,sans-serif; padding:30px; background:#f0f4f8;}
+        .container{max-width:1000px; margin:0 auto; background:white; border-radius:12px; padding:30px; box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+        .header{text-align:center; margin-bottom:25px; border-bottom:3px solid #8b5cf6; padding-bottom:15px;}
+        .header-logo{max-height:80px; max-width:150px; object-fit:contain;}
+        .header h1{color:#2c3e66; font-size:22px;}
+        .header p{color:#6b7280; font-size:14px;}
+        .avaliacao-item{background:#f8fafc; border-left:4px solid #8b5cf6; padding:15px; margin-bottom:15px; border-radius:4px;}
+        .avaliacao-header{display:flex; justify-content:space-between; flex-wrap:wrap; margin-bottom:8px;}
+        .avaliacao-header .profissional{font-weight:bold; color:#2c3e66;}
+        .avaliacao-header .data{color:#6b7280; font-size:0.9rem;}
+        .avaliacao-area{color:#8b5cf6; font-weight:500; font-size:0.85rem;}
+        .avaliacao-conteudo{white-space:pre-wrap; margin-top:10px; color:#1e293b;}
+        .avaliacao-credenciais{font-size:0.8rem; color:#6b7280;}
+        .badge{display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600;}
+        .badge-regular{background:#dbeafe; color:#1e40af;}
+        .badge-irregular{background:#fef3c7; color:#92400e;}
+        .badge-em-descumprimento{background:#fee2e2; color:#991b1b;}
+        .badge-suspenso{background:#fce7f3; color:#be185d;}
+        .badge-medida-finalizada{background:#d1fae5; color:#065f46;}
+        .badge-liberado{background:#e5e7eb; color:#374151;}
+        .total{background:#f5f3ff; padding:15px; border-radius:8px; margin-top:20px; border:1px solid #8b5cf6;}
+        .footer{text-align:center; margin-top:20px; padding-top:15px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:0.8rem;}
+        @media print{body{padding:20px; background:white;}}
+    </style></head><body>
+    <div class="container">
+        <div class="header">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="header-logo">` : ''}
+            <h1>📋 Relatório de Avaliações Profissionais</h1>
+            <p>Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+        </div>
+        <p style="color:#6b7280; margin-bottom:15px;">Total: <strong>${estado.avaliacoes.length}</strong> avaliações registradas</p>`;
+    
+    // Agrupar por jovem
+    const avaliacoesPorJovem = {};
+    estado.avaliacoes.forEach(a => {
+        if (!avaliacoesPorJovem[a.jovemId]) {
+            const jovem = estado.jovens.find(j => j.id === a.jovemId);
+            avaliacoesPorJovem[a.jovemId] = {
+                nome: jovem ? (jovem['NOME'] || jovem['REFERENCIA'] || 'Sem nome') : 'Jovem não encontrado',
+                status: jovem ? jovem.status : 'REGULAR',
+                avaliacoes: []
+            };
+        }
+        avaliacoesPorJovem[a.jovemId].avaliacoes.push(a);
+    });
+    
+    const chavesOrdenadas = Object.keys(avaliacoesPorJovem).sort((a, b) => 
+        (avaliacoesPorJovem[a].nome || '').localeCompare(avaliacoesPorJovem[b].nome || '')
+    );
+    
+    chavesOrdenadas.forEach(jovemId => {
+        const info = avaliacoesPorJovem[jovemId];
+        let bgStatus = info.status === 'SUSPENSO' ? 'badge-suspenso' :
+            info.status === 'EM DESCUMPRIMENTO' ? 'badge-em-descumprimento' :
+            info.status === 'IRREGULAR' ? 'badge-irregular' :
+            info.status === 'MEDIDA FINALIZADA' ? 'badge-medida-finalizada' :
+            info.status === 'REGULAR' ? 'badge-regular' :
+            info.status === 'LIBERADO' ? 'badge-liberado' :
+            'badge-regular';
+        
+        html += `
+            <div style="margin-top:25px;">
+                <h3 style="color:#2c3e66; border-bottom:1px solid #e2e8f0; padding-bottom:5px;">
+                    ${info.nome}
+                    <span class="badge ${bgStatus}">${info.status}</span>
+                </h3>`;
+        
+        info.avaliacoes.forEach(a => {
+            html += `
+                <div class="avaliacao-item">
+                    <div class="avaliacao-header">
+                        <span class="profissional">${a.profissionalNome}</span>
+                        <span class="data">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    <div class="avaliacao-area">📌 ${a.area}</div>
+                    <div class="avaliacao-credenciais">${a.profissionalFuncao || ''}${a.profissionalRegistro ? ' - Reg: ' + a.profissionalRegistro : ''}</div>
+                    <div class="avaliacao-conteudo">${a.conteudo}</div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+    });
+    
+    html += `
+        <div class="total">
+            <strong>📊 Resumo:</strong> ${estado.avaliacoes.length} avaliações • ${chavesOrdenadas.length} jovens avaliados
+        </div>
+        <div class="footer">
+            Sistema de Controle de Medidas Socioeducativas • v2.0
+        </div>
+    </div></body></html>`;
+    
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+};
+
+// ============================================================
+// RELATÓRIO DE AÇÕES LA
+// ============================================================
+window.abrirRelatorioLA = function() {
+    const jovensLA = estado.jovens.filter(j => j['MEDIDA'] === 'LA');
+    if (jovensLA.length === 0) {
+        alert('Nenhum jovem com Liberdade Assistida encontrado.');
+        return;
+    }
+    
+    let logoBase64 = window._logoBase64 || '';
+    if (!logoBase64) {
+        const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
+        if (logoImg && logoImg.src && logoImg.src.startsWith('data:image')) {
+            logoBase64 = logoImg.src;
+        }
+    }
+    
+    let totalAcoes = 0;
+    let totalRealizadas = 0;
+    
+    let html = `<html><head><title>Relatório de Ações LA</title><style>
+        body{font-family:'Segoe UI',Arial,sans-serif; padding:30px; background:#f0f4f8;}
+        .container{max-width:1000px; margin:0 auto; background:white; border-radius:12px; padding:30px; box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+        .header{text-align:center; margin-bottom:25px; border-bottom:3px solid #f59e0b; padding-bottom:15px;}
+        .header-logo{max-height:80px; max-width:150px; object-fit:contain;}
+        .header h1{color:#2c3e66; font-size:22px;}
+        .header p{color:#6b7280; font-size:14px;}
+        .acao-item{padding:10px 15px; margin-bottom:8px; border-radius:4px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;}
+        .acao-item.pendente{background:#fffbeb; border-left:4px solid #f59e0b;}
+        .acao-item.realizado{background:#ecfdf5; border-left:4px solid #10b981;}
+        .acao-item .texto{font-weight:500;}
+        .acao-item .status{font-size:0.85rem; font-weight:600;}
+        .acao-item .status.pendente{color:#92400e;}
+        .acao-item .status.realizado{color:#065f46;}
+        .acao-item .data{font-size:0.8rem; color:#6b7280;}
+        .acao-item .prazo{font-size:0.8rem; color:#6b7280;}
+        .total{background:#fffbeb; padding:15px; border-radius:8px; margin-top:20px; border:1px solid #f59e0b;}
+        .badge{display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600;}
+        .badge-regular{background:#dbeafe; color:#1e40af;}
+        .footer{text-align:center; margin-top:20px; padding-top:15px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:0.8rem;}
+        @media print{body{padding:20px; background:white;}}
+    </style></head><body>
+    <div class="container">
+        <div class="header">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="header-logo">` : ''}
+            <h1>⚖️ Relatório de Ações de Liberdade Assistida</h1>
+            <p>Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+        </div>
+        <p style="color:#6b7280; margin-bottom:15px;">Jovens com LA: <strong>${jovensLA.length}</strong></p>`;
+    
+    jovensLA.forEach(j => {
+        const acoes = j.acoesLA || [];
+        const realizadas = acoes.filter(a => a.realizado).length;
+        totalAcoes += acoes.length;
+        totalRealizadas += realizadas;
+        
+        html += `
+            <div style="margin-top:25px;">
+                <h3 style="color:#2c3e66; border-bottom:1px solid #e2e8f0; padding-bottom:5px;">
+                    ${j['NOME'] || j['REFERENCIA'] || 'Sem nome'}
+                    <span style="font-size:0.85rem; color:#6b7280;">(${realizadas}/${acoes.length} ações)</span>
+                </h3>`;
+        
+        if (acoes.length === 0) {
+            html += `<p style="color:#6b7280;">Nenhuma ação cadastrada.</p>`;
+        } else {
+            acoes.forEach(a => {
+                const statusClass = a.realizado ? 'realizado' : 'pendente';
+                html += `
+                    <div class="acao-item ${statusClass}">
+                        <div>
+                            <div class="texto">${a.texto}</div>
+                            <div class="data">Criado: ${new Date(a.data).toLocaleDateString('pt-BR')}</div>
+                            ${a.prazo ? `<div class="prazo">Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')}</div>` : ''}
+                        </div>
+                        <span class="status ${statusClass}">${a.realizado ? '✅ Realizado' : '⏳ Pendente'}</span>
+                    </div>
+                `;
+            });
+        }
+        
+        html += `</div>`;
+    });
+    
+    const progresso = totalAcoes > 0 ? ((totalRealizadas / totalAcoes) * 100).toFixed(1) : 0;
+    
+    html += `
+        <div class="total">
+            <strong>📊 Resumo:</strong> ${totalAcoes} ações • ${totalRealizadas} realizadas • ${progresso}% de conclusão
+        </div>
+        <div class="footer">
+            Sistema de Controle de Medidas Socioeducativas • v2.0
+        </div>
+    </div></body></html>`;
+    
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+};
+
+// ============================================================
+// RELATÓRIO DE REVERTÊNCIA
+// ============================================================
+window.abrirRelatorioRevertencia = function() {
+    const ofs = estado.oficinas.filter(o => o.reverte);
+    if (ofs.length === 0) {
+        alert('Nenhuma oficina revertida encontrada.');
+        return;
+    }
+    
+    let logoBase64 = window._logoBase64 || '';
+    if (!logoBase64) {
+        const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
+        if (logoImg && logoImg.src && logoImg.src.startsWith('data:image')) {
+            logoBase64 = logoImg.src;
+        }
+    }
+    
+    let html = `<html><head><title>Relatório de Revertência</title><style>
+        body{font-family:'Segoe UI',Arial,sans-serif; padding:30px; background:#f0f4f8;}
+        .container{max-width:900px; margin:0 auto; background:white; border-radius:12px; padding:30px; box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+        .header{text-align:center; margin-bottom:25px; border-bottom:3px solid #10b981; padding-bottom:15px;}
+        .header-logo{max-height:80px; max-width:150px; object-fit:contain;}
+        .header h1{color:#2c3e66; font-size:22px;}
+        .header p{color:#6b7280; font-size:14px;}
+        table{width:100%; border-collapse:collapse; margin-top:15px;}
+        th{background:#f1f5f9; color:#1e293b; font-weight:600; padding:10px 12px; text-align:left; border-bottom:2px solid #e2e8f0;}
+        td{padding:8px 12px; border-bottom:1px solid #f1f5f9;}
+        .total{background:#ecfdf5; padding:15px; border-radius:8px; margin-top:20px; border:1px solid #10b981;}
+        .footer{text-align:center; margin-top:20px; padding-top:15px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:0.8rem;}
+        @media print{body{padding:20px; background:white;}}
+    </style></head><body>
+    <div class="container">
+        <div class="header">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="header-logo">` : ''}
+            <h1>🌱 Relatório de Oficinas Revertidas em Benefício Social</h1>
+            <p>Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+        </div>
+        <p style="color:#6b7280; margin-bottom:15px;">Total: <strong>${ofs.length}</strong> oficinas revertidas</p>`;
+    
+    html += `<table><thead><tr><th>Data</th><th>Período</th><th>Conteúdo</th><th>Participantes</th></tr></thead><tbody>`;
+    ofs.forEach(o => {
+        const jovens = (o.jovensIds || []).map(id => {
+            const j = estado.jovens.find(x => x.id === id);
+            return j ? (j['NOME'] || j['REFERENCIA']) : 'Desconhecido';
+        }).join(', ') || 'Nenhum';
+        html += `<tr><td>${new Date(o.data).toLocaleDateString('pt-BR')}</td><td>${o.periodo || '-'}</td><td>${o.conteudo}</td><td>${jovens}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    
+    const todosJovens = new Set();
+    ofs.forEach(o => (o.jovensIds || []).forEach(id => todosJovens.add(id)));
+    html += `<div class="total"><strong>📊 Jovens beneficiados:</strong> ${todosJovens.size} jovens únicos</div>`;
+    
+    html += `<div class="footer">Sistema de Controle de Medidas Socioeducativas • v2.0</div>
+    </div></body></html>`;
+    
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+};
+
+// ============================================================
+// RELATÓRIO COMPLETO - IMPRIMIR
+// ============================================================
+window.imprimirRelatorioCompleto = function() {
+    const win = window.open('', '_blank');
+    if (!win) { alert('Por favor, permita pop-ups para imprimir o relatório.'); return; }
+    
+    let logoBase64 = window._logoBase64 || '';
+    if (!logoBase64) {
+        const logoImg = document.querySelector('#logoImg, .header .logo-img, .logo-img');
+        if (logoImg && logoImg.src && logoImg.src.startsWith('data:image')) {
+            logoBase64 = logoImg.src;
+        }
+    }
+    
+    let html = `<!DOCTYPE html>
+    <html><head><title>Relatório Completo - Sistema Socioeducativo</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Segoe UI',Arial,sans-serif; padding:40px; background:white; color:#1e293b;}
+        .header{text-align:center; margin-bottom:30px; border-bottom:3px solid #2c3e66; padding-bottom:20px;}
+        .header-logo{max-height:80px; max-width:150px; object-fit:contain;}
+        .header h1{color:#2c3e66; font-size:24px; margin-top:10px;}
+        .header p{color:#6b7280; font-size:14px;}
+        .section{margin-bottom:25px;}
+        .section h2{color:#2c3e66; font-size:18px; border-bottom:2px solid #e2e8f0; padding-bottom:8px; margin-bottom:15px;}
+        table{width:100%; border-collapse:collapse; font-size:12px; margin-top:10px;}
+        th{background:#f1f5f9; font-weight:600; padding:8px 10px; text-align:left; border-bottom:2px solid #e2e8f0;}
+        td{padding:6px 10px; border-bottom:1px solid #f1f5f9;}
+        .badge{display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600;}
+        .badge-regular{background:#dbeafe; color:#1e40af;}
+        .badge-irregular{background:#fef3c7; color:#92400e;}
+        .badge-em-descumprimento{background:#fee2e2; color:#991b1b;}
+        .badge-suspenso{background:#fce7f3; color:#be185d;}
+        .badge-medida-finalizada{background:#d1fae5; color:#065f46;}
+        .badge-liberado{background:#e5e7eb; color:#374151;}
+        .footer{text-align:center; margin-top:30px; padding-top:15px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:11px;}
+        .col-2{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+        .info-box{background:#f8fafc; padding:12px; border-radius:6px; border:1px solid #e2e8f0;}
+        .info-box strong{display:block; color:#2c3e66;}
+        .no-print{text-align:center; margin-top:20px;}
+        .no-print button{padding:10px 30px; border:none; border-radius:6px; font-size:16px; cursor:pointer;}
+        .btn-print{background:#2c3e66; color:white;}
+        .btn-close{background:#6c757d; color:white; margin-left:10px;}
+        @media print{body{padding:20px;} .no-print{display:none;}}
+    </style>
+    </head><body>
+    <div class="header">
+        ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="header-logo">` : ''}
+        <h1>📊 Relatório Completo do Sistema</h1>
+        <p>Relatório gerado em ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    
+    <div class="section">
+        <h2>📊 Resumo Geral</h2>
+        <div class="col-2">
+            <div class="info-box"><strong>Total de Jovens</strong> ${estado.jovens.length}</div>
+            <div class="info-box"><strong>REGULAR</strong> ${estado.jovens.filter(j => j.status === 'REGULAR').length}</div>
+            <div class="info-box"><strong>IRREGULAR</strong> ${estado.jovens.filter(j => j.status === 'IRREGULAR').length}</div>
+            <div class="info-box"><strong>EM DESCUMPRIMENTO</strong> ${estado.jovens.filter(j => j.status === 'EM DESCUMPRIMENTO').length}</div>
+            <div class="info-box"><strong>SUSPENSO</strong> ${estado.jovens.filter(j => j.status === 'SUSPENSO').length}</div>
+            <div class="info-box"><strong>MEDIDA FINALIZADA</strong> ${estado.jovens.filter(j => j.status === 'MEDIDA FINALIZADA').length}</div>
+            <div class="info-box"><strong>LIBERADO</strong> ${estado.jovens.filter(j => j.status === 'LIBERADO' || j['MEDIDA'] === 'Liberação').length}</div>
+            <div class="info-box"><strong>Oficinas Realizadas</strong> ${estado.oficinas.length}</div>
+            <div class="info-box"><strong>Avaliações Profissionais</strong> ${estado.avaliacoes.length}</div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>👥 Lista de Jovens</h2>
+        <table>
+            <thead><tr><th>Nome</th><th>Medida</th><th>Status</th><th>Horas Atribuídas</th><th>Horas Cumpridas</th><th>Saldo</th></tr></thead>
+            <tbody>
+                ${estado.jovens.sort((a,b) => (a['NOME'] || '').localeCompare(b['NOME'] || '')).map(j => `
+                    <tr>
+                        <td>${j['NOME'] || j['REFERENCIA'] || '-'}</td>
+                        <td>${j['MEDIDA'] || '-'}</td>
+                        <td><span class="badge badge-${(j.status || 'regular').toLowerCase().replace(' ', '-')}">${j.status || 'REGULAR'}</span></td>
+                        <td>${j['HORAS'] || 0}h</td>
+                        <td>${calcularHorasCumpridas(j)}h</td>
+                        <td>${calcularSaldo(j)}h</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>📋 Avaliações Profissionais</h2>
+        ${estado.avaliacoes.length > 0 ? `
+            <table>
+                <thead><tr><th>Jovem</th><th>Profissional</th><th>Área</th><th>Data</th></tr></thead>
+                <tbody>
+                    ${estado.avaliacoes.map(a => {
+                        const jovem = estado.jovens.find(j => j.id === a.jovemId);
+                        return `<tr>
+                            <td>${jovem ? jovem['NOME'] || jovem['REFERENCIA'] || 'Sem nome' : 'Não encontrado'}</td>
+                            <td>${a.profissionalNome}</td>
+                            <td>${a.area}</td>
+                            <td>${new Date(a.data).toLocaleDateString('pt-BR')}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        ` : '<p style="color:#6b7280;">Nenhuma avaliação registrada.</p>'}
+    </div>
+    
+    <div class="section">
+        <h2>🛠️ Oficinas Realizadas</h2>
+        ${estado.oficinas.length > 0 ? `
+            <table>
+                <thead><tr><th>Data</th><th>Conteúdo</th><th>Participantes</th><th>Benefício Social</th></tr></thead>
+                <tbody>
+                    ${estado.oficinas.slice().reverse().map(o => `
+                        <tr>
+                            <td>${new Date(o.data).toLocaleDateString('pt-BR')}</td>
+                            <td>${o.conteudo}</td>
+                            <td>${(o.jovensIds || []).map(id => {
+                                const j = estado.jovens.find(x => x.id === id);
+                                return j ? j['NOME'] || j['REFERENCIA'] : 'Desconhecido';
+                            }).join(', ') || 'Nenhum'}</td>
+                            <td>${o.reverte ? '✅ Sim' : 'Não'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        ` : '<p style="color:#6b7280;">Nenhuma oficina registrada.</p>'}
+    </div>
+    
+    <div class="section">
+        <h2>⚖️ Ações de Liberdade Assistida</h2>
+        ${estado.jovens.filter(j => j['MEDIDA'] === 'LA').length > 0 ? `
+            <table>
+                <thead><tr><th>Jovem</th><th>Ação</th><th>Status</th><th>Vencimento</th></tr></thead>
+                <tbody>
+                    ${estado.jovens.filter(j => j['MEDIDA'] === 'LA').flatMap(j => 
+                        (j.acoesLA || []).map(a => `
+                            <tr>
+                                <td>${j['NOME'] || j['REFERENCIA'] || 'Sem nome'}</td>
+                                <td>${a.texto}</td>
+                                <td>${a.realizado ? '✅ Realizado' : '⏳ Pendente'}</td>
+                                <td>${a.prazo ? new Date(a.prazo).toLocaleDateString('pt-BR') : 'Sem prazo'}</td>
+                            </tr>
+                        `)
+                    ).join('')}
+                </tbody>
+            </table>
+        ` : '<p style="color:#6b7280;">Nenhuma ação de LA registrada.</p>'}
+    </div>
+    
+    <div class="footer">
+        Sistema de Controle de Medidas Socioeducativas • v2.0<br>
+        Relatório gerado automaticamente em ${new Date().toLocaleString('pt-BR')}
+    </div>
+    <div class="no-print">
+        <button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
+        <button class="btn-close" onclick="window.close()">Fechar</button>
+    </div>
+    </body></html>`;
+    
+    win.document.write(html);
+    win.document.close();
+};
+
+window.exportarRelatorioCompleto = function() {
+    alert('Para exportar como PDF, clique em "Imprimir" e selecione "Salvar como PDF" como destino.');
+    imprimirRelatorioCompleto();
+};
+
+// ============================================================
 // PONTO DIGITAL E NA LINHA
 // ============================================================
 window.registrarPontoNaLinha = async function(jovemId) {
@@ -1309,7 +2190,6 @@ window.registrarPontoNaLinha = async function(jovemId) {
     if (jovem.status === 'SUSPENSO') return alert('❌ Jovem está suspenso.');
     if (jovem.status === 'MEDIDA FINALIZADA') return alert('❌ Jovem já finalizou a medida.');
 
-    // Se o jovem estiver IRREGULAR ou EM DESCUMPRIMENTO, oferece a opção de reativar
     if (jovem.status === 'IRREGULAR') {
         if (!confirm('Este jovem está irregular (7+ dias sem comparecer). Deseja reativá-lo para REGULAR ao registrar presença?')) return;
         jovem.status = 'REGULAR';
@@ -1677,113 +2557,6 @@ function renderizarPlanejamentos() {
         </div>
     `).join('') || '<p style="color:#6b7280; text-align:center; padding:20px;">Nenhum planejamento salvo.</p>';
 }
-
-// ============================================================
-// RELATÓRIOS
-// ============================================================
-function renderizarRelatorios() {
-    const tbody1 = document.querySelector('#tabelaProjecao tbody');
-    if (tbody1) {
-        const agora = new Date();
-        const HORAS_POR_QUINZENA = 8;
-        let saldos = estado.jovens
-            .filter(j => j['MEDIDA'] && j['MEDIDA'] !== 'Liberação' && j['MEDIDA'] !== 'LA' && j.status !== 'SUSPENSO' && j.status !== 'EM DESCUMPRIMENTO' && j.status !== 'MEDIDA FINALIZADA')
-            .map(j => {
-                const horasTotal = parseNum(j['HORAS']);
-                const horasFeitas = (j.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
-                return Math.max(0, horasTotal - horasFeitas);
-            });
-
-        tbody1.innerHTML = '';
-        for (let mes = 0; mes < 3; mes++) {
-            const dataMes = new Date(agora.getFullYear(), agora.getMonth() + mes, 1);
-            const mesNome = dataMes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-            const diasMes = new Date(dataMes.getFullYear(), dataMes.getMonth() + 1, 0).getDate();
-
-            const ativosQ1 = saldos.filter(s => s > 0).length;
-            const horasQ1 = saldos.reduce((sum, s) => sum + Math.min(s, HORAS_POR_QUINZENA), 0);
-            saldos = saldos.map(s => Math.max(0, s - HORAS_POR_QUINZENA));
-            const q1Inicio = new Date(dataMes.getFullYear(), dataMes.getMonth(), 1);
-            const q1Fim = new Date(dataMes.getFullYear(), dataMes.getMonth(), 15);
-            tbody1.innerHTML += `<tr><td>1ª Quin. ${mesNome}</td><td>${q1Inicio.toLocaleDateString('pt-BR')} - ${q1Fim.toLocaleDateString('pt-BR')}</td><td>${ativosQ1}</td><td>${horasQ1}h</td></tr>`;
-
-            const ativosQ2 = saldos.filter(s => s > 0).length;
-            const horasQ2 = saldos.reduce((sum, s) => sum + Math.min(s, HORAS_POR_QUINZENA), 0);
-            saldos = saldos.map(s => Math.max(0, s - HORAS_POR_QUINZENA));
-            const q2Inicio = new Date(dataMes.getFullYear(), dataMes.getMonth(), 16);
-            const q2Fim = new Date(dataMes.getFullYear(), dataMes.getMonth(), diasMes);
-            tbody1.innerHTML += `<tr><td>2ª Quin. ${mesNome}</td><td>${q2Inicio.toLocaleDateString('pt-BR')} - ${q2Fim.toLocaleDateString('pt-BR')}</td><td>${ativosQ2}</td><td>${horasQ2}h</td></tr>`;
-        }
-    }
-
-    const tbody2 = document.querySelector('#tabelaAniversariantes tbody');
-    if (tbody2) {
-        const agora = new Date();
-        const anoAtual = agora.getFullYear();
-        const mesAtual = agora.getMonth();
-        const aniversariantes = estado.jovens.filter(j => j['MEDIDA'] !== 'Liberação' && j.status !== 'MEDIDA FINALIZADA').map(j => {
-            const nascStr = j['NASC.'];
-            if (!nascStr) return null;
-            const nasc = new Date(nascStr);
-            if (isNaN(nasc.getTime())) return null;
-            const mesNasc = nasc.getMonth();
-            const diaNasc = nasc.getDate() + 1;
-            let mesTarget = mesNasc;
-            let anoTarget = anoAtual;
-            if (mesNasc < mesAtual || (mesNasc === mesAtual && diaNasc < agora.getDate())) anoTarget = anoAtual + 1;
-            const diffMeses = (anoTarget - anoAtual) * 12 + (mesTarget - mesAtual);
-            if (diffMeses < 0 || diffMeses >= 3) return null;
-            return {
-                nome: j['NOME'] || j['REFERENCIA'],
-                nasc,
-                mesNasc,
-                diaNasc,
-                anoTarget,
-                mesTarget,
-                idadeQueFara: anoTarget - nasc.getFullYear(),
-                dataEvento: new Date(anoTarget, mesTarget, diaNasc)
-            };
-        }).filter(Boolean).sort((a, b) => a.dataEvento - b.dataEvento);
-        tbody2.innerHTML = aniversariantes.length > 0 ? aniversariantes.map(a =>
-            `<tr><td>${a.nome}</td><td>${a.nasc.toLocaleDateString('pt-BR')}</td><td>${a.diaNasc}/${String(a.mesTarget + 1).padStart(2, '0')}/${a.anoTarget}</td><td>${a.idadeQueFara} anos</td></tr>`
-        ).join('') : '<tr><td colspan="4" style="text-align:center; color:#6b7280;">Nenhum aniversariante nos próximos 3 meses.</td></tr>';
-    }
-}
-
-window.abrirRelatorioRevertencia = function() {
-    const ofs = estado.oficinas.filter(o => o.reverte);
-    let html = `<html><head><title>Relatório de Revertência</title><style>
-        body{font-family:'Segoe UI',Arial,sans-serif; padding:30px; background:#f0f4f8;}
-        .container{max-width:900px; margin:0 auto; background:white; border-radius:12px; padding:30px; box-shadow:0 4px 20px rgba(0,0,0,0.08);}
-        h1{color:#2c3e66; border-bottom:3px solid #10b981; padding-bottom:10px;}
-        table{width:100%; border-collapse:collapse; margin-top:15px;}
-        th{background:#f1f5f9; color:#1e293b; font-weight:600; padding:10px 12px; text-align:left; border-bottom:2px solid #e2e8f0;}
-        td{padding:8px 12px; border-bottom:1px solid #f1f5f9;}
-        .badge{display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; background:#10b981; color:white;}
-        .total{background:#ecfdf5; padding:15px; border-radius:8px; margin-top:20px; border:1px solid #10b981;}
-    </style></head><body>
-    <div class="container">
-        <h1>🌱 Relatório de Oficinas Revertidas em Benefício Social</h1>
-        <p style="color:#6b7280; margin:10px 0;">Oficinas que geraram benefício direto à sociedade.</p>
-        <p style="color:#6b7280; font-size:0.9rem;">Total: <strong>${ofs.length}</strong> oficinas revertidas</p>`;
-    if (ofs.length > 0) {
-        html += `<table><thead><tr><th>Data</th><th>Período</th><th>Conteúdo</th><th>Participantes</th></tr></thead><tbody>`;
-        ofs.forEach(o => {
-            const jovens = o.jovensIds.map(id => estado.jovens.find(j => j.id === id)?.['NOME']).filter(Boolean).join(', ');
-            html += `<tr><td>${new Date(o.data).toLocaleDateString('pt-BR')}</td><td>${o.periodo || '-'}</td><td>${o.conteudo}</td><td>${jovens || 'Nenhum'}</td></tr>`;
-        });
-        html += `</tbody></table>`;
-        const todosJovens = new Set();
-        ofs.forEach(o => o.jovensIds.forEach(id => todosJovens.add(id)));
-        html += `<div class="total"><strong>📊 Jovens beneficiados:</strong> ${todosJovens.size} jovens únicos</div>`;
-    } else {
-        html += `<p style="color:#6b7280;">Nenhuma oficina revertida encontrada.</p>`;
-    }
-    html += `<div style="margin-top:20px; text-align:center; color:#94a3b8; font-size:0.8rem;">Gerado em ${new Date().toLocaleString('pt-BR')}</div>
-    </div></body></html>`;
-    const win = window.open('', '_blank');
-    if (win) { win.document.write(html); win.document.close(); }
-};
 
 // ============================================================
 // USUÁRIOS
@@ -2346,306 +3119,6 @@ function renderizarDashboardJovem() {
 }
 
 // ============================================================
-// ACOMPANHAMENTO INDIVIDUAL - FICHA
-// ============================================================
-function popularSelectAcompInd() {
-    const select = document.getElementById('selectJovemAcomp');
-    if (!select) return;
-    select.innerHTML = '<option value="">Selecione um jovem...</option>' +
-        estado.jovens.sort((a, b) => (a['NOME'] || '').localeCompare(b['NOME'] || '', 'pt-BR'))
-        .map(j => `<option value="${j.id}">${j['NOME'] || j['REFERENCIA']} - ${j['MEDIDA'] || ''} ${j.status === 'SUSPENSO' ? '🔴' : j.status === 'EM DESCUMPRIMENTO' ? '⚠️' : j.status === 'MEDIDA FINALIZADA' ? '✅' : ''}</option>`).join('');
-}
-
-window.carregarFichaIndividual = function() {
-    const id = document.getElementById('selectJovemAcomp').value;
-    const container = document.getElementById('fichaIndividual');
-    const btnPrint = document.getElementById('btnImprimirFicha');
-
-    if (!id) {
-        container.style.display = 'none';
-        if (btnPrint) btnPrint.style.display = 'none';
-        return;
-    }
-    const jovem = estado.jovens.find(j => j.id === id);
-    if (!jovem) return;
-
-    container.style.display = 'block';
-    if (btnPrint) btnPrint.style.display = 'inline-block';
-
-    let acoesLAHTML = '';
-    if (jovem['MEDIDA'] === 'LA') {
-        const acoes = jovem.acoesLA || [];
-        const profs = estado.usuarios.filter(u => u.nivel === 'tecnico' || u.nivel === 'gestor');
-        const profAtual = estado.usuarios.find(u => u.id === jovem.profissionalLA);
-        acoesLAHTML = `
-            <h3 style="margin-top:20px; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚖️ Acompanhamento LA</h3>
-            <div style="margin-bottom:15px;">
-                <label style="font-weight:bold;">Profissional Responsável:</label>
-                <select onchange="vincularProfissionalLA('${jovem.id}', this.value)" style="padding:5px; border-radius:5px; margin-left:10px; border:1px solid #d1d9e6;">
-                    <option value="">Não atribuído</option>
-                    ${profs.map(p => `<option value="${p.id}" ${jovem.profissionalLA === p.id ? 'selected' : ''}>${p.nome}</option>`).join('')}
-                </select>
-                ${profAtual ? `<span style="margin-left:15px; color:#10b981;">✅ Atribuído a: ${profAtual.nome}</span>` : ''}
-            </div>
-            <ul style="list-style:none; padding:0;">
-                ${acoes.map(a => `
-                    <li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-radius:8px; flex-wrap:wrap; gap:8px;">
-                        <span style="${a.realizado ? 'text-decoration:line-through; color:#10b981;' : ''}">
-                            ${a.texto} ${a.prazo ? `<span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span>` : ''}
-                        </span>
-                        <div>
-                            <span style="font-size:0.7rem; color:#6b7280; margin-right:10px;">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
-                            <button class="btn-sm ${a.realizado ? 'btn-sm-success' : 'btn-sm-warning'}" onclick="toggleAcaoLA('${jovem.id}', ${a.id})">
-                                ${a.realizado ? '✅ Feito' : 'Marcar Feito'}
-                            </button>
-                        </div>
-                    </li>
-                `).join('')}
-            </ul>
-        `;
-    }
-
-    const dadosDiv = document.getElementById('fichaDadosPessoais');
-    if (dadosDiv) {
-        dadosDiv.innerHTML = `
-            <div class="ficha-grid">
-                ${CAMPOS.map(([key, label]) => `<div class="ficha-campo"><strong>${label}:</strong> ${jovem[key] || '-'}</div>`).join('')}
-                <div class="ficha-campo"><strong>ID Digital:</strong> ${jovem['ID_DIGITAL'] || '-'}</div>
-                ${jovem.motivoSuspensao ? `<div class="ficha-campo" style="grid-column:1/-1; background:#fce7f3; padding:8px; border-radius:4px;"><strong style="color:#be185d;">Motivo da Suspensão:</strong> ${jovem.motivoSuspensao}</div>` : ''}
-                ${jovem.status === 'EM DESCUMPRIMENTO' ? `<div class="ficha-campo" style="grid-column:1/-1; background:#fee2e2; padding:8px; border-radius:4px;"><strong style="color:#991b1b;">⚠️ Status: EM DESCUMPRIMENTO</strong></div>` : ''}
-                ${jovem.status === 'IRREGULAR' ? `<div class="ficha-campo" style="grid-column:1/-1; background:#fef3c7; padding:8px; border-radius:4px;"><strong style="color:#92400e;">🟡 Status: IRREGULAR</strong></div>` : ''}
-            </div>
-            ${acoesLAHTML}
-        `;
-    }
-
-    const freqDiv = document.getElementById('fichaFrequencia');
-    if (freqDiv) {
-        const hist = jovem.historicoFrequencia || [];
-        const totalHoras = hist.reduce((s, h) => s + parseNum(h.horas), 0);
-        freqDiv.innerHTML = `
-            <p><strong>Total de frequências:</strong> ${hist.length} registros</p>
-            <p><strong>Total de horas:</strong> ${totalHoras.toFixed(1)}h</p>
-            <p><strong>Saldo restante:</strong> ${calcularSaldo(jovem)}h</p>
-            ${hist.length > 0 ? `
-                <table style="margin-top:12px; width:100%;">
-                    <thead><tr><th>Tipo</th><th>Data/Hora</th><th>Horas</th><th>Observação</th></tr></thead>
-                    <tbody>
-                        ${hist.map(h => `<tr>
-                            <td>${h.tipo === 'saida' ? '🚪 Saída' : '🚪 Entrada'}</td>
-                            <td>${new Date(h.data).toLocaleDateString('pt-BR')} ${new Date(h.data).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</td>
-                            <td>${h.tipo === 'saida' ? '-' : (parseNum(h.horas) || 0) + 'h'}</td>
-                            <td>${h.observacao || '-'}</td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            ` : '<p style="color:#6b7280;">Nenhum registro de frequência.</p>'}
-        `;
-    }
-
-    const ofDiv = document.getElementById('fichaOficinas');
-    if (ofDiv) {
-        const oficinasParticipadas = estado.oficinas.filter(o => (o.jovensIds || []).includes(jovem.id));
-        ofDiv.innerHTML = oficinasParticipadas.length > 0 ?
-            `<table style="margin-top:12px; width:100%;"><thead><tr><th>Data</th><th>Conteúdo</th><th>Benefício Social</th></tr></thead><tbody>
-                ${oficinasParticipadas.map(o => `<tr><td>${new Date(o.data).toLocaleDateString('pt-BR')}</td><td>${o.conteudo}</td><td>${o.reverte ? '✅ Sim' : 'Não'}</td></tr>`).join('')}
-            </tbody></table>` :
-            '<p style="color:#6b7280;">Nenhuma oficina registrada.</p>';
-    }
-
-    const docDiv = document.getElementById('fichaDocumentos');
-    if (docDiv) {
-        const docs = jovem.documentos || [];
-        docDiv.innerHTML = docs.length > 0 ?
-            docs.map((d, i) => `<div class="doc-item"><span>📄 ${d.nome} (${d.tipo})</span><div>${d.base64 ? `<a href="${d.base64}" download="${d.nome}" class="btn-sm btn-sm-primary" style="text-decoration:none;">📥 Baixar</a>` : ''}<button onclick="removerDocumento('${id}', ${i})" class="btn-sm btn-sm-danger">🗑️</button></div></div>`).join('') :
-            '<p style="color:#6b7280;">Nenhum documento anexado.</p>';
-    }
-
-    const obsDiv = document.getElementById('fichaObservacoes');
-    if (obsDiv) {
-        const obs = jovem.observacoes || [];
-        obsDiv.innerHTML = obs.length > 0 ?
-            obs.map(o => `<div class="obs-item"><strong>${o.profissional || 'Sistema'}</strong> - <small>${new Date(o.data).toLocaleDateString('pt-BR')} ${new Date(o.data).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</small><p>${o.texto}</p></div>`).join('') :
-            '<p style="color:#6b7280;">Nenhuma observação registrada.</p>';
-    }
-
-    _jovemDocAtual = jovem.id;
-};
-
-window.toggleAcaoLA = async function(jovemId, acaoId) {
-    const jovem = estado.jovens.find(j => j.id === jovemId);
-    if (!jovem) return;
-    const acao = jovem.acoesLA.find(a => a.id === acaoId);
-    if (!acao) return;
-    acao.realizado = !acao.realizado;
-    await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-    carregarFichaIndividual();
-    carregarLista();
-    listarMetasLAProximas();
-};
-
-window.vincularProfissionalLA = async function(jovemId, profId) {
-    const jovem = estado.jovens.find(j => j.id === jovemId);
-    if (!jovem) return;
-    jovem.profissionalLA = profId;
-    await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-    carregarFichaIndividual();
-    alert('Profissional vinculado com sucesso!');
-};
-
-window.salvarObsAcomp = async function() {
-    const jovemId = document.getElementById('selectJovemAcomp').value;
-    const texto = document.getElementById('obsAcompTexto').value.trim();
-    if (!texto) return alert('Digite a observação.');
-    const jovem = estado.jovens.find(j => j.id === jovemId);
-    if (!jovem) return;
-    jovem.observacoes = jovem.observacoes || [];
-    jovem.observacoes.push({
-        data: new Date().toISOString(),
-        profissional: estado.usuarioAtual?.nome || 'Sistema',
-        texto: texto
-    });
-    try {
-        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-        document.getElementById('obsAcompTexto').value = '';
-        carregarFichaIndividual();
-        alert('Observação salva!');
-    } catch (err) {
-        alert('Erro: ' + err.message);
-    }
-};
-
-window.removerDocumento = async function(jovemId, index) {
-    if (!confirm('Tem certeza que deseja remover este documento?')) return;
-    const jovem = estado.jovens.find(j => j.id === jovemId);
-    if (!jovem) return;
-    jovem.documentos = jovem.documentos || [];
-    jovem.documentos.splice(index, 1);
-    try {
-        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-        carregarFichaIndividual();
-        alert('Documento removido com sucesso!');
-    } catch (err) {
-        alert('Erro ao remover documento: ' + err.message);
-    }
-};
-
-window.adicionarDocumento = function() {
-    document.getElementById('modalDocumento').style.display = 'flex';
-    document.getElementById('docNome').value = '';
-    document.getElementById('docTipo').value = 'pdf';
-    document.getElementById('docArquivo').value = '';
-};
-
-window.fecharModalDocumento = function() {
-    document.getElementById('modalDocumento').style.display = 'none';
-};
-
-window.salvarDocumento = async function() {
-    const jovemId = _jovemDocAtual;
-    if (!jovemId) { alert('Selecione um jovem primeiro.'); return; }
-    const nome = document.getElementById('docNome').value.trim();
-    const tipo = document.getElementById('docTipo').value;
-    const arquivo = document.getElementById('docArquivo').files[0];
-    if (!nome) { alert('Digite o nome do documento.'); return; }
-    if (!arquivo) { alert('Selecione um arquivo.'); return; }
-    try {
-        const base64 = await fileToBase64(arquivo);
-        const jovem = estado.jovens.find(j => j.id === jovemId);
-        if (!jovem) { alert('Jovem não encontrado.'); return; }
-        jovem.documentos = jovem.documentos || [];
-        jovem.documentos.push({ nome, tipo, base64, data: new Date().toISOString() });
-        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
-        fecharModalDocumento();
-        carregarFichaIndividual();
-        alert('Documento adicionado com sucesso!');
-    } catch (err) {
-        alert('Erro ao salvar documento: ' + err.message);
-    }
-};
-
-window.abrirFichaModal = function(id) {
-    if (!id) { alert('ID do jovem não fornecido.'); return; }
-    const jovem = estado.jovens.find(j => j.id === id);
-    if (!jovem) { alert('Jovem não encontrado.'); return; }
-    const modalFicha = document.getElementById('modalFicha');
-    if (!modalFicha) { alert('Modal de ficha não encontrado.'); return; }
-
-    document.getElementById('fichaTitulo').textContent = `📋 Ficha: ${jovem['NOME'] || 'Sem nome'}`;
-
-    let acoesLAHTML = '';
-    if (jovem['MEDIDA'] === 'LA') {
-        const acoes = jovem.acoesLA || [];
-        const profs = estado.usuarios.filter(u => u.nivel === 'tecnico' || u.nivel === 'gestor');
-        const profAtual = estado.usuarios.find(u => u.id === jovem.profissionalLA);
-        const podeMarcar = NIVEIS_COM_STATUS.includes(estado.usuarioAtual?.nivel);
-
-        acoesLAHTML = `
-            <h3 style="margin-top:20px; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚖️ Acompanhamento LA</h3>
-            <div style="margin-bottom:15px;">
-                <label style="font-weight:bold;">Profissional Responsável:</label>
-                <select onchange="vincularProfissionalLA('${jovem.id}', this.value)" style="padding:5px; border-radius:5px; margin-left:10px; border:1px solid #d1d9e6;">
-                    <option value="">Não atribuído</option>
-                    ${profs.map(p => `<option value="${p.id}" ${jovem.profissionalLA === p.id ? 'selected' : ''}>${p.nome}</option>`).join('')}
-                </select>
-                ${profAtual ? `<span style="margin-left:15px; color:#10b981;">✅ Atribuído a: ${profAtual.nome}</span>` : ''}
-            </div>
-            <ul style="list-style:none; padding:0;">
-                ${acoes.map(a => `
-                    <li style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-radius:8px; flex-wrap:wrap; gap:8px;">
-                        <span style="${a.realizado ? 'text-decoration:line-through; color:#10b981;' : ''}">
-                            ${a.texto} ${a.prazo ? `<span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span>` : ''}
-                        </span>
-                        <div>
-                            <span style="font-size:0.7rem; color:#6b7280; margin-right:10px;">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
-                            ${podeMarcar ? `<button class="btn-sm ${a.realizado ? 'btn-sm-success' : 'btn-sm-warning'}" onclick="toggleAcaoLA('${jovem.id}', ${a.id})">${a.realizado ? '✅ Feito' : 'Marcar Feito'}</button>` :
-                            `<span style="color:${a.realizado ? '#10b981' : '#92400e'};">${a.realizado ? '✅ Cumprido' : '⏳ Pendente'}</span>`}
-                        </div>
-                    </li>
-                `).join('')}
-            </ul>
-        `;
-    }
-
-    const hist = jovem.historicoFrequencia || [];
-    const totalHoras = hist.reduce((s, h) => s + parseFloat(h.horas || 0), 0);
-    const saldo = jovem['MEDIDA'] === 'LA' ? 'N/A' : calcularSaldo(jovem) + 'h';
-
-    const frequenciaHTML = hist.length > 0 ?
-        `<ul style="list-style:none; padding:0; margin-top:10px;">
-            ${hist.sort((a, b) => new Date(a.data) - new Date(b.data)).map(h => {
-                const tipoLabel = h.tipo === 'saida' ? '🚪 Saída' : '🚪 Entrada';
-                const horasLabel = h.tipo === 'saida' ? '' : `${parseFloat(h.horas || 0).toFixed(1)}h`;
-                return `<li style="padding:6px 0; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
-                    <span>${tipoLabel} - ${new Date(h.data).toLocaleDateString('pt-BR')} ${new Date(h.data).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</span>
-                    <span>${horasLabel} ${h.observacao ? '- ' + h.observacao : ''}</span>
-                </li>`;
-            }).join('')}
-        </ul>` :
-        '<p style="color:#6b7280;">Sem registros de frequência</p>';
-
-    document.getElementById('fichaConteudo').innerHTML = `
-        <div style="margin-bottom:20px;">
-            <h3 style="border-bottom:2px solid #e2e8f0; padding-bottom:8px;">Dados Pessoais</h3>
-            <div class="grid-campos" style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; margin-top:12px;">
-                ${CAMPOS.map(([key, label]) => `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2;"><strong style="font-size:0.78rem; color:#1e2a4a;">${label}:</strong> ${jovem[key] || '-'}</div>`).join('')}
-                <div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2;"><strong style="font-size:0.78rem; color:#1e2a4a;">ID Digital:</strong> ${jovem['ID_DIGITAL'] || '-'}</div>
-                ${jovem.motivoSuspensao ? `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2; grid-column:1/-1; background:#fce7f3; padding:8px; border-radius:4px;"><strong style="color:#be185d;">Motivo da Suspensão:</strong> ${jovem.motivoSuspensao}</div>` : ''}
-                ${jovem.status === 'EM DESCUMPRIMENTO' ? `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2; grid-column:1/-1; background:#fee2e2; padding:8px; border-radius:4px;"><strong style="color:#991b1b;">⚠️ Status: EM DESCUMPRIMENTO</strong></div>` : ''}
-                ${jovem.status === 'IRREGULAR' ? `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2; grid-column:1/-1; background:#fef3c7; padding:8px; border-radius:4px;"><strong style="color:#92400e;">🟡 Status: IRREGULAR</strong></div>` : ''}
-                ${jovem.status === 'MEDIDA FINALIZADA' ? `<div class="campo-item" style="padding:4px 0; border-bottom:1px solid #e9edf2; grid-column:1/-1; background:#d1fae5; padding:8px; border-radius:4px;"><strong style="color:#065f46;">✅ Medida Finalizada</strong></div>` : ''}
-            </div>
-        </div>
-        ${acoesLAHTML}
-        <div class="secao-historico" style="margin-top:20px;">
-            <h4 style="border-bottom:2px solid #e2e8f0; padding-bottom:8px;">📊 Frequência (${hist.length} registros) | Total: ${jovem['MEDIDA'] === 'LA' ? 'N/A' : totalHoras.toFixed(1) + 'h'} | Saldo: ${saldo}</h4>
-            ${frequenciaHTML}
-        </div>
-    `;
-    modalFicha.style.display = 'flex';
-};
-
-// ============================================================
 // IMPRIMIR FICHA INDIVIDUAL (COM LOGO)
 // ============================================================
 window.imprimirFichaIndividual = function() {
@@ -2691,6 +3164,11 @@ window.imprimirFichaIndividual = function() {
             .status-SUSPENSO { background: #fce7f3; color: #be185d; }
             .status-MEDIDA_FINALIZADA { background: #d1fae5; color: #065f46; }
             .status-LIBERADO { background: #e5e7eb; color: #374151; }
+            .avaliacao-item { background: #f5f3ff; border-left: 3px solid #8b5cf6; padding: 10px; margin-bottom: 8px; border-radius: 4px; }
+            .avaliacao-item .profissional { font-weight: bold; }
+            .avaliacao-item .data { font-size: 0.8rem; color: #6b7280; }
+            .avaliacao-item .area { color: #8b5cf6; font-weight: 500; font-size: 0.85rem; }
+            .avaliacao-item .conteudo { margin-top: 6px; white-space: pre-wrap; }
             @media print { body { padding: 20px; } }
         </style>
     </head>
@@ -2717,6 +3195,9 @@ window.imprimirFichaIndividual = function() {
         html += `<div class="field"><strong>${label}</strong><span>${valor}</span></div>`;
     });
     html += `<div class="field"><strong>ID Digital</strong><span>${jovem['ID_DIGITAL'] || '-'}</span></div>`;
+    html += `<div class="field"><strong>Horas Atribuídas</strong><span>${jovem['HORAS'] || 0}h</span></div>`;
+    html += `<div class="field"><strong>Horas Cumpridas</strong><span>${calcularHorasCumpridas(jovem)}h</span></div>`;
+    html += `<div class="field"><strong>Saldo</strong><span>${calcularSaldo(jovem)}h</span></div>`;
     html += `</div></div>`;
 
     if (jovem['MEDIDA'] === 'LA') {
@@ -2724,6 +3205,26 @@ window.imprimirFichaIndividual = function() {
         html += `<div class="section"><h2>Ações LA</h2>`;
         acoes.forEach(a => {
             html += `<div style="padding:6px; background:${a.realizado ? '#d1fae5' : '#f8fafc'}; margin-bottom:4px; border-radius:4px;"><span>${a.texto}</span> ${a.prazo ? `<span style="font-size:0.7rem; color:#64748b;">(Vence: ${new Date(a.prazo).toLocaleDateString('pt-BR')})</span>` : ''} - <span style="color:${a.realizado ? '#065f46' : '#92400e'};">${a.realizado ? '✅ Cumprido' : '⏳ Pendente'}</span></div>`;
+        });
+        html += `</div>`;
+    }
+
+    // Avaliações
+    const avaliacoes = estado.avaliacoes.filter(a => a.jovemId === jovem.id);
+    if (avaliacoes.length > 0) {
+        html += `<div class="section"><h2>📋 Avaliações Profissionais</h2>`;
+        avaliacoes.forEach(a => {
+            html += `
+                <div class="avaliacao-item">
+                    <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                        <span class="profissional">${a.profissionalNome}</span>
+                        <span class="data">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    <div class="area">${a.area}</div>
+                    ${a.profissionalFuncao || a.profissionalRegistro ? `<div style="font-size:0.8rem; color:#6b7280;">${a.profissionalFuncao || ''}${a.profissionalRegistro ? ' - Reg: ' + a.profissionalRegistro : ''}</div>` : ''}
+                    <div class="conteudo">${a.conteudo}</div>
+                </div>
+            `;
         });
         html += `</div>`;
     }
@@ -2803,6 +3304,9 @@ function exportarExcel() {
             row[header] = chave ? (j[chave] || '') : '';
         });
         row['STATUS'] = j.status || 'REGULAR';
+        row['HORAS_ATRIBUIDAS'] = j['HORAS'] || 0;
+        row['HORAS_CUMPRIDAS'] = calcularHorasCumpridas(j);
+        row['SALDO'] = calcularSaldo(j);
         if (j['ID_DIGITAL']) {
             row['ID_DIGITAL'] = j['ID_DIGITAL'];
         }
@@ -2829,7 +3333,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA - USA EXATAMENTE O STATUS DA COLUNA AJ
+// IMPORTAR PLANILHA - OTIMIZADO PARA ARQUIVOS GRANDES
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -2847,19 +3351,27 @@ async function importarPlanilha() {
         statusDiv.style.display = 'block';
         statusDiv.style.background = '#fffbeb';
         statusDiv.style.color = '#92400e';
-        statusDiv.textContent = '⏳ Processando planilha...';
+        statusDiv.textContent = '⏳ Processando planilha... Isso pode levar alguns segundos.';
 
         try {
             const data = await file.arrayBuffer();
-            const wb = XLSX.read(data, { cellStyles: true, type: 'array' });
-            const ws = wb.Sheets[wb.SheetNames[0]];
+            const wb = XLSX.read(data, { 
+                type: 'array',
+                cellStyles: false,
+                cellDates: false,
+                cellFormula: false,
+                sheetRows: 1000
+            });
+            
+            const sheetName = wb.SheetNames[0];
+            const ws = wb.Sheets[sheetName];
             
             if (!ws) {
                 throw new Error('Planilha vazia ou formato inválido.');
             }
             
             const rows = XLSX.utils.sheet_to_json(ws, { 
-                raw: false, 
+                raw: true,
                 defval: '',
                 header: 'A'
             });
@@ -2868,15 +3380,24 @@ async function importarPlanilha() {
                 throw new Error('Planilha vazia.');
             }
             
-            // Pular linhas de cabeçalho vazias no início
             let startRow = 0;
-            for (let i = 0; i < Math.min(5, rows.length); i++) {
+            let foundHeader = false;
+            for (let i = 0; i < Math.min(20, rows.length); i++) {
                 const row = rows[i];
-                const hasData = Object.values(row).some(val => val && val.toString().trim() !== '');
-                if (hasData) {
+                const rowValues = Object.values(row).filter(v => v && v.toString().trim() !== '');
+                const hasHeader = rowValues.some(v => {
+                    const str = v.toString().toUpperCase().trim();
+                    return str === 'NOME' || str === 'REFERENCIA' || str === 'REFERÊNCIA';
+                });
+                if (hasHeader) {
                     startRow = i;
+                    foundHeader = true;
                     break;
                 }
+            }
+            
+            if (!foundHeader) {
+                throw new Error('Cabeçalho da planilha não encontrado.');
             }
             
             const headers = rows[startRow] || {};
@@ -2885,15 +3406,11 @@ async function importarPlanilha() {
             });
 
             if (dataRows.length === 0) {
-                throw new Error('Nenhuma linha de dados encontrada na planilha.');
+                throw new Error('Nenhuma linha de dados encontrada.');
             }
 
-            console.log('Cabeçalhos encontrados:', headers);
-            console.log('Linhas de dados:', dataRows.length);
+            console.log(`Processando ${dataRows.length} linhas...`);
 
-            // ================================================================
-            // MAPEAR COLUNAS
-            // ================================================================
             function findColumnIndex(headerNames) {
                 for (const h of Object.keys(headers)) {
                     const hVal = String(headers[h] || '').toUpperCase().trim();
@@ -2908,8 +3425,8 @@ async function importarPlanilha() {
             }
 
             const colMap = {
-                REFERENCIA: findColumnIndex(['REFERENCIA', 'REF']),
                 NOME: findColumnIndex(['NOME', 'NOME COMPLETO', 'NOME DO ADOLESCENTE']),
+                REFERENCIA: findColumnIndex(['REFERENCIA', 'REF']),
                 RESPONSAVEL: findColumnIndex(['NOME DO RESPONSÁVEL', 'RESPONSÁVEL']),
                 REINCIDENCIA: findColumnIndex(['REINCIDÊNCIA', 'REINCIDENCIA']),
                 MEDIDA: findColumnIndex(['MEDIDA', 'MSE', 'TIPO DE MEDIDA']),
@@ -2936,7 +3453,9 @@ async function importarPlanilha() {
                 STATUS: findColumnIndex(['STATUS', 'SITUAÇÃO', 'SITUACAO'])
             };
 
-            console.log('Mapeamento de colunas:', colMap);
+            if (!colMap.NOME) {
+                throw new Error('Coluna "NOME" não encontrada.');
+            }
 
             const campoParaColuna = {
                 'REFERENCIA': colMap.REFERENCIA,
@@ -2972,207 +3491,198 @@ async function importarPlanilha() {
             let ignorados = 0;
             let linhasProcessadas = 0;
 
-            // ================================================================
-            // PROCESSAR CADA LINHA
-            // ================================================================
-            for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
-                const row = dataRows[rowIndex];
-                linhasProcessadas++;
+            statusDiv.textContent = `⏳ Processando ${dataRows.length} linhas...`;
+
+            const batchSize = 10;
+            for (let batchStart = 0; batchStart < dataRows.length; batchStart += batchSize) {
+                const batchEnd = Math.min(batchStart + batchSize, dataRows.length);
+                const batch = dataRows.slice(batchStart, batchEnd);
                 
-                try {
-                    let nome = '';
-                    if (colMap.NOME && row[colMap.NOME]) {
-                        nome = String(row[colMap.NOME]).trim();
-                    }
+                for (let rowIndex = 0; rowIndex < batch.length; rowIndex++) {
+                    const row = batch[rowIndex];
+                    linhasProcessadas++;
                     
-                    if (!nome) {
-                        if (row['A']) nome = String(row['A']).trim();
-                        if (!nome && row['B']) nome = String(row['B']).trim();
-                    }
-                    
-                    if (!nome) {
-                        ignorados++;
-                        continue;
-                    }
-                    
-                    const nomeUpper = nome.toUpperCase().trim();
-                    // Pular linhas que são cabeçalhos ou legendas
-                    const palavrasIgnorar = [
-                        'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
-                        'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'MEDIDA FINALIZADA', 'LEGENDA',
-                        'TOTAL', 'NOME', 'REFERENCIA', 'SITUAÇÃO', 'STATUS'
-                    ];
-                    
-                    let ignorar = false;
-                    for (const palavra of palavrasIgnorar) {
-                        if (nomeUpper.includes(palavra)) {
-                            ignorar = true;
-                            break;
+                    try {
+                        if (linhasProcessadas % 10 === 0) {
+                            statusDiv.textContent = `⏳ Processando ${linhasProcessadas}/${dataRows.length} linhas...`;
+                            await new Promise(r => setTimeout(r, 10));
                         }
-                    }
-                    
-                    if (ignorar) {
-                        ignorados++;
-                        continue;
-                    }
+                        
+                        let nome = '';
+                        if (colMap.NOME && row[colMap.NOME]) {
+                            nome = String(row[colMap.NOME]).trim();
+                        }
+                        
+                        if (!nome) {
+                            if (row['A']) nome = String(row['A']).trim();
+                            if (!nome && row['B']) nome = String(row['B']).trim();
+                        }
+                        
+                        if (!nome) {
+                            ignorados++;
+                            continue;
+                        }
+                        
+                        const nomeUpper = nome.toUpperCase().trim();
+                        const palavrasIgnorar = [
+                            'NOVOS ADOLESCENTES', 'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO',
+                            'CÓDIGOS FAMILIARES', 'PACTUAÇÃO', 'MEDIDA FINALIZADA', 'LEGENDA',
+                            'TOTAL', 'NOME', 'REFERENCIA', 'SITUAÇÃO', 'STATUS',
+                            'PEDIR EXT', 'EXT ANDAMENTO', 'ENCERRADO'
+                        ];
+                        
+                        let ignorar = false;
+                        for (const palavra of palavrasIgnorar) {
+                            if (nomeUpper.includes(palavra)) {
+                                ignorar = true;
+                                break;
+                            }
+                        }
+                        
+                        if (ignorar) {
+                            ignorados++;
+                            continue;
+                        }
 
-                    // ================================================================
-                    // OBTER STATUS DA PLANILHA - EXATAMENTE COMO ESTÁ NA COLUNA AJ
-                    // ================================================================
-                    let statusPlanilha = 'REGULAR'; // valor padrão
-                    if (colMap.STATUS && row[colMap.STATUS]) {
-                        const statusRaw = String(row[colMap.STATUS]).toUpperCase().trim();
-                        // Mapeamento exato dos status da planilha
-                        const statusMap = {
-                            'REGULAR': 'REGULAR',
-                            'ATIVO': 'REGULAR',
-                            'IRREGULAR': 'IRREGULAR',
-                            'SUSPENSO': 'SUSPENSO',
-                            'EM DESCUMPRIMENTO': 'EM DESCUMPRIMENTO',
-                            'DESCUMPRIMENTO': 'EM DESCUMPRIMENTO',
-                            'CONCLUÍDO': 'MEDIDA FINALIZADA',
-                            'CONCLUIDO': 'MEDIDA FINALIZADA',
-                            'FINALIZADA': 'MEDIDA FINALIZADA',
-                            'FINALIZADO': 'MEDIDA FINALIZADA',
-                            'MEDIDA FINALIZADA': 'MEDIDA FINALIZADA',
-                            'LIBERADO': 'LIBERADO',
-                            'LIBERAÇÃO': 'LIBERADO'
-                        };
-                        statusPlanilha = statusMap[statusRaw] || statusRaw;
-                    }
+                        let statusPlanilha = 'REGULAR';
+                        if (colMap.STATUS && row[colMap.STATUS]) {
+                            const statusRaw = String(row[colMap.STATUS]).toUpperCase().trim();
+                            const statusMap = {
+                                'REGULAR': 'REGULAR',
+                                'ATIVO': 'REGULAR',
+                                'IRREGULAR': 'IRREGULAR',
+                                'SUSPENSO': 'SUSPENSO',
+                                'EM DESCUMPRIMENTO': 'EM DESCUMPRIMENTO',
+                                'DESCUMPRIMENTO': 'EM DESCUMPRIMENTO',
+                                'CONCLUÍDO': 'MEDIDA FINALIZADA',
+                                'CONCLUIDO': 'MEDIDA FINALIZADA',
+                                'FINALIZADA': 'MEDIDA FINALIZADA',
+                                'FINALIZADO': 'MEDIDA FINALIZADA',
+                                'MEDIDA FINALIZADA': 'MEDIDA FINALIZADA',
+                                'LIBERADO': 'LIBERADO',
+                                'LIBERAÇÃO': 'LIBERADO'
+                            };
+                            statusPlanilha = statusMap[statusRaw] || statusRaw;
+                        }
 
-                    // ================================================================
-                    // BUSCAR JOVEM EXISTENTE
-                    // ================================================================
-                    let jovemExistente = null;
-                    
-                    let cpfPlanilha = '';
-                    if (colMap.CPF && row[colMap.CPF]) {
-                        cpfPlanilha = String(row[colMap.CPF]).replace(/\D/g, '');
-                    }
-                    
-                    if (cpfPlanilha && cpfPlanilha.length >= 11) {
-                        jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
-                    }
-                    
-                    if (!jovemExistente) {
-                        jovemExistente = estado.jovens.find(j => (j['NOME'] || '').toUpperCase().trim() === nome.toUpperCase().trim());
-                    }
-                    
-                    if (!jovemExistente) {
-                        const nomeBusca = nome.toUpperCase().trim();
-                        jovemExistente = estado.jovens.find(j => {
-                            const jNome = (j['NOME'] || '').toUpperCase().trim();
-                            return jNome === nomeBusca || jNome.includes(nomeBusca) || nomeBusca.includes(jNome);
-                        });
-                    }
+                        let jovemExistente = null;
+                        
+                        let cpfPlanilha = '';
+                        if (colMap.CPF && row[colMap.CPF]) {
+                            cpfPlanilha = String(row[colMap.CPF]).replace(/\D/g, '');
+                        }
+                        
+                        if (cpfPlanilha && cpfPlanilha.length >= 11) {
+                            jovemExistente = estado.jovens.find(j => (j['CPF'] || '').replace(/\D/g, '') === cpfPlanilha);
+                        }
+                        
+                        if (!jovemExistente) {
+                            const nomeBusca = nome.toUpperCase().trim();
+                            jovemExistente = estado.jovens.find(j => {
+                                const jNome = (j['NOME'] || '').toUpperCase().trim();
+                                return jNome === nomeBusca || jNome.includes(nomeBusca) || nomeBusca.includes(jNome);
+                            });
+                        }
 
-                    const dadosJovem = {};
-                    
-                    for (const [campo, coluna] of Object.entries(campoParaColuna)) {
-                        if (coluna && row[coluna] !== undefined && row[coluna] !== '') {
-                            let valor = String(row[coluna]).trim();
+                        const dadosJovem = {};
+                        
+                        for (const [campo, coluna] of Object.entries(campoParaColuna)) {
+                            if (coluna && row[coluna] !== undefined && row[coluna] !== '') {
+                                let valor = String(row[coluna]).trim();
+                                
+                                if (campo === 'GÊNERO') {
+                                    if (valor.toUpperCase().includes('MASC')) valor = 'M';
+                                    else if (valor.toUpperCase().includes('FEM')) valor = 'F';
+                                    else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
+                                }
+                                if ((campo === 'HORAS' || campo === 'MESES') && valor) {
+                                    valor = parseFloat(String(valor).replace(',', '.')) || 0;
+                                }
+                                if (campo === 'IDADE' && valor) {
+                                    valor = parseInt(valor) || 0;
+                                }
+                                
+                                dadosJovem[campo] = valor;
+                            }
+                        }
+                        
+                        dadosJovem['NOME'] = nome;
+
+                        if (jovemExistente) {
+                            const jovemId = jovemExistente.id;
                             
-                            if (campo === 'GÊNERO') {
-                                if (valor.toUpperCase().includes('MASC')) valor = 'M';
-                                else if (valor.toUpperCase().includes('FEM')) valor = 'F';
-                                else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
-                            }
-                            if ((campo === 'HORAS' || campo === 'MESES') && valor) {
-                                valor = parseFloat(String(valor).replace(',', '.')) || 0;
-                            }
-                            if (campo === 'IDADE' && valor) {
-                                valor = parseInt(valor) || 0;
+                            const historicoFrequencia = jovemExistente.historicoFrequencia || [];
+                            const observacoes = jovemExistente.observacoes || [];
+                            const documentos = jovemExistente.documentos || [];
+                            const acoesLA = jovemExistente.acoesLA || [];
+                            const profissionalLA = jovemExistente.profissionalLA || '';
+                            
+                            const jovemAtualizado = { 
+                                id: jovemId, 
+                                profissionalLA: profissionalLA,
+                                historicoFrequencia: historicoFrequencia,
+                                observacoes: observacoes,
+                                documentos: documentos,
+                                acoesLA: acoesLA,
+                                avaliacoes: jovemExistente.avaliacoes || []
+                            };
+                            
+                            for (const [key, value] of Object.entries(dadosJovem)) {
+                                jovemAtualizado[key] = value;
                             }
                             
-                            dadosJovem[campo] = valor;
-                        }
-                    }
-                    
-                    dadosJovem['NOME'] = nome;
-                    
-                    if (colMap.ID_DIGITAL && row[colMap.ID_DIGITAL]) {
-                        dadosJovem['ID_DIGITAL'] = String(row[colMap.ID_DIGITAL]).trim();
-                    }
-
-                    if (jovemExistente) {
-                        // Atualizar jovem existente - preservando dados importantes
-                        const jovemId = jovemExistente.id;
-                        
-                        const historicoFrequencia = jovemExistente.historicoFrequencia || [];
-                        const observacoes = jovemExistente.observacoes || [];
-                        const documentos = jovemExistente.documentos || [];
-                        const acoesLA = jovemExistente.acoesLA || [];
-                        const profissionalLA = jovemExistente.profissionalLA || '';
-                        
-                        const jovemAtualizado = { 
-                            id: jovemId, 
-                            profissionalLA: profissionalLA,
-                            historicoFrequencia: historicoFrequencia,
-                            observacoes: observacoes,
-                            documentos: documentos,
-                            acoesLA: acoesLA
-                        };
-                        
-                        // Copiar dados da planilha
-                        for (const [key, value] of Object.entries(dadosJovem)) {
-                            jovemAtualizado[key] = value;
-                        }
-                        
-                        // Preservar campos que não vieram da planilha
-                        for (const [key] of CAMPOS) {
-                            if (!jovemAtualizado[key] && jovemExistente[key] !== undefined) {
-                                jovemAtualizado[key] = jovemExistente[key];
+                            for (const [key] of CAMPOS) {
+                                if (!jovemAtualizado[key] && jovemExistente[key] !== undefined) {
+                                    jovemAtualizado[key] = jovemExistente[key];
+                                }
                             }
+                            
+                            jovemAtualizado.status = statusPlanilha;
+                            
+                            await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
+                            
+                            const index = estado.jovens.findIndex(j => j.id === jovemId);
+                            if (index !== -1) {
+                                estado.jovens[index] = jovemAtualizado;
+                            }
+                            
+                            atualizados++;
+                            
+                        } else {
+                            const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                            const novoJovem = { 
+                                id: novoId, 
+                                status: statusPlanilha,
+                                historicoFrequencia: [],
+                                observacoes: [],
+                                documentos: [],
+                                acoesLA: [],
+                                avaliacoes: []
+                            };
+                            
+                            for (const [key, value] of Object.entries(dadosJovem)) {
+                                novoJovem[key] = value;
+                            }
+                            
+                            for (const [key] of CAMPOS) {
+                                if (!novoJovem[key]) novoJovem[key] = '';
+                            }
+                            
+                            await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
+                            await upstash('SADD', 'jovens:all', novoId);
+                            estado.jovens.push(novoJovem);
+                            importados++;
                         }
                         
-                        // APLICAR STATUS EXATAMENTE COMO VEM DA PLANILHA
-                        jovemAtualizado.status = statusPlanilha;
-                        
-                        await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
-                        
-                        const index = estado.jovens.findIndex(j => j.id === jovemId);
-                        if (index !== -1) {
-                            estado.jovens[index] = jovemAtualizado;
-                        }
-                        
-                        atualizados++;
-                        
-                    } else {
-                        // Criar novo jovem
-                        const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                        const novoJovem = { 
-                            id: novoId, 
-                            status: statusPlanilha,
-                            historicoFrequencia: [],
-                            observacoes: [],
-                            documentos: [],
-                            acoesLA: []
-                        };
-                        
-                        for (const [key, value] of Object.entries(dadosJovem)) {
-                            novoJovem[key] = value;
-                        }
-                        
-                        for (const [key] of CAMPOS) {
-                            if (!novoJovem[key]) novoJovem[key] = '';
-                        }
-                        
-                        await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
-                        await upstash('SADD', 'jovens:all', novoId);
-                        estado.jovens.push(novoJovem);
-                        importados++;
+                    } catch (rowError) {
+                        console.error('Erro ao processar linha:', row, rowError);
+                        erros++;
                     }
-                    
-                } catch (rowError) {
-                    console.error('Erro ao processar linha:', row, rowError);
-                    erros++;
                 }
+                
+                await new Promise(r => setTimeout(r, 50));
             }
 
-            // ================================================================
-            // RECARREGAR DADOS E ATUALIZAR INTERFACE
-            // ================================================================
             await carregarTodosDados();
             
             let mensagem = `✅ Importação concluída!`;
@@ -3186,7 +3696,6 @@ async function importarPlanilha() {
             statusDiv.style.color = '#065f46';
             statusDiv.textContent = mensagem;
             
-            // Forçar atualização da interface
             carregarLista();
             renderizarDashboard();
             renderizarAcompanhamento();
@@ -3199,7 +3708,7 @@ async function importarPlanilha() {
             statusDiv.style.color = '#991b1b';
             statusDiv.textContent = '❌ Erro: ' + err.message;
             console.error('Erro na importação:', err);
-            alert('Erro na importação: ' + err.message);
+            alert('Erro na importação: ' + err.message + '\n\nTente salvar a planilha como .csv ou remover abas extras.');
         }
     };
     
@@ -3274,6 +3783,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     renderizarCamposFormulario();
     verificarLoginLocal();
+    renderizarFiltrosCheckbox();
 });
 
 function verificarLoginLocal() {
