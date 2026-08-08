@@ -42,7 +42,9 @@ const CAMPOS = [
     ['FUNÇÃO','FUNÇÃO','text'],['VINCULO','VÍNCULO','text'],['REDE','REDE','text'],
     ['USO DE SPA?','USO DE SPA?','select',[['',''],['Sim','Sim'],['Não','Não']]],
     ['QUAL?','QUAL?','text'],['PREFERE NOME SOCIAL?','NOME SOCIAL?','select',[['',''],['Sim','Sim'],['Não','Não']]],
-    ['QUAL NOME SOCIAL?','NOME SOCIAL','text']
+    ['QUAL NOME SOCIAL?','NOME SOCIAL','text'],
+    ['HORAS_CUMPRIDAS','Horas Cumpridas','number'],
+    ['SALDO','Saldo de Horas','number']
 ];
 
 // ============================================================
@@ -418,11 +420,18 @@ function calcularSaldo(jovem) {
     const horasTotal = parseNum(jovem['HORAS']);
     const horasFeitas = (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
     const ajusteManual = parseNum(jovem.ajusteSaldo) || 0;
+    const saldoPlanilha = parseNum(jovem['SALDO']);
+    // Se tiver saldo da planilha, usa ele, senão calcula
+    if (saldoPlanilha > 0) return saldoPlanilha.toFixed(1);
     return Math.max(0, horasTotal - horasFeitas + ajusteManual).toFixed(1);
 }
 
 function calcularHorasCumpridas(jovem) {
     if (jovem['MEDIDA'] === 'LA') return 0;
+    // Se tiver horas cumpridas da planilha, usa elas
+    if (jovem['HORAS_CUMPRIDAS'] && parseNum(jovem['HORAS_CUMPRIDAS']) > 0) {
+        return parseNum(jovem['HORAS_CUMPRIDAS']).toFixed(1);
+    }
     return (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0).toFixed(1);
 }
 
@@ -943,7 +952,7 @@ function getFiltrosSelecionados(containerId) {
 }
 
 // ============================================================
-// FUNÇÃO CARREGAR LISTA - CORRIGIDA
+// FUNÇÃO CARREGAR LISTA
 // ============================================================
 function carregarLista() {
     const tbody = document.getElementById('listaCorpo');
@@ -1076,7 +1085,7 @@ function carregarLista() {
 }
 
 // ============================================================
-// FUNÇÃO ABRIR FICHA MODAL - CORRIGIDA (ADICIONADA)
+// FUNÇÃO ABRIR FICHA MODAL
 // ============================================================
 window.abrirFichaModal = function(jovemId) {
     if (!jovemId) {
@@ -1713,9 +1722,11 @@ window.carregarFichaIndividual = function() {
     if (freqDiv) {
         const hist = jovem.historicoFrequencia || [];
         const totalHoras = hist.reduce((s, h) => s + parseNum(h.horas), 0);
+        const horasCumpridasPlanilha = parseNum(jovem['HORAS_CUMPRIDAS']);
         freqDiv.innerHTML = `
             <p><strong>Total de frequências:</strong> ${hist.length} registros</p>
-            <p><strong>Total de horas:</strong> ${totalHoras.toFixed(1)}h</p>
+            <p><strong>Horas cumpridas (sistema):</strong> ${totalHoras.toFixed(1)}h</p>
+            ${horasCumpridasPlanilha > 0 ? `<p><strong>Horas cumpridas (planilha):</strong> ${horasCumpridasPlanilha}h</p>` : ''}
             <p><strong>Saldo restante:</strong> ${calcularSaldo(jovem)}h</p>
             ${hist.length > 0 ? `
                 <table style="margin-top:12px; width:100%;">
@@ -3278,13 +3289,13 @@ function renderizarDashboardJovem() {
         const horasTotal = parseFloat(jovem['HORAS'] || 0);
         const hist = jovem.historicoFrequencia || [];
         const horasFeitas = hist.reduce((s, h) => s + (parseFloat(h.horas) || 0), 0);
-        const saldo = Math.max(0, horasTotal - horasFeitas);
+        const saldo = calcularSaldo(jovem);
 
         cards.innerHTML = `
             <div class="card"><h4>Nome</h4><p style="font-size:1.1rem;">${jovem['NOME'] || '-'}</p></div>
             <div class="card"><h4>Horas a Cumprir</h4><p style="font-size:1.5rem; color:#2c3e66;">${horasTotal}h</p></div>
-            <div class="card"><h4>Horas Cumpridas</h4><p style="font-size:1.5rem; color:#10b981;">${horasFeitas.toFixed(1)}h</p></div>
-            <div class="card"><h4>Saldo Restante</h4><p style="font-size:1.5rem; color:#f59e0b;">${saldo.toFixed(1)}h</p></div>
+            <div class="card"><h4>Horas Cumpridas</h4><p style="font-size:1.5rem; color:#10b981;">${calcularHorasCumpridas(jovem)}h</p></div>
+            <div class="card"><h4>Saldo Restante</h4><p style="font-size:1.5rem; color:#f59e0b;">${saldo}h</p></div>
         `;
         freqDiv.innerHTML = `
             <div class="card" style="margin-top:16px;">
@@ -3515,7 +3526,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA - OTIMIZADO PARA ARQUIVOS GRANDES
+// IMPORTAR PLANILHA - CORRIGIDO COM MAPEAMENTO DE HORAS
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -3614,6 +3625,8 @@ async function importarPlanilha() {
                 MEDIDA: findColumnIndex(['MEDIDA', 'MSE', 'TIPO DE MEDIDA']),
                 MESES: findColumnIndex(['MESES']),
                 HORAS: findColumnIndex(['HORAS', 'TOTAL HORAS']),
+                HORAS_CUMPRIDAS: findColumnIndex(['HORAS_CUMPRIDAS', 'HORAS CUMPRIDAS', 'HORASCUMPRIDAS']),
+                SALDO: findColumnIndex(['SALDO', 'SALDO HORAS']),
                 PROTETIVA: findColumnIndex(['PROTETIVA']),
                 NASCIMENTO: findColumnIndex(['NASC.', 'NASCIMENTO', 'DATA NASC']),
                 NATURALIDADE: findColumnIndex(['NATURALIDADE']),
@@ -3647,6 +3660,8 @@ async function importarPlanilha() {
                 'MEDIDA': colMap.MEDIDA,
                 'MESES': colMap.MESES,
                 'HORAS': colMap.HORAS,
+                'HORAS_CUMPRIDAS': colMap.HORAS_CUMPRIDAS,
+                'SALDO': colMap.SALDO,
                 'PROTETIVA': colMap.PROTETIVA,
                 'NASC.': colMap.NASCIMENTO,
                 'NATURALIDADE': colMap.NATURALIDADE,
