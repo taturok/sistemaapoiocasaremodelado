@@ -3556,6 +3556,7 @@ async function importarPlanilha() {
                 sheetRows: 1000
             });
             
+            // PEGAR A PRIMEIRA ABA (GERAL)
             const sheetName = wb.SheetNames[0];
             const ws = wb.Sheets[sheetName];
             
@@ -3626,6 +3627,7 @@ async function importarPlanilha() {
                 return null;
             }
 
+            // MAPEAMENTO DAS COLUNAS CORRIGIDO
             const colMap = {
                 NOME: findColumnIndex(['NOME', 'NOME COMPLETO', 'NOME DO ADOLESCENTE']),
                 REFERENCIA: findColumnIndex(['REFERENCIA', 'REF']),
@@ -3633,6 +3635,7 @@ async function importarPlanilha() {
                 REINCIDENCIA: findColumnIndex(['REINCIDÊNCIA', 'REINCIDENCIA']),
                 MEDIDA: findColumnIndex(['MEDIDA', 'MSE', 'TIPO DE MEDIDA']),
                 MESES: findColumnIndex(['MESES']),
+                // ADICIONADO HORAS_ATRIBUIDAS
                 HORAS: findColumnIndex(['HORAS', 'TOTAL HORAS', 'HORAS_ATRIBUIDAS']),
                 HORAS_CUMPRIDAS: findColumnIndex(['HORAS_CUMPRIDAS', 'HORAS CUMPRIDAS', 'HORASCUMPRIDAS']),
                 SALDO: findColumnIndex(['SALDO', 'SALDO HORAS']),
