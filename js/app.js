@@ -3526,7 +3526,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA - CORRIGIDO COM MAPEAMENTO DE HORAS
+// IMPORTAR PLANILHA - CORRIGIDO COM MAPEAMENTO DE HORAS E LOGS
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -3594,6 +3594,13 @@ async function importarPlanilha() {
             }
             
             const headers = rows[startRow] || {};
+            
+            // LOG PARA DEBUG - MOSTRA OS NOMES DAS COLUNAS ENCONTRADAS
+            console.log('=== COLUNAS ENCONTRADAS NA PLANILHA ===');
+            Object.keys(headers).forEach(key => {
+                console.log(`Coluna ${key}: "${headers[key]}"`);
+            });
+            
             const dataRows = rows.slice(startRow + 1).filter(row => {
                 return Object.values(row).some(val => val && val.toString().trim() !== '');
             });
@@ -3610,10 +3617,12 @@ async function importarPlanilha() {
                     for (const name of headerNames) {
                         const nameUpper = name.toUpperCase().trim();
                         if (hVal === nameUpper || hVal.includes(nameUpper) || nameUpper.includes(hVal)) {
+                            console.log(`✅ Encontrou coluna para "${name}": ${h} (${headers[h]})`);
                             return h;
                         }
                     }
                 }
+                console.log(`❌ Não encontrou coluna para: ${headerNames.join(', ')}`);
                 return null;
             }
 
@@ -3624,7 +3633,7 @@ async function importarPlanilha() {
                 REINCIDENCIA: findColumnIndex(['REINCIDÊNCIA', 'REINCIDENCIA']),
                 MEDIDA: findColumnIndex(['MEDIDA', 'MSE', 'TIPO DE MEDIDA']),
                 MESES: findColumnIndex(['MESES']),
-                HORAS: findColumnIndex(['HORAS', 'TOTAL HORAS']),
+                HORAS: findColumnIndex(['HORAS', 'TOTAL HORAS', 'HORAS_ATRIBUIDAS']),
                 HORAS_CUMPRIDAS: findColumnIndex(['HORAS_CUMPRIDAS', 'HORAS CUMPRIDAS', 'HORASCUMPRIDAS']),
                 SALDO: findColumnIndex(['SALDO', 'SALDO HORAS']),
                 PROTETIVA: findColumnIndex(['PROTETIVA']),
@@ -3792,7 +3801,7 @@ async function importarPlanilha() {
                                     else if (valor.toUpperCase().includes('FEM')) valor = 'F';
                                     else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
                                 }
-                                if ((campo === 'HORAS' || campo === 'MESES') && valor) {
+                                if ((campo === 'HORAS' || campo === 'MESES' || campo === 'HORAS_CUMPRIDAS' || campo === 'SALDO') && valor) {
                                     valor = parseFloat(String(valor).replace(',', '.')) || 0;
                                 }
                                 if (campo === 'IDADE' && valor) {
