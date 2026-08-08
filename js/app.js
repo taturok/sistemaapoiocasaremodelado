@@ -942,6 +942,9 @@ function getFiltrosSelecionados(containerId) {
     return Array.from(checkboxes).map(cb => cb.value);
 }
 
+// ============================================================
+// FUNÇÃO CARREGAR LISTA - CORRIGIDA
+// ============================================================
 function carregarLista() {
     const tbody = document.getElementById('listaCorpo');
     if (!tbody) {
@@ -1071,6 +1074,185 @@ function carregarLista() {
     document.getElementById('selecionarTodos').checked = false;
     atualizarBarraSelecao();
 }
+
+// ============================================================
+// FUNÇÃO ABRIR FICHA MODAL - CORRIGIDA (ADICIONADA)
+// ============================================================
+window.abrirFichaModal = function(jovemId) {
+    if (!jovemId) {
+        alert('ID do jovem não fornecido.');
+        return;
+    }
+    
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) {
+        alert('Jovem não encontrado.');
+        return;
+    }
+    
+    // Preencher o modal com os dados do jovem
+    document.getElementById('fichaTitulo').textContent = `📋 Ficha de ${jovem['NOME'] || jovem['REFERENCIA'] || 'Jovem'}`;
+    
+    // Criar o conteúdo da ficha
+    let html = `
+        <div style="margin-bottom:20px;">
+            <h3 style="color:#2c3e66; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">📋 Dados Pessoais</h3>
+            <div class="grid-campos" style="display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; margin-top:12px;">
+    `;
+    
+    // Adicionar todos os campos do jovem
+    CAMPOS.forEach(([key, label]) => {
+        const valor = jovem[key] || '-';
+        html += `
+            <div class="campo-item" style="padding:6px 0; border-bottom:1px solid #f1f5f9;">
+                <strong style="color:#6b7280; font-size:0.75rem; display:block; text-transform:uppercase;">${label}</strong>
+                <span style="font-size:0.9rem;">${valor}</span>
+            </div>
+        `;
+    });
+    
+    // Status e informações adicionais
+    html += `
+        <div class="campo-item" style="padding:6px 0; border-bottom:1px solid #f1f5f9;">
+            <strong style="color:#6b7280; font-size:0.75rem; display:block; text-transform:uppercase;">STATUS</strong>
+            <span style="font-size:0.9rem; font-weight:600; padding:4px 12px; border-radius:20px; background:${jovem.status === 'REGULAR' ? '#dbeafe' : jovem.status === 'IRREGULAR' ? '#fef3c7' : jovem.status === 'EM DESCUMPRIMENTO' ? '#fee2e2' : jovem.status === 'SUSPENSO' ? '#fce7f3' : jovem.status === 'MEDIDA FINALIZADA' ? '#d1fae5' : '#e5e7eb'}; color:${jovem.status === 'REGULAR' ? '#1e40af' : jovem.status === 'IRREGULAR' ? '#92400e' : jovem.status === 'EM DESCUMPRIMENTO' ? '#991b1b' : jovem.status === 'SUSPENSO' ? '#be185d' : jovem.status === 'MEDIDA FINALIZADA' ? '#065f46' : '#374151'};">
+                ${jovem.status || 'REGULAR'}
+            </span>
+        </div>
+        <div class="campo-item" style="padding:6px 0; border-bottom:1px solid #f1f5f9;">
+            <strong style="color:#6b7280; font-size:0.75rem; display:block; text-transform:uppercase;">Horas Atribuídas</strong>
+            <span style="font-size:0.9rem;">${jovem['HORAS'] || 0}h</span>
+        </div>
+        <div class="campo-item" style="padding:6px 0; border-bottom:1px solid #f1f5f9;">
+            <strong style="color:#6b7280; font-size:0.75rem; display:block; text-transform:uppercase;">Horas Cumpridas</strong>
+            <span style="font-size:0.9rem;">${calcularHorasCumpridas(jovem)}h</span>
+        </div>
+        <div class="campo-item" style="padding:6px 0; border-bottom:1px solid #f1f5f9;">
+            <strong style="color:#6b7280; font-size:0.75rem; display:block; text-transform:uppercase;">Saldo</strong>
+            <span style="font-size:0.9rem;">${calcularSaldo(jovem)}h</span>
+        </div>
+    `;
+    
+    // Se for LA, mostrar ações
+    if (jovem['MEDIDA'] === 'LA') {
+        const acoes = jovem.acoesLA || [];
+        const realizadas = acoes.filter(a => a.realizado).length;
+        html += `
+            <div class="campo-item" style="padding:6px 0; border-bottom:1px solid #f1f5f9; grid-column:1/-1;">
+                <strong style="color:#6b7280; font-size:0.75rem; display:block; text-transform:uppercase;">Ações LA (${realizadas}/${acoes.length})</strong>
+                ${acoes.length > 0 ? acoes.map(a => `
+                    <div style="padding:4px 8px; margin:4px 0; background:${a.realizado ? '#d1fae5' : '#fffbeb'}; border-radius:4px; border-left:3px solid ${a.realizado ? '#10b981' : '#f59e0b'}; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+                        <span style="font-size:0.85rem; ${a.realizado ? 'text-decoration:line-through; color:#065f46;' : ''}">${a.texto}</span>
+                        <span style="font-size:0.7rem; color:#6b7280;">${a.prazo ? 'Vence: ' + new Date(a.prazo).toLocaleDateString('pt-BR') : 'Sem prazo'}</span>
+                        <span style="font-size:0.7rem; font-weight:600; color:${a.realizado ? '#065f46' : '#92400e'};">${a.realizado ? '✅ Feito' : '⏳ Pendente'}</span>
+                    </div>
+                `).join('') : '<span style="font-size:0.85rem; color:#6b7280;">Nenhuma ação cadastrada</span>'}
+            </div>
+        `;
+    }
+    
+    html += `</div></div>`;
+    
+    // Frequência
+    const hist = jovem.historicoFrequencia || [];
+    html += `
+        <div style="margin-bottom:20px;">
+            <h3 style="color:#2c3e66; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">📊 Frequência (${hist.length} registros)</h3>
+            ${hist.length > 0 ? `
+                <div style="max-height:200px; overflow-y:auto; margin-top:10px;">
+                    <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+                        <thead><tr style="background:#f1f5f9;"><th style="padding:6px 8px; text-align:left;">Data</th><th style="padding:6px 8px; text-align:left;">Tipo</th><th style="padding:6px 8px; text-align:left;">Horas</th><th style="padding:6px 8px; text-align:left;">Obs</th></tr></thead>
+                        <tbody>
+                            ${hist.slice().reverse().map(h => `
+                                <tr style="border-bottom:1px solid #f1f5f9;">
+                                    <td style="padding:6px 8px;">${new Date(h.data).toLocaleString('pt-BR')}</td>
+                                    <td style="padding:6px 8px;">${h.tipo === 'entrada' ? '🚪 Entrada' : '🚪 Saída'}</td>
+                                    <td style="padding:6px 8px;">${h.tipo === 'entrada' ? (h.horas || 0) + 'h' : '-'}</td>
+                                    <td style="padding:6px 8px;">${h.observacao || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : '<p style="color:#6b7280; margin-top:8px;">Nenhum registro de frequência.</p>'}
+        </div>
+    `;
+    
+    // Observações
+    const obs = jovem.observacoes || [];
+    html += `
+        <div style="margin-bottom:20px;">
+            <h3 style="color:#2c3e66; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">📝 Observações (${obs.length})</h3>
+            ${obs.length > 0 ? `
+                <div style="max-height:200px; overflow-y:auto; margin-top:10px;">
+                    ${obs.slice().reverse().map(o => `
+                        <div style="background:#f8fafc; padding:10px 14px; margin-bottom:8px; border-radius:6px; border-left:3px solid #8b5cf6;">
+                            <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#6b7280;">
+                                <strong>${o.profissional || 'Sistema'}</strong>
+                                <span>${new Date(o.data).toLocaleString('pt-BR')}</span>
+                            </div>
+                            <p style="margin-top:4px; color:#1e293b; white-space:pre-wrap;">${o.texto}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : '<p style="color:#6b7280; margin-top:8px;">Nenhuma observação registrada.</p>'}
+        </div>
+    `;
+    
+    // Oficinas
+    const oficinas = estado.oficinas.filter(o => (o.jovensIds || []).includes(jovem.id));
+    html += `
+        <div>
+            <h3 style="color:#2c3e66; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">🛠️ Oficinas Participadas (${oficinas.length})</h3>
+            ${oficinas.length > 0 ? `
+                <div style="max-height:200px; overflow-y:auto; margin-top:10px;">
+                    ${oficinas.slice().reverse().map(o => `
+                        <div style="background:#f8fafc; padding:8px 14px; margin-bottom:6px; border-radius:6px; border-left:3px solid ${o.reverte ? '#10b981' : '#6c757d'};">
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                <span><strong>${o.conteudo}</strong></span>
+                                <span style="font-size:0.85rem; color:#6b7280;">${new Date(o.data).toLocaleDateString('pt-BR')} - ${o.periodo}</span>
+                            </div>
+                            ${o.reverte ? '<span style="font-size:0.75rem; color:#10b981;">✅ Reverte em benefício social</span>' : ''}
+                            ${o.isCurso ? '<span style="font-size:0.75rem; color:#3b82f6;">📚 Curso Obrigatório</span>' : ''}
+                            <div style="font-size:0.75rem; color:#6b7280; margin-top:4px;">
+                                👥 ${(o.jovensIds || []).map(id => {
+                                    const j = estado.jovens.find(x => x.id === id);
+                                    return j ? (j['NOME'] || j['REFERENCIA'] || 'Desconhecido') : 'Desconhecido';
+                                }).join(', ')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : '<p style="color:#6b7280; margin-top:8px;">Nenhuma oficina registrada.</p>'}
+        </div>
+    `;
+    
+    // Avaliações
+    const avaliacoes = estado.avaliacoes.filter(a => a.jovemId === jovem.id);
+    if (avaliacoes.length > 0) {
+        html += `
+            <div style="margin-top:20px;">
+                <h3 style="color:#2c3e66; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">📋 Avaliações Profissionais (${avaliacoes.length})</h3>
+                <div style="max-height:200px; overflow-y:auto; margin-top:10px;">
+                    ${avaliacoes.slice().reverse().map(a => `
+                        <div style="background:#f5f3ff; padding:10px 14px; margin-bottom:8px; border-radius:6px; border-left:3px solid #8b5cf6;">
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px;">
+                                <strong>${a.profissionalNome}</strong>
+                                <span style="font-size:0.8rem; color:#6b7280;">${new Date(a.data).toLocaleDateString('pt-BR')}</span>
+                            </div>
+                            <div style="font-size:0.8rem; color:#8b5cf6;">${a.area}</div>
+                            ${a.profissionalFuncao || a.profissionalRegistro ? `<div style="font-size:0.75rem; color:#6b7280;">${a.profissionalFuncao || ''}${a.profissionalRegistro ? ' - Reg: ' + a.profissionalRegistro : ''}</div>` : ''}
+                            <p style="margin-top:6px; color:#1e293b; white-space:pre-wrap; font-size:0.9rem;">${a.conteudo}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    document.getElementById('fichaConteudo').innerHTML = html;
+    document.getElementById('modalFicha').style.display = 'flex';
+};
 
 function atualizarContadorLista(total) {
     let contadorContainer = document.getElementById('contadorContainer');
