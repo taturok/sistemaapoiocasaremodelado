@@ -3526,7 +3526,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA - CORRIGIDO COM MAPEAMENTO DE HORAS E LOGS
+// IMPORTAR PLANILHA - CORRIGIDO PARA LER VALORES CALCULADOS
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -3548,12 +3548,16 @@ async function importarPlanilha() {
 
         try {
             const data = await file.arrayBuffer();
+            
+            // 🔥 CONFIGURAÇÃO PARA LER VALORES CALCULADOS
             const wb = XLSX.read(data, { 
                 type: 'array',
                 cellStyles: false,
                 cellDates: false,
-                cellFormula: false,
-                sheetRows: 1000
+                cellFormula: false,  // ← NÃO ler fórmulas, ler valores
+                sheetRows: 1000,
+                raw: false,          // ← FORÇAR valores formatados
+                rawNumbers: true     // ← Manter números como números
             });
             
             // PEGAR A PRIMEIRA ABA (GERAL)
@@ -3564,8 +3568,9 @@ async function importarPlanilha() {
                 throw new Error('Planilha vazia ou formato inválido.');
             }
             
+            // 🔥 LER COM VALORES CALCULADOS
             const rows = XLSX.utils.sheet_to_json(ws, { 
-                raw: true,
+                raw: false,          // ← VALORES CALCULADOS, não fórmulas
                 defval: '',
                 header: 'A'
             });
@@ -3627,7 +3632,7 @@ async function importarPlanilha() {
                 return null;
             }
 
-            // MAPEAMENTO DAS COLUNAS CORRIGIDO
+            // MAPEAMENTO DAS COLUNAS
             const colMap = {
                 NOME: findColumnIndex(['NOME', 'NOME COMPLETO', 'NOME DO ADOLESCENTE']),
                 REFERENCIA: findColumnIndex(['REFERENCIA', 'REF']),
@@ -3635,7 +3640,6 @@ async function importarPlanilha() {
                 REINCIDENCIA: findColumnIndex(['REINCIDÊNCIA', 'REINCIDENCIA']),
                 MEDIDA: findColumnIndex(['MEDIDA', 'MSE', 'TIPO DE MEDIDA']),
                 MESES: findColumnIndex(['MESES']),
-                // ADICIONADO HORAS_ATRIBUIDAS
                 HORAS: findColumnIndex(['HORAS', 'TOTAL HORAS', 'HORAS_ATRIBUIDAS']),
                 HORAS_CUMPRIDAS: findColumnIndex(['HORAS_CUMPRIDAS', 'HORAS CUMPRIDAS', 'HORASCUMPRIDAS']),
                 SALDO: findColumnIndex(['SALDO', 'SALDO HORAS']),
@@ -3804,6 +3808,8 @@ async function importarPlanilha() {
                                     else if (valor.toUpperCase().includes('FEM')) valor = 'F';
                                     else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
                                 }
+                                
+                                // 🔥 CONVERTER VALORES NUMÉRICOS - INCLUINDO HORAS_CUMPRIDAS E SALDO
                                 if ((campo === 'HORAS' || campo === 'MESES' || campo === 'HORAS_CUMPRIDAS' || campo === 'SALDO') && valor) {
                                     valor = parseFloat(String(valor).replace(',', '.')) || 0;
                                 }
@@ -3816,6 +3822,40 @@ async function importarPlanilha() {
                         }
                         
                         dadosJovem['NOME'] = nome;
+
+                        // 🔥 SE NÃO CONSEGUIU LER AS HORAS_CUMPRIDAS, TENTA CALCULAR
+                        if (!dadosJovem['HORAS_CUMPRIDAS'] || dadosJovem['HORAS_CUMPRIDAS'] === 0 || dadosJovem['HORAS_CUMPRIDAS'] === '') {
+                            // Tenta encontrar a coluna de frequência (onde tem P)
+                            console.log(`⚠️ HORAS_CUMPRIDAS não encontrada para ${nome}, tentando calcular...`);
+                            
+                            // Verifica se tem colunas com "P" (presença)
+                            let hasPresenca = false;
+                            let totalPresencas = 0;
+                            
+                            for (const key of Object.keys(row)) {
+                                const val = String(row[key] || '').toUpperCase().trim();
+                                if (val === 'P') {
+                                    hasPresenca = true;
+                                    totalPresencas++;
+                                }
+                            }
+                            
+                            if (hasPresenca) {
+                                // Cada presença = 4 horas
+                                dadosJovem['HORAS_CUMPRIDAS'] = totalPresencas * 4;
+                                console.log(`✅ Calculado HORAS_CUMPRIDAS: ${totalPresencas} presenças × 4 = ${dadosJovem['HORAS_CUMPRIDAS']}h`);
+                            }
+                        }
+                        
+                        // 🔥 SE NÃO CONSEGUIU LER O SALDO, CALCULA
+                        if (!dadosJovem['SALDO'] || dadosJovem['SALDO'] === 0 || dadosJovem['SALDO'] === '') {
+                            const horasAtribuidas = parseFloat(dadosJovem['HORAS'] || 0);
+                            const horasCumpridas = parseFloat(dadosJovem['HORAS_CUMPRIDAS'] || 0);
+                            dadosJovem['SALDO'] = Math.max(0, horasAtribuidas - horasCumpridas);
+                            console.log(`✅ Calculado SALDO: ${horasAtribuidas} - ${horasCumpridas} = ${dadosJovem['SALDO']}`);
+                        }
+
+                        console.log(`📊 ${nome}: HORAS=${dadosJovem['HORAS']}, CUMPRIDAS=${dadosJovem['HORAS_CUMPRIDAS']}, SALDO=${dadosJovem['SALDO']}`);
 
                         if (jovemExistente) {
                             const jovemId = jovemExistente.id;
@@ -3848,6 +3888,10 @@ async function importarPlanilha() {
                             
                             jovemAtualizado.status = statusPlanilha;
                             
+                            // 🔥 GARANTIR QUE HORAS_CUMPRIDAS E SALDO ESTEJAM NO JOVEM
+                            jovemAtualizado['HORAS_CUMPRIDAS'] = dadosJovem['HORAS_CUMPRIDAS'] || jovemAtualizado['HORAS_CUMPRIDAS'] || 0;
+                            jovemAtualizado['SALDO'] = dadosJovem['SALDO'] || jovemAtualizado['SALDO'] || 0;
+                            
                             await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
                             
                             const index = estado.jovens.findIndex(j => j.id === jovemId);
@@ -3866,7 +3910,9 @@ async function importarPlanilha() {
                                 observacoes: [],
                                 documentos: [],
                                 acoesLA: [],
-                                avaliacoes: []
+                                avaliacoes: [],
+                                'HORAS_CUMPRIDAS': dadosJovem['HORAS_CUMPRIDAS'] || 0,
+                                'SALDO': dadosJovem['SALDO'] || 0
                             };
                             
                             for (const [key, value] of Object.entries(dadosJovem)) {
@@ -3922,6 +3968,7 @@ async function importarPlanilha() {
     };
     
     input.click();
+}
 }
 
 // ============================================================
