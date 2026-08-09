@@ -107,6 +107,82 @@ function fileToBase64(file) {
 }
 
 // ============================================================
+// FUNÇÃO PARA CONVERTER DATAS EM DIFERENTES FORMATOS
+// ============================================================
+function parseDataBrasil(valor) {
+    if (!valor) return '';
+    
+    // Se já é uma data válida no formato ISO
+    let data = new Date(valor);
+    if (!isNaN(data.getTime()) && valor.toString().includes('-')) {
+        return data.toISOString().split('T')[0];
+    }
+    
+    // Tentar limpar o valor
+    let strValor = String(valor).trim();
+    
+    // Se for número, converter para string
+    if (typeof valor === 'number') {
+        strValor = String(valor);
+    }
+    
+    // Formato: DD/MM/AAAA ou DD/MM/AA
+    let match = strValor.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+    if (match) {
+        let dia = parseInt(match[1]);
+        let mes = parseInt(match[2]) - 1;
+        let ano = parseInt(match[3]);
+        if (ano < 100) ano += 2000;
+        data = new Date(ano, mes, dia);
+        if (!isNaN(data.getTime())) {
+            return data.toISOString().split('T')[0];
+        }
+    }
+    
+    // Formato: DD/MMAAAA (sem barras) - ex: 20/012011
+    match = strValor.match(/^(\d{1,2})[\/\-\.]?(\d{2})(\d{4})$/);
+    if (match) {
+        let dia = parseInt(match[1]);
+        let mes = parseInt(match[2]) - 1;
+        let ano = parseInt(match[3]);
+        data = new Date(ano, mes, dia);
+        if (!isNaN(data.getTime())) {
+            return data.toISOString().split('T')[0];
+        }
+    }
+    
+    // Formato: DD/MM/YYYY (com barras)
+    match = strValor.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if (match) {
+        let dia = parseInt(match[1]);
+        let mes = parseInt(match[2]) - 1;
+        let ano = parseInt(match[3]);
+        data = new Date(ano, mes, dia);
+        if (!isNaN(data.getTime())) {
+            return data.toISOString().split('T')[0];
+        }
+    }
+    
+    // Tentar interpretar como número (excel serial)
+    if (typeof valor === 'number' && valor > 10000) {
+        // Excel serial para data
+        data = new Date((valor - 25569) * 86400 * 1000);
+        if (!isNaN(data.getTime())) {
+            return data.toISOString().split('T')[0];
+        }
+    }
+    
+    // Última tentativa: new Date direto
+    data = new Date(strValor);
+    if (!isNaN(data.getTime())) {
+        return data.toISOString().split('T')[0];
+    }
+    
+    console.log(`⚠️ Não foi possível converter a data: "${strValor}"`);
+    return '';
+}
+
+// ============================================================
 // NAVEGAÇÃO (MENU LATERAL)
 // ============================================================
 function navigateTo(pageId) {
@@ -1056,7 +1132,6 @@ function carregarLista() {
 
         const isSelecionado = estado.selecionadosLote.has(j.id);
 
-        // 🔥 CAMPOS DE HORAS EDITÁVEIS
         const horasAtribuidasInput = `<input type="number" id="horas_atribuidas_${j.id}" value="${horasAtribuidas}" min="0" step="1" style="width:60px; padding:2px 4px; border:1px solid #d1d9e6; border-radius:4px; text-align:center;" onchange="atualizarHoras('${j.id}', 'HORAS', this.value)">`;
         const horasCumpridasInput = `<input type="number" id="horas_cumpridas_${j.id}" value="${horasCumpridas}" min="0" step="0.5" style="width:60px; padding:2px 4px; border:1px solid #d1d9e6; border-radius:4px; text-align:center;" onchange="atualizarHoras('${j.id}', 'HORAS_CUMPRIDAS', this.value)">`;
         const saldoInput = `<input type="number" id="saldo_${j.id}" value="${saldo}" min="0" step="0.5" style="width:60px; padding:2px 4px; border:1px solid #d1d9e6; border-radius:4px; text-align:center;" onchange="atualizarHoras('${j.id}', 'SALDO', this.value)">`;
@@ -3678,7 +3753,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA - CORRIGIDO (NÃO ALTERA HORAS E STATUS)
+// IMPORTAR PLANILHA - CORRIGIDO COM PARSE DE DATAS
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -3812,7 +3887,7 @@ async function importarPlanilha() {
                 throw new Error('Coluna "NOME" não encontrada.');
             }
 
-            // 🔥 CAMPOS QUE SERÃO ATUALIZADOS (APENAS DADOS PESSOAIS)
+            // CAMPOS PESSOAIS QUE SERÃO ATUALIZADOS
             const camposPessoais = [
                 'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA',
                 'MEDIDA', 'MESES', 'PROTETIVA', 'NASC.', 'NATURALIDADE',
@@ -3946,6 +4021,17 @@ async function importarPlanilha() {
                                     valor = parseInt(valor) || 0;
                                 }
                                 
+                                // 🔥 CONVERTER DATA DE NASCIMENTO
+                                if (campo === 'NASC.') {
+                                    const dataConvertida = parseDataBrasil(valor);
+                                    if (dataConvertida) {
+                                        valor = dataConvertida;
+                                    } else if (valor) {
+                                        // Mantém o valor original se não conseguir converter
+                                        valor = valor;
+                                    }
+                                }
+                                
                                 dadosJovem[campo] = valor;
                             }
                         }
@@ -3956,7 +4042,6 @@ async function importarPlanilha() {
                         if (jovemExistente) {
                             const jovemId = jovemExistente.id;
                             
-                            // Manter dados existentes
                             const historicoFrequencia = jovemExistente.historicoFrequencia || [];
                             const observacoes = jovemExistente.observacoes || [];
                             const documentos = jovemExistente.documentos || [];
@@ -3971,25 +4056,27 @@ async function importarPlanilha() {
                                 documentos: documentos,
                                 acoesLA: acoesLA,
                                 avaliacoes: jovemExistente.avaliacoes || [],
-                                // 🔥 MANTER STATUS E HORAS EXISTENTES
                                 status: jovemExistente.status || 'REGULAR',
                                 'HORAS': jovemExistente['HORAS'] || 0,
                                 'HORAS_CUMPRIDAS': jovemExistente['HORAS_CUMPRIDAS'] || 0,
-                                'SALDO': jovemExistente['SALDO'] || 0
+                                'SALDO': jovemExistente['SALDO'] || 0,
+                                'MÊS ANIVERSARIO': jovemExistente['MÊS ANIVERSARIO'] || ''
                             };
                             
-                            // 🔥 ATUALIZAR APENAS CAMPOS PESSOAIS
                             for (const [key, value] of Object.entries(dadosJovem)) {
                                 if (camposPessoais.includes(key)) {
                                     jovemAtualizado[key] = value;
                                 }
                             }
                             
-                            // 🔥 GARANTIR QUE HORAS E STATUS NÃO SEJAM ALTERADOS
-                            jovemAtualizado['HORAS'] = jovemExistente['HORAS'] || 0;
-                            jovemAtualizado['HORAS_CUMPRIDAS'] = jovemExistente['HORAS_CUMPRIDAS'] || 0;
-                            jovemAtualizado['SALDO'] = jovemExistente['SALDO'] || 0;
-                            jovemAtualizado.status = jovemExistente.status || 'REGULAR';
+                            // 🔥 SE DATA DE NASCIMENTO FOI ATUALIZADA, ATUALIZA MÊS ANIVERSARIO TAMBÉM
+                            if (dadosJovem['NASC.'] && jovemAtualizado['NASC.']) {
+                                const dataNasc = new Date(jovemAtualizado['NASC.']);
+                                if (!isNaN(dataNasc.getTime())) {
+                                    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+                                    jovemAtualizado['MÊS ANIVERSARIO'] = meses[dataNasc.getMonth()];
+                                }
+                            }
                             
                             await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
                             
@@ -4001,7 +4088,6 @@ async function importarPlanilha() {
                             atualizados++;
                             
                         } else {
-                            // 🔥 NOVO JOVEM
                             const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                             const novoJovem = { 
                                 id: novoId, 
@@ -4013,12 +4099,22 @@ async function importarPlanilha() {
                                 avaliacoes: [],
                                 'HORAS': 0,
                                 'HORAS_CUMPRIDAS': 0,
-                                'SALDO': 0
+                                'SALDO': 0,
+                                'MÊS ANIVERSARIO': ''
                             };
                             
                             for (const [key, value] of Object.entries(dadosJovem)) {
                                 if (camposPessoais.includes(key)) {
                                     novoJovem[key] = value;
+                                }
+                            }
+                            
+                            // 🔥 SE TEM DATA DE NASCIMENTO, PREENCHE MÊS ANIVERSARIO
+                            if (novoJovem['NASC.']) {
+                                const dataNasc = new Date(novoJovem['NASC.']);
+                                if (!isNaN(dataNasc.getTime())) {
+                                    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+                                    novoJovem['MÊS ANIVERSARIO'] = meses[dataNasc.getMonth()];
                                 }
                             }
                             
