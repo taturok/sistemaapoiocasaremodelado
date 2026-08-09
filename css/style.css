@@ -414,6 +414,31 @@ body {
     color: #475569;
 }
 
+/* Botão de importação */
+.btn-importar {
+    background: #10b981;
+    border: none;
+    color: white;
+    padding: 8px 24px;
+    border-radius: 40px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-importar:hover {
+    background: #059669;
+    transform: translateY(-1px);
+}
+
+.btn-importar i {
+    font-size: 1rem;
+}
+
 .menu-toggle {
     display: none;
     background: none;
@@ -681,6 +706,18 @@ tr:hover {
     color: #475569;
 }
 
+/* Badge para ID_DIGITAL */
+.badge-digital {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #f0f9ff;
+    color: #0369a1;
+    border: 1px solid #b6d4fe;
+}
+
 /* ===== BADGES PARA RELATÓRIOS ===== */
 .badge-regular {
     background: #dbeafe;
@@ -854,6 +891,127 @@ tr:hover {
     flex-wrap: wrap;
     gap: 12px;
     margin-top: 10px;
+}
+
+/* ===== CAMPO DIGITAL - DESTACADO ===== */
+.campo-digital-container {
+    background: #f0f9ff;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 2px dashed #0ea5e9;
+    margin: 12px 0 16px 0;
+    grid-column: 1 / -1;
+}
+
+.campo-digital-container label {
+    font-weight: 700;
+    color: #0369a1;
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+}
+
+.campo-digital-container .input-group {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.campo-digital-container input {
+    flex: 1;
+    min-width: 200px;
+    padding: 10px 14px;
+    border: 1px solid #d1d9e6;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: white;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.campo-digital-container input:focus {
+    border-color: #0ea5e9;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+
+.campo-digital-container .helper-text {
+    font-size: 0.75rem;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.campo-digital-container .helper-text i {
+    color: #0ea5e9;
+}
+
+/* ===== MÊS ANIVERSARIO ===== */
+.campo-mes-container {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+}
+
+.campo-mes-container input {
+    flex: 1;
+}
+
+.btn-atualizar-mes {
+    background: #8b5cf6;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.btn-atualizar-mes:hover {
+    background: #7c3aed;
+    transform: scale(1.02);
+}
+
+.btn-atualizar-mes i {
+    font-size: 0.8rem;
+}
+
+/* ===== STATUS DE IMPORTAÇÃO ===== */
+#statusImportacao {
+    margin-top: 15px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 500;
+    display: none;
+}
+
+#statusImportacao.success {
+    display: block;
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #10b981;
+}
+
+#statusImportacao.error {
+    display: block;
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #ef4444;
+}
+
+#statusImportacao.loading {
+    display: block;
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #f59e0b;
 }
 
 /* ===== OFICINAS ===== */
@@ -1270,43 +1428,6 @@ tr:hover {
     background: white;
 }
 
-/* Estilo para o botão de atualizar mês aniversário */
-.btn-atualizar-mes {
-    background: #8b5cf6;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: 0.15s;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.btn-atualizar-mes:hover {
-    background: #7c3aed;
-    transform: scale(1.02);
-}
-
-.btn-atualizar-mes i {
-    font-size: 0.8rem;
-}
-
-/* Container do campo MÊS ANIVERSARIO com botão */
-.campo-mes-container {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-}
-
-.campo-mes-container input {
-    flex: 1;
-}
-
 /* Feedback visual para campos editados */
 .campo-atualizado {
     border-color: #10b981 !important;
@@ -1353,6 +1474,37 @@ tr:hover {
 .status-badge:hover {
     transform: scale(1.05);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilo para mês aniversario destacado */
+.mes-destaque {
+    background: #f5f3ff;
+    border: 1px solid #8b5cf6;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-weight: 600;
+    color: #6d28d9;
+}
+
+/* Tooltip para campos editáveis */
+.campo-editavel {
+    position: relative;
+    cursor: pointer;
+}
+
+.campo-editavel:hover::after {
+    content: "Clique para editar";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    white-space: nowrap;
+    z-index: 1000;
 }
 
 /* ============================================================
@@ -1411,6 +1563,14 @@ tr:hover {
     .btn-atualizar-mes {
         padding: 4px 10px;
         font-size: 0.7rem;
+    }
+    .campo-digital-container .input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .campo-digital-container input {
+        min-width: unset;
+        width: 100%;
     }
 }
 
