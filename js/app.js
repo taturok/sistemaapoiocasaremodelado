@@ -24,7 +24,7 @@ const NIVEIS_ACESSO = {
 const NIVEIS_COM_STATUS = ['desenvolvedor', 'admin', 'gestor', 'tecnico'];
 
 // ============================================================
-// CAMPOS DO FORMULÁRIO - CORRIGIDO COM ID_DIGITAL
+// CAMPOS DO FORMULÁRIO - COMPLETO
 // ============================================================
 const CAMPOS = [
     ['REFERENCIA','REFERÊNCIA','text'],['NOME','NOME','text'],['NOME DO RESPONSÁVEL','RESPONSÁVEL','text'],
@@ -108,10 +108,12 @@ function fileToBase64(file) {
 }
 
 // ============================================================
-// FUNÇÃO PARA CONVERTER DATAS - VERSÃO CORRIGIDA E ROBUSTA
+// FUNÇÃO PARA CONVERTER DATAS - CORRIGIDA COMPLETA
 // ============================================================
 function parseDataBrasil(valor) {
     if (!valor) return '';
+    
+    let strValor = String(valor).trim();
     
     // Se for número (Excel serial date)
     if (typeof valor === 'number' && valor > 10000 && valor < 50000) {
@@ -122,23 +124,23 @@ function parseDataBrasil(valor) {
         }
     }
     
-    // Converter para string e limpar
-    let strValor = String(valor).trim();
+    // Remove "00:00:00" do final
     strValor = strValor.replace(/\s00:00:00$/, '');
     
-    // Verificar se já é uma data ISO válida (YYYY-MM-DD)
+    // Já é ISO? (YYYY-MM-DD)
     let data = new Date(strValor);
     if (!isNaN(data.getTime()) && strValor.match(/^\d{4}-\d{2}-\d{2}/)) {
         return data.toISOString().split('T')[0];
     }
     
-    // FORMATO: DD/MM/AAAA
-    let match = strValor.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    // DD/MM/AAAA ou DD/MM/AA
+    let match = strValor.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
     if (match) {
         let dia = parseInt(match[1]);
         let mes = parseInt(match[2]) - 1;
         let ano = parseInt(match[3]);
-        if (ano >= 1900 && ano <= 2100) {
+        if (ano < 100) ano += ano < 30 ? 2000 : 1900;
+        if (ano >= 1900 && ano <= 2100 && dia >= 1 && dia <= 31 && mes >= 0 && mes <= 11) {
             data = new Date(ano, mes, dia);
             if (!isNaN(data.getTime())) {
                 return data.toISOString().split('T')[0];
@@ -146,22 +148,7 @@ function parseDataBrasil(valor) {
         }
     }
     
-    // FORMATO: DD/MM/AA
-    match = strValor.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
-    if (match) {
-        let dia = parseInt(match[1]);
-        let mes = parseInt(match[2]) - 1;
-        let ano = parseInt(match[3]);
-        ano += ano < 30 ? 2000 : 1900;
-        if (ano >= 1900 && ano <= 2100) {
-            data = new Date(ano, mes, dia);
-            if (!isNaN(data.getTime())) {
-                return data.toISOString().split('T')[0];
-            }
-        }
-    }
-    
-    // FORMATO: DD/MMAAAA (ex: 20/012011)
+    // DD/MMAAAA (20/012011)
     match = strValor.match(/^(\d{1,2})[\/\-\.]?(\d{2})(\d{4})$/);
     if (match) {
         let dia = parseInt(match[1]);
@@ -175,7 +162,7 @@ function parseDataBrasil(valor) {
         }
     }
     
-    // FORMATO: DDMMAAAA (ex: 14022011)
+    // DDMMAAAA (14022011)
     match = strValor.match(/^(\d{2})(\d{2})(\d{4})$/);
     if (match) {
         let dia = parseInt(match[1]);
@@ -189,7 +176,7 @@ function parseDataBrasil(valor) {
         }
     }
     
-    // FORMATO: DMMAAAA (ex: 23052011)
+    // DMMAAAA (23052011)
     match = strValor.match(/^(\d{1})(\d{2})(\d{4})$/);
     if (match) {
         let dia = parseInt(match[1]);
@@ -203,7 +190,7 @@ function parseDataBrasil(valor) {
         }
     }
     
-    // FORMATO: Mês por extenso
+    // Mês por extenso
     const mesesMap = {
         'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5,
         'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11,
@@ -229,40 +216,55 @@ function parseDataBrasil(valor) {
         }
     }
     
-    // TENTAR NEW DATE COM STRING
-    data = new Date(strValor);
-    if (!isNaN(data.getTime()) && data.getFullYear() > 1900 && data.getFullYear() < 2100) {
-        return data.toISOString().split('T')[0];
-    }
-    
     return '';
 }
 
 // ============================================================
-// FUNÇÃO PARA CALCULAR IDADE CORRETAMENTE
+// CALCULAR IDADE
 // ============================================================
 function calcularIdade(dataNascimento) {
     if (!dataNascimento) return 0;
-    
     const data = new Date(dataNascimento);
     if (isNaN(data.getTime())) return 0;
-    
     const hoje = new Date();
     let idade = hoje.getFullYear() - data.getFullYear();
     const mesAtual = hoje.getMonth();
     const mesNasc = data.getMonth();
-    const diaAtual = hoje.getDate();
-    const diaNasc = data.getDate();
-    
-    if (mesAtual < mesNasc || (mesAtual === mesNasc && diaAtual < diaNasc)) {
+    if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < data.getDate())) {
         idade--;
     }
-    
     return Math.max(0, idade);
 }
 
 // ============================================================
-// NAVEGAÇÃO (MENU LATERAL)
+// FUNÇÕES AUXILIARES
+// ============================================================
+function parseNum(val) {
+    if (!val) return 0;
+    const n = parseFloat(String(val).replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+}
+
+function calcularSaldo(jovem) {
+    if (jovem['MEDIDA'] === 'LA') return 0;
+    const horasTotal = parseNum(jovem['HORAS']);
+    const horasFeitas = (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
+    const ajusteManual = parseNum(jovem.ajusteSaldo) || 0;
+    const saldoPlanilha = parseNum(jovem['SALDO']);
+    if (saldoPlanilha > 0) return saldoPlanilha.toFixed(1);
+    return Math.max(0, horasTotal - horasFeitas + ajusteManual).toFixed(1);
+}
+
+function calcularHorasCumpridas(jovem) {
+    if (jovem['MEDIDA'] === 'LA') return 0;
+    if (jovem['HORAS_CUMPRIDAS'] && parseNum(jovem['HORAS_CUMPRIDAS']) > 0) {
+        return parseNum(jovem['HORAS_CUMPRIDAS']).toFixed(1);
+    }
+    return (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0).toFixed(1);
+}
+
+// ============================================================
+// NAVEGAÇÃO
 // ============================================================
 function navigateTo(pageId) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -336,7 +338,7 @@ function closeSidebar() {
 }
 
 // ============================================================
-// LOGIN E SESSÃO
+// LOGIN
 // ============================================================
 async function fazerLogin() {
     const email = document.getElementById('loginEmail').value.trim();
@@ -535,7 +537,7 @@ function atualizarInterfaceCompleta() {
 }
 
 // ============================================================
-// ABAS POR NÍVEL (MENU)
+// ABAS POR NÍVEL
 // ============================================================
 function mostrarAbasPorNivel(nivel) {
     let nivelNormalizado = (nivel || '').toLowerCase().trim();
@@ -566,33 +568,6 @@ function mostrarAbasPorNivel(nivel) {
 }
 
 // ============================================================
-// FUNÇÕES AUXILIARES
-// ============================================================
-function parseNum(val) {
-    if (!val) return 0;
-    const n = parseFloat(String(val).replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-}
-
-function calcularSaldo(jovem) {
-    if (jovem['MEDIDA'] === 'LA') return 0;
-    const horasTotal = parseNum(jovem['HORAS']);
-    const horasFeitas = (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0);
-    const ajusteManual = parseNum(jovem.ajusteSaldo) || 0;
-    const saldoPlanilha = parseNum(jovem['SALDO']);
-    if (saldoPlanilha > 0) return saldoPlanilha.toFixed(1);
-    return Math.max(0, horasTotal - horasFeitas + ajusteManual).toFixed(1);
-}
-
-function calcularHorasCumpridas(jovem) {
-    if (jovem['MEDIDA'] === 'LA') return 0;
-    if (jovem['HORAS_CUMPRIDAS'] && parseNum(jovem['HORAS_CUMPRIDAS']) > 0) {
-        return parseNum(jovem['HORAS_CUMPRIDAS']).toFixed(1);
-    }
-    return (jovem.historicoFrequencia || []).reduce((s, h) => s + parseNum(h.horas), 0).toFixed(1);
-}
-
-// ============================================================
 // DASHBOARD
 // ============================================================
 function renderizarDashboard() {
@@ -614,7 +589,6 @@ function renderizarDashboard() {
     }
     
     const total = estado.jovens.length;
-    
     const regular = estado.jovens.filter(j => j.status === 'REGULAR').length;
     const irregular = estado.jovens.filter(j => j.status === 'IRREGULAR').length;
     const descumprimento = estado.jovens.filter(j => j.status === 'EM DESCUMPRIMENTO').length;
@@ -641,10 +615,8 @@ function renderizarGraficos() {
         });
         estado.graficos = {};
 
-        const regular = estado.jovens.filter(j => j.status === 'REGULAR');
-
         const medidas = {};
-        regular.forEach(j => {
+        estado.jovens.forEach(j => {
             const m = j['MEDIDA'] || 'Não informada';
             medidas[m] = (medidas[m] || 0) + 1;
         });
@@ -1105,7 +1077,7 @@ function getFiltrosSelecionados(containerId) {
 }
 
 // ============================================================
-// FUNÇÃO CARREGAR LISTA
+// FUNÇÃO CARREGAR LISTA - COMPLETA
 // ============================================================
 function carregarLista() {
     const tbody = document.getElementById('listaCorpo');
@@ -1319,7 +1291,7 @@ window.atualizarHoras = async function(jovemId, campo, valor) {
 };
 
 // ============================================================
-// ATUALIZAR MÊS ANIVERSARIO AUTOMATICAMENTE
+// ATUALIZAR MÊS ANIVERSARIO
 // ============================================================
 window.atualizarMesAniversario = function() {
     const nascInput = document.getElementById('campo_NASC.');
@@ -1406,7 +1378,7 @@ window.atualizarTodosMesesAniversario = async function() {
 };
 
 // ============================================================
-// FUNÇÃO ABRIR FICHA MODAL
+// FUNÇÃO ABRIR FICHA MODAL - COMPLETA
 // ============================================================
 window.abrirFichaModal = function(jovemId) {
     if (!jovemId) {
@@ -1954,7 +1926,7 @@ window.excluirAvaliacao = async function(avaliacaoId) {
 };
 
 // ============================================================
-// ACOMPANHAMENTO INDIVIDUAL
+// ACOMPANHAMENTO INDIVIDUAL - FICHA COMPLETA
 // ============================================================
 function popularSelectAcompInd() {
     const select = document.getElementById('selectJovemAcomp');
@@ -2234,506 +2206,6 @@ function renderizarRelatorios() {
             </tr>`;
         }).join('') : '<tr><td colspan="5" style="text-align:center; color:#6b7280;">Nenhum aniversariante nos próximos 3 meses.</td></tr>';
     }
-}
-
-// ============================================================
-// FUNÇÃO DE IMPORTAÇÃO DE PLANILHA - VERSÃO CORRIGIDA COM DATAS
-// ============================================================
-async function importarPlanilha() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.xlsx,.xls,.csv';
-    
-    input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) {
-            alert('Nenhum arquivo selecionado.');
-            return;
-        }
-        
-        const statusDiv = document.getElementById('statusImportacao');
-        statusDiv.style.display = 'block';
-        statusDiv.className = 'loading';
-        statusDiv.textContent = '⏳ Processando planilha... Isso pode levar alguns segundos.';
-
-        try {
-            const data = await file.arrayBuffer();
-            const wb = XLSX.read(data, { 
-                type: 'array',
-                cellStyles: false,
-                cellDates: false,
-                cellFormula: false,
-                sheetRows: 2000,
-                raw: true,
-                dateNF: 'yyyy-mm-dd'
-            });
-            
-            const sheetName = wb.SheetNames[0];
-            const ws = wb.Sheets[sheetName];
-            
-            if (!ws) {
-                throw new Error('Planilha vazia ou formato inválido.');
-            }
-            
-            // Converter para array de arrays
-            const rawRows = XLSX.utils.sheet_to_json(ws, { 
-                raw: true,
-                defval: '',
-                header: 1
-            });
-            
-            if (!rawRows || rawRows.length < 2) {
-                throw new Error('Planilha vazia ou sem dados.');
-            }
-            
-            // Encontrar a linha do cabeçalho
-            let headerRowIndex = -1;
-            let headerRow = null;
-            
-            for (let i = 0; i < Math.min(30, rawRows.length); i++) {
-                const row = rawRows[i];
-                if (!row || row.length === 0) continue;
-                
-                const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join(' ');
-                
-                const hasNome = rowStr.includes('NOME');
-                const hasMedida = rowStr.includes('MEDIDA');
-                const hasReferencia = rowStr.includes('REFERENCIA') || rowStr.includes('REFERÊNCIA');
-                const hasStatus = rowStr.includes('STATUS') || rowStr.includes('SITUAÇÃO') || rowStr.includes('SITUACAO');
-                const hasNasc = rowStr.includes('NASC') || rowStr.includes('NASCIMENTO');
-                
-                if ((hasNome && hasMedida) || (hasNome && hasReferencia) || (hasNome && hasStatus) || (hasNome && hasNasc)) {
-                    headerRowIndex = i;
-                    headerRow = row;
-                    console.log('✅ Cabeçalho encontrado na linha', i);
-                    console.log('📋 Colunas:', headerRow);
-                    break;
-                }
-            }
-            
-            if (headerRowIndex === -1 || !headerRow) {
-                // Tentar encontrar cabeçalho com menos critérios
-                for (let i = 0; i < Math.min(10, rawRows.length); i++) {
-                    const row = rawRows[i];
-                    if (!row || row.length === 0) continue;
-                    
-                    const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join(' ');
-                    if (rowStr.includes('NOME') && rowStr.includes('CPF')) {
-                        headerRowIndex = i;
-                        headerRow = row;
-                        console.log('✅ Cabeçalho alternativo encontrado na linha', i);
-                        break;
-                    }
-                }
-            }
-            
-            if (headerRowIndex === -1 || !headerRow) {
-                throw new Error('Cabeçalho da planilha não encontrado. Verifique se as colunas "NOME" estão presentes.');
-            }
-            
-            // Mapear índices das colunas
-            const colIndex = {};
-            const colNames = {
-                'REFERENCIA': ['REFERENCIA', 'REFERÊNCIA', 'REF'],
-                'NOME': ['NOME', 'NOME COMPLETO', 'NOME DO ADOLESCENTE'],
-                'NOME DO RESPONSÁVEL': ['NOME DO RESPONSÁVEL', 'RESPONSÁVEL'],
-                'REINCIDÊNCIA': ['REINCIDÊNCIA', 'REINCIDENCIA'],
-                'MEDIDA': ['MEDIDA', 'MSE', 'TIPO DE MEDIDA', 'MEDIDA SOCIOEDUCATIVA'],
-                'MESES': ['MESES'],
-                'HORAS': ['HORAS', 'TOTAL HORAS', 'HORAS_ATRIBUIDAS'],
-                'HORAS_CUMPRIDAS': ['HORAS_CUMPRIDAS', 'HORAS CUMPRIDAS', 'HORASCUMPRIDAS'],
-                'SALDO': ['SALDO', 'SALDO DE HORAS'],
-                'PROTETIVA': ['PROTETIVA'],
-                'NASC.': ['NASC.', 'NASCIMENTO', 'DATA NASC', 'DATA NASCIMENTO', 'DATA DE NASCIMENTO'],
-                'MÊS ANIVERSARIO': ['MÊS ANIVERSARIO', 'MES ANIVERSARIO', 'MÊS ANIVER'],
-                'NATURALIDADE': ['NATURALIDADE'],
-                'IDADE': ['IDADE'],
-                'GÊNERO': ['GÊNERO', 'GENERO', 'SEXO'],
-                'COR': ['COR', 'RAÇA', 'ETNIA'],
-                'COMPOSIÇÃO FAMILIAR': ['COMPOSIÇÃO FAMILIAR', 'COMPOSICAO FAMILIAR'],
-                'RENDA': ['RENDA', 'RENDA FAMILIAR'],
-                'BENEFICIO': ['BENEFICIO', 'BENEFÍCIO'],
-                'PAA': ['PAA'],
-                'ENDEREÇO': ['ENDEREÇO', 'ENDERECO'],
-                'BAIRRO': ['BAIRRO'],
-                'TELEFONE': ['TELEFONE', 'TEL', 'CONTATO'],
-                'CRAS': ['CRAS'],
-                'UBS': ['UBS'],
-                'CPF': ['CPF'],
-                'ESTUDA?': ['ESTUDA?', 'ESTUDA'],
-                'SÉRIE': ['SÉRIE', 'SERIE'],
-                'ESCOLA': ['ESCOLA'],
-                'TRABALHA?': ['TRABALHA?', 'TRABALHA'],
-                'FUNÇÃO': ['FUNÇÃO', 'FUNCAO'],
-                'VINCULO': ['VINCULO', 'VÍNCULO'],
-                'REDE': ['REDE'],
-                'USO DE SPA?': ['USO DE SPA?', 'USO DE SPA'],
-                'QUAL?': ['QUAL?', 'QUAL'],
-                'PREFERE NOME SOCIAL?': ['PREFERE NOME SOCIAL?', 'NOME SOCIAL?'],
-                'QUAL NOME SOCIAL?': ['QUAL NOME SOCIAL?', 'NOME SOCIAL'],
-                'ID_DIGITAL': ['ID_DIGITAL', 'ID DIGITAL', 'DIGITAL', 'IMPRESSÃO DIGITAL'],
-                'STATUS': ['STATUS', 'SITUAÇÃO', 'SITUACAO']
-            };
-            
-            // Mapear índices com busca mais flexível
-            for (const [field, possibleNames] of Object.entries(colNames)) {
-                for (const name of possibleNames) {
-                    const idx = headerRow.findIndex(cell => {
-                        const cellStr = String(cell || '').trim().toUpperCase();
-                        const nameStr = name.toUpperCase();
-                        return cellStr === nameStr || 
-                               cellStr.includes(nameStr) || 
-                               nameStr.includes(cellStr) ||
-                               cellStr.replace(/[^A-Z]/g, '') === nameStr.replace(/[^A-Z]/g, '');
-                    });
-                    if (idx !== -1) {
-                        colIndex[field] = idx;
-                        console.log(`✅ "${field}" → coluna ${idx} ("${headerRow[idx]}")`);
-                        break;
-                    }
-                }
-            }
-            
-            // Verificar se encontrou colunas essenciais
-            if (colIndex['NOME'] === undefined) {
-                throw new Error('Coluna "NOME" não encontrada. Verifique o cabeçalho da planilha.');
-            }
-            
-            // Processar linhas de dados
-            const dataRows = rawRows.slice(headerRowIndex + 1).filter(row => {
-                const hasData = row.some(cell => cell && String(cell).trim() !== '');
-                if (!hasData) return false;
-                
-                const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join(' ');
-                const ignorePatterns = ['LEGENDA', 'CÓDIGOS', 'RENDA TOTAL', 'BENEFÍCIO', 
-                                       'NOVOS ADOLESCENTES', 'AGUARDANDO', 'TOTAL', 'SUM('];
-                for (const pattern of ignorePatterns) {
-                    if (rowStr.includes(pattern)) return false;
-                }
-                return true;
-            });
-            
-            if (dataRows.length === 0) {
-                throw new Error('Nenhuma linha de dados encontrada.');
-            }
-            
-            console.log(`📊 Processando ${dataRows.length} linhas de dados...`);
-            
-            let importados = 0;
-            let atualizados = 0;
-            let erros = 0;
-            let ignorados = 0;
-            let linhasProcessadas = 0;
-            
-            statusDiv.textContent = `⏳ Processando ${dataRows.length} linhas...`;
-            
-            const batchSize = 10;
-            for (let batchStart = 0; batchStart < dataRows.length; batchStart += batchSize) {
-                const batchEnd = Math.min(batchStart + batchSize, dataRows.length);
-                const batch = dataRows.slice(batchStart, batchEnd);
-                
-                for (let rowIndex = 0; rowIndex < batch.length; rowIndex++) {
-                    const row = batch[rowIndex];
-                    linhasProcessadas++;
-                    
-                    try {
-                        if (linhasProcessadas % 20 === 0) {
-                            statusDiv.textContent = `⏳ Processando ${linhasProcessadas}/${dataRows.length} linhas...`;
-                            await new Promise(r => setTimeout(r, 10));
-                        }
-                        
-                        // Extrair nome
-                        let nome = '';
-                        if (colIndex['NOME'] !== undefined && row[colIndex['NOME']]) {
-                            nome = String(row[colIndex['NOME']]).trim();
-                        }
-                        
-                        if (!nome) {
-                            ignorados++;
-                            continue;
-                        }
-                        
-                        // Verificar se é uma linha de legenda
-                        const nomeUpper = nome.toUpperCase().trim();
-                        const palavrasIgnorar = [
-                            'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO', 'MEDIDA FINALIZADA',
-                            'LIBERADO', 'SUSPENSO', 'TOTAL', 'LEGENDA', 'CÓDIGOS', 'PACTUAÇÃO',
-                            'PRESENÇA', 'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TER', 'QUIN', 'SÁB'
-                        ];
-                        let ignorar = false;
-                        for (const palavra of palavrasIgnorar) {
-                            if (nomeUpper.includes(palavra) && nomeUpper.length < 20) {
-                                ignorar = true;
-                                break;
-                            }
-                        }
-                        if (ignorar) {
-                            ignorados++;
-                            continue;
-                        }
-                        
-                        // Extrair dados
-                        const dadosJovem = {};
-                        let dataNascimento = null;
-                        
-                        for (const campo of Object.keys(colNames)) {
-                            const idx = colIndex[campo];
-                            if (idx !== undefined && row[idx] !== undefined && row[idx] !== '') {
-                                let valor = String(row[idx]).trim();
-                                
-                                // Processar campos específicos
-                                if (campo === 'GÊNERO') {
-                                    const generoMap = {
-                                        'MASCULINO': 'M', 'MASC': 'M', 'M': 'M',
-                                        'FEMININO': 'F', 'FEM': 'F', 'F': 'F',
-                                        'NÃO-BINÁRIO': 'NB', 'NAO BINARIO': 'NB', 'NB': 'NB',
-                                        'NÃO BINÁRIO': 'NB'
-                                    };
-                                    const key = valor.toUpperCase().trim();
-                                    dadosJovem[campo] = generoMap[key] || valor;
-                                } 
-                                else if (campo === 'NASC.') {
-                                    const dataConvertida = parseDataBrasil(valor);
-                                    if (dataConvertida) {
-                                        dadosJovem[campo] = dataConvertida;
-                                        dataNascimento = dataConvertida;
-                                    } else {
-                                        dadosJovem[campo] = valor;
-                                    }
-                                }
-                                else if (campo === 'CPF') {
-                                    dadosJovem[campo] = valor.replace(/\D/g, '');
-                                }
-                                else if (campo === 'TELEFONE') {
-                                    dadosJovem[campo] = valor.replace(/\s/g, '');
-                                }
-                                else if (campo === 'MEDIDA') {
-                                    const medidaMap = {
-                                        'LA': 'LA', 'LIBERDADE ASSISTIDA': 'LA',
-                                        'PSC': 'PSC', 'PRESTAÇÃO DE SERVIÇO': 'PSC',
-                                        'INTERNAÇÃO': 'Internação',
-                                        'LIBERAÇÃO': 'Liberação'
-                                    };
-                                    const key = valor.toUpperCase().trim();
-                                    dadosJovem[campo] = medidaMap[key] || valor;
-                                }
-                                else if (campo === 'IDADE') {
-                                    const idadeNum = parseInt(valor);
-                                    if (!isNaN(idadeNum) && idadeNum > 0) {
-                                        dadosJovem[campo] = idadeNum;
-                                    }
-                                }
-                                else {
-                                    dadosJovem[campo] = valor;
-                                }
-                            }
-                        }
-                        
-                        // Se não tem idade mas tem data de nascimento, calcular
-                        if (!dadosJovem['IDADE'] && dataNascimento) {
-                            const idadeCalculada = calcularIdade(dataNascimento);
-                            if (idadeCalculada > 0) {
-                                dadosJovem['IDADE'] = idadeCalculada;
-                            }
-                        }
-                        
-                        // Processar campos numéricos
-                        const camposNumericos = ['HORAS', 'HORAS_CUMPRIDAS', 'SALDO', 'MESES'];
-                        for (const campo of camposNumericos) {
-                            const idx = colIndex[campo];
-                            if (idx !== undefined && row[idx] !== undefined && row[idx] !== '') {
-                                let valor = row[idx];
-                                if (typeof valor === 'string') {
-                                    valor = parseFloat(valor.replace(',', '.').replace(/[^0-9.,-]/g, ''));
-                                }
-                                if (!isNaN(valor) && valor >= 0) {
-                                    dadosJovem[campo] = valor;
-                                }
-                            }
-                        }
-                        
-                        // Status
-                        if (colIndex['STATUS'] !== undefined && row[colIndex['STATUS']]) {
-                            let status = String(row[colIndex['STATUS']]).toUpperCase().trim();
-                            const statusMap = {
-                                'REGULAR': 'REGULAR',
-                                'IRREGULAR': 'IRREGULAR',
-                                'EM DESCUMPRIMENTO': 'EM DESCUMPRIMENTO',
-                                'SUSPENSO': 'SUSPENSO',
-                                'MEDIDA FINALIZADA': 'MEDIDA FINALIZADA',
-                                'LIBERADO': 'LIBERADO'
-                            };
-                            for (const [key, value] of Object.entries(statusMap)) {
-                                if (status.includes(key) || key.includes(status)) {
-                                    status = value;
-                                    break;
-                                }
-                            }
-                            dadosJovem['STATUS'] = status;
-                        }
-                        
-                        // Verificar se jovem já existe
-                        let jovemExistente = null;
-                        
-                        if (dadosJovem['CPF'] && dadosJovem['CPF'].length >= 11) {
-                            jovemExistente = estado.jovens.find(j => 
-                                (j['CPF'] || '').replace(/\D/g, '') === dadosJovem['CPF']
-                            );
-                        }
-                        
-                        if (!jovemExistente) {
-                            const nomeBusca = nome.toUpperCase().trim();
-                            jovemExistente = estado.jovens.find(j => {
-                                const jNome = (j['NOME'] || '').toUpperCase().trim();
-                                return jNome === nomeBusca || 
-                                       jNome.includes(nomeBusca) || 
-                                       nomeBusca.includes(jNome);
-                            });
-                        }
-                        
-                        if (jovemExistente) {
-                            // ATUALIZAR JOVEM EXISTENTE
-                            const jovemId = jovemExistente.id;
-                            
-                            const historicoFrequencia = jovemExistente.historicoFrequencia || [];
-                            const observacoes = jovemExistente.observacoes || [];
-                            const documentos = jovemExistente.documentos || [];
-                            const acoesLA = jovemExistente.acoesLA || [];
-                            const profissionalLA = jovemExistente.profissionalLA || '';
-                            const avaliacoes = jovemExistente.avaliacoes || [];
-                            
-                            const jovemAtualizado = { 
-                                id: jovemId,
-                                profissionalLA: profissionalLA,
-                                historicoFrequencia: historicoFrequencia,
-                                observacoes: observacoes,
-                                documentos: documentos,
-                                acoesLA: acoesLA,
-                                avaliacoes: avaliacoes,
-                                'HORAS': jovemExistente['HORAS'] || 0,
-                                'HORAS_CUMPRIDAS': jovemExistente['HORAS_CUMPRIDAS'] || 0,
-                                'SALDO': jovemExistente['SALDO'] || 0,
-                                status: jovemExistente.status || 'REGULAR'
-                            };
-                            
-                            // Adicionar/atualizar campos
-                            for (const [key, value] of Object.entries(dadosJovem)) {
-                                if (key === 'STATUS' || key === 'ID_DIGITAL') {
-                                    jovemAtualizado[key] = value;
-                                } else if (key !== 'HORAS' && key !== 'HORAS_CUMPRIDAS' && key !== 'SALDO' && key !== 'MESES') {
-                                    jovemAtualizado[key] = value;
-                                }
-                            }
-                            
-                            // Se tiver data de nascimento e mês aniversario vazio
-                            if (jovemAtualizado['NASC.'] && !jovemAtualizado['MÊS ANIVERSARIO']) {
-                                const dataNasc = new Date(jovemAtualizado['NASC.']);
-                                if (!isNaN(dataNasc.getTime())) {
-                                    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
-                                                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-                                    jovemAtualizado['MÊS ANIVERSARIO'] = meses[dataNasc.getMonth()];
-                                }
-                            }
-                            
-                            // Salvar
-                            await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
-                            
-                            const index = estado.jovens.findIndex(j => j.id === jovemId);
-                            if (index !== -1) {
-                                estado.jovens[index] = jovemAtualizado;
-                            }
-                            
-                            atualizados++;
-                        } else {
-                            // CRIAR NOVO JOVEM
-                            const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                            
-                            const novoJovem = {
-                                id: novoId,
-                                status: dadosJovem['STATUS'] || 'REGULAR',
-                                historicoFrequencia: [],
-                                observacoes: [],
-                                documentos: [],
-                                acoesLA: [],
-                                avaliacoes: [],
-                                'HORAS': dadosJovem['HORAS'] || 0,
-                                'HORAS_CUMPRIDAS': dadosJovem['HORAS_CUMPRIDAS'] || 0,
-                                'SALDO': dadosJovem['SALDO'] || 0,
-                                'MÊS ANIVERSARIO': '',
-                                'ID_DIGITAL': dadosJovem['ID_DIGITAL'] || ''
-                            };
-                            
-                            // Adicionar campos
-                            for (const [key, value] of Object.entries(dadosJovem)) {
-                                if (key !== 'HORAS' && key !== 'HORAS_CUMPRIDAS' && key !== 'SALDO' && key !== 'MESES') {
-                                    novoJovem[key] = value;
-                                }
-                            }
-                            
-                            // Garantir que todos os campos existam
-                            for (const [key] of CAMPOS) {
-                                if (!novoJovem[key]) novoJovem[key] = '';
-                            }
-                            
-                            // Se tiver data de nascimento, calcular idade e mês
-                            if (novoJovem['NASC.']) {
-                                const dataNasc = new Date(novoJovem['NASC.']);
-                                if (!isNaN(dataNasc.getTime())) {
-                                    const idade = calcularIdade(dataNasc);
-                                    if (idade > 0) {
-                                        novoJovem['IDADE'] = idade;
-                                    }
-                                    
-                                    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
-                                                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-                                    novoJovem['MÊS ANIVERSARIO'] = meses[dataNasc.getMonth()];
-                                }
-                            }
-                            
-                            // Salvar
-                            await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
-                            await upstash('SADD', 'jovens:all', novoId);
-                            estado.jovens.push(novoJovem);
-                            importados++;
-                        }
-                        
-                    } catch (rowError) {
-                        console.error('Erro ao processar linha:', row, rowError);
-                        erros++;
-                    }
-                }
-                
-                await new Promise(r => setTimeout(r, 50));
-            }
-            
-            await carregarTodosDados();
-            
-            let mensagem = `✅ Importação concluída!`;
-            if (importados > 0) mensagem += ` ${importados} novos adicionados.`;
-            if (atualizados > 0) mensagem += ` ${atualizados} atualizados.`;
-            if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas (legendas/vazias).`;
-            if (erros > 0) mensagem += ` ⚠️ ${erros} erros.`;
-            mensagem += ` Total de linhas processadas: ${linhasProcessadas}`;
-            
-            statusDiv.className = 'success';
-            statusDiv.textContent = mensagem;
-            
-            carregarLista();
-            renderizarDashboard();
-            renderizarAcompanhamento();
-            popularSelectAcompInd();
-            
-            alert(mensagem);
-            
-        } catch (err) {
-            statusDiv.className = 'error';
-            statusDiv.textContent = '❌ Erro: ' + err.message;
-            console.error('Erro na importação:', err);
-            alert('Erro na importação: ' + err.message + '\n\nVerifique se a planilha tem o cabeçalho correto.');
-        }
-    };
-    
-    input.click();
 }
 
 // ============================================================
@@ -4327,6 +3799,490 @@ function exportarExcel() {
 }
 
 // ============================================================
+// IMPORTAÇÃO DE PLANILHA - VERSÃO CORRIGIDA
+// ============================================================
+async function importarPlanilha() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) {
+            alert('Nenhum arquivo selecionado.');
+            return;
+        }
+        
+        const statusDiv = document.getElementById('statusImportacao');
+        statusDiv.style.display = 'block';
+        statusDiv.className = 'loading';
+        statusDiv.textContent = '⏳ Processando planilha... Isso pode levar alguns segundos.';
+
+        try {
+            const data = await file.arrayBuffer();
+            const wb = XLSX.read(data, { 
+                type: 'array',
+                cellStyles: false,
+                cellDates: false,
+                cellFormula: false,
+                sheetRows: 2000,
+                raw: true,
+                dateNF: 'yyyy-mm-dd'
+            });
+            
+            const sheetName = wb.SheetNames[0];
+            const ws = wb.Sheets[sheetName];
+            
+            if (!ws) {
+                throw new Error('Planilha vazia ou formato inválido.');
+            }
+            
+            // Converter para array de arrays para preservar melhor os dados
+            const rawRows = XLSX.utils.sheet_to_json(ws, { 
+                raw: true,
+                defval: '',
+                header: 1
+            });
+            
+            if (!rawRows || rawRows.length < 2) {
+                throw new Error('Planilha vazia ou sem dados.');
+            }
+            
+            // Encontrar a linha do cabeçalho
+            let headerRowIndex = -1;
+            let headerRow = null;
+            
+            for (let i = 0; i < Math.min(30, rawRows.length); i++) {
+                const row = rawRows[i];
+                if (!row || row.length === 0) continue;
+                
+                const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join(' ');
+                
+                const hasNome = rowStr.includes('NOME');
+                const hasMedida = rowStr.includes('MEDIDA');
+                const hasReferencia = rowStr.includes('REFERENCIA') || rowStr.includes('REFERÊNCIA');
+                const hasStatus = rowStr.includes('STATUS') || rowStr.includes('SITUAÇÃO') || rowStr.includes('SITUACAO');
+                const hasNasc = rowStr.includes('NASC') || rowStr.includes('NASCIMENTO');
+                
+                if ((hasNome && hasMedida) || (hasNome && hasReferencia) || (hasNome && hasStatus) || (hasNome && hasNasc)) {
+                    headerRowIndex = i;
+                    headerRow = row;
+                    console.log('✅ Cabeçalho encontrado na linha', i);
+                    console.log('📋 Colunas:', headerRow);
+                    break;
+                }
+            }
+            
+            if (headerRowIndex === -1 || !headerRow) {
+                throw new Error('Cabeçalho da planilha não encontrado. Verifique se as colunas "NOME" estão presentes.');
+            }
+            
+            // Mapear índices das colunas
+            const colIndex = {};
+            const colNames = {
+                'REFERENCIA': ['REFERENCIA', 'REFERÊNCIA', 'REF'],
+                'NOME': ['NOME', 'NOME COMPLETO', 'NOME DO ADOLESCENTE'],
+                'NOME DO RESPONSÁVEL': ['NOME DO RESPONSÁVEL', 'RESPONSÁVEL'],
+                'REINCIDÊNCIA': ['REINCIDÊNCIA', 'REINCIDENCIA'],
+                'MEDIDA': ['MEDIDA', 'MSE', 'TIPO DE MEDIDA', 'MEDIDA SOCIOEDUCATIVA'],
+                'MESES': ['MESES'],
+                'HORAS': ['HORAS', 'TOTAL HORAS', 'HORAS_ATRIBUIDAS'],
+                'HORAS_CUMPRIDAS': ['HORAS_CUMPRIDAS', 'HORAS CUMPRIDAS', 'HORASCUMPRIDAS'],
+                'SALDO': ['SALDO', 'SALDO DE HORAS'],
+                'PROTETIVA': ['PROTETIVA'],
+                'NASC.': ['NASC.', 'NASCIMENTO', 'DATA NASC', 'DATA NASCIMENTO', 'DATA DE NASCIMENTO'],
+                'MÊS ANIVERSARIO': ['MÊS ANIVERSARIO', 'MES ANIVERSARIO', 'MÊS ANIVER'],
+                'NATURALIDADE': ['NATURALIDADE'],
+                'IDADE': ['IDADE'],
+                'GÊNERO': ['GÊNERO', 'GENERO', 'SEXO'],
+                'COR': ['COR', 'RAÇA', 'ETNIA'],
+                'COMPOSIÇÃO FAMILIAR': ['COMPOSIÇÃO FAMILIAR', 'COMPOSICAO FAMILIAR'],
+                'RENDA': ['RENDA', 'RENDA FAMILIAR'],
+                'BENEFICIO': ['BENEFICIO', 'BENEFÍCIO'],
+                'PAA': ['PAA'],
+                'ENDEREÇO': ['ENDEREÇO', 'ENDERECO'],
+                'BAIRRO': ['BAIRRO'],
+                'TELEFONE': ['TELEFONE', 'TEL', 'CONTATO'],
+                'CRAS': ['CRAS'],
+                'UBS': ['UBS'],
+                'CPF': ['CPF'],
+                'ESTUDA?': ['ESTUDA?', 'ESTUDA'],
+                'SÉRIE': ['SÉRIE', 'SERIE'],
+                'ESCOLA': ['ESCOLA'],
+                'TRABALHA?': ['TRABALHA?', 'TRABALHA'],
+                'FUNÇÃO': ['FUNÇÃO', 'FUNCAO'],
+                'VINCULO': ['VINCULO', 'VÍNCULO'],
+                'REDE': ['REDE'],
+                'USO DE SPA?': ['USO DE SPA?', 'USO DE SPA'],
+                'QUAL?': ['QUAL?', 'QUAL'],
+                'PREFERE NOME SOCIAL?': ['PREFERE NOME SOCIAL?', 'NOME SOCIAL?'],
+                'QUAL NOME SOCIAL?': ['QUAL NOME SOCIAL?', 'NOME SOCIAL'],
+                'ID_DIGITAL': ['ID_DIGITAL', 'ID DIGITAL', 'DIGITAL', 'IMPRESSÃO DIGITAL'],
+                'STATUS': ['STATUS', 'SITUAÇÃO', 'SITUACAO']
+            };
+            
+            // Mapear índices com busca mais flexível
+            for (const [field, possibleNames] of Object.entries(colNames)) {
+                for (const name of possibleNames) {
+                    const idx = headerRow.findIndex(cell => {
+                        const cellStr = String(cell || '').trim().toUpperCase();
+                        const nameStr = name.toUpperCase();
+                        return cellStr === nameStr || 
+                               cellStr.includes(nameStr) || 
+                               nameStr.includes(cellStr) ||
+                               cellStr.replace(/[^A-Z]/g, '') === nameStr.replace(/[^A-Z]/g, '');
+                    });
+                    if (idx !== -1) {
+                        colIndex[field] = idx;
+                        console.log(`✅ "${field}" → coluna ${idx} ("${headerRow[idx]}")`);
+                        break;
+                    }
+                }
+            }
+            
+            // Verificar se encontrou colunas essenciais
+            if (colIndex['NOME'] === undefined) {
+                throw new Error('Coluna "NOME" não encontrada. Verifique o cabeçalho da planilha.');
+            }
+            
+            // Processar linhas de dados
+            const dataRows = rawRows.slice(headerRowIndex + 1).filter(row => {
+                const hasData = row.some(cell => cell && String(cell).trim() !== '');
+                if (!hasData) return false;
+                
+                const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join(' ');
+                const ignorePatterns = ['LEGENDA', 'CÓDIGOS', 'RENDA TOTAL', 'BENEFÍCIO', 
+                                       'NOVOS ADOLESCENTES', 'AGUARDANDO', 'TOTAL', 'SUM('];
+                for (const pattern of ignorePatterns) {
+                    if (rowStr.includes(pattern)) return false;
+                }
+                return true;
+            });
+            
+            if (dataRows.length === 0) {
+                throw new Error('Nenhuma linha de dados encontrada.');
+            }
+            
+            console.log(`📊 Processando ${dataRows.length} linhas de dados...`);
+            
+            let importados = 0;
+            let atualizados = 0;
+            let erros = 0;
+            let ignorados = 0;
+            let linhasProcessadas = 0;
+            
+            statusDiv.textContent = `⏳ Processando ${dataRows.length} linhas...`;
+            
+            const batchSize = 10;
+            for (let batchStart = 0; batchStart < dataRows.length; batchStart += batchSize) {
+                const batchEnd = Math.min(batchStart + batchSize, dataRows.length);
+                const batch = dataRows.slice(batchStart, batchEnd);
+                
+                for (let rowIndex = 0; rowIndex < batch.length; rowIndex++) {
+                    const row = batch[rowIndex];
+                    linhasProcessadas++;
+                    
+                    try {
+                        if (linhasProcessadas % 20 === 0) {
+                            statusDiv.textContent = `⏳ Processando ${linhasProcessadas}/${dataRows.length} linhas...`;
+                            await new Promise(r => setTimeout(r, 10));
+                        }
+                        
+                        // Extrair nome
+                        let nome = '';
+                        if (colIndex['NOME'] !== undefined && row[colIndex['NOME']]) {
+                            nome = String(row[colIndex['NOME']]).trim();
+                        }
+                        
+                        if (!nome) {
+                            ignorados++;
+                            continue;
+                        }
+                        
+                        // Verificar se é uma linha de legenda
+                        const nomeUpper = nome.toUpperCase().trim();
+                        const palavrasIgnorar = [
+                            'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO', 'MEDIDA FINALIZADA',
+                            'LIBERADO', 'SUSPENSO', 'TOTAL', 'LEGENDA', 'CÓDIGOS', 'PACTUAÇÃO',
+                            'PRESENÇA', 'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TER', 'QUIN', 'SÁB'
+                        ];
+                        let ignorar = false;
+                        for (const palavra of palavrasIgnorar) {
+                            if (nomeUpper.includes(palavra) && nomeUpper.length < 20) {
+                                ignorar = true;
+                                break;
+                            }
+                        }
+                        if (ignorar) {
+                            ignorados++;
+                            continue;
+                        }
+                        
+                        // Extrair dados
+                        const dadosJovem = {};
+                        let dataNascimento = null;
+                        
+                        for (const campo of Object.keys(colNames)) {
+                            const idx = colIndex[campo];
+                            if (idx !== undefined && row[idx] !== undefined && row[idx] !== '') {
+                                let valor = String(row[idx]).trim();
+                                
+                                // Processar campos específicos
+                                if (campo === 'GÊNERO') {
+                                    const generoMap = {
+                                        'MASCULINO': 'M', 'MASC': 'M', 'M': 'M',
+                                        'FEMININO': 'F', 'FEM': 'F', 'F': 'F',
+                                        'NÃO-BINÁRIO': 'NB', 'NAO BINARIO': 'NB', 'NB': 'NB',
+                                        'NÃO BINÁRIO': 'NB'
+                                    };
+                                    const key = valor.toUpperCase().trim();
+                                    dadosJovem[campo] = generoMap[key] || valor;
+                                } 
+                                else if (campo === 'NASC.') {
+                                    const dataConvertida = parseDataBrasil(valor);
+                                    if (dataConvertida) {
+                                        dadosJovem[campo] = dataConvertida;
+                                        dataNascimento = dataConvertida;
+                                    } else {
+                                        dadosJovem[campo] = valor;
+                                    }
+                                }
+                                else if (campo === 'CPF') {
+                                    dadosJovem[campo] = valor.replace(/\D/g, '');
+                                }
+                                else if (campo === 'TELEFONE') {
+                                    dadosJovem[campo] = valor.replace(/\s/g, '');
+                                }
+                                else if (campo === 'MEDIDA') {
+                                    const medidaMap = {
+                                        'LA': 'LA', 'LIBERDADE ASSISTIDA': 'LA',
+                                        'PSC': 'PSC', 'PRESTAÇÃO DE SERVIÇO': 'PSC',
+                                        'INTERNAÇÃO': 'Internação',
+                                        'LIBERAÇÃO': 'Liberação'
+                                    };
+                                    const key = valor.toUpperCase().trim();
+                                    dadosJovem[campo] = medidaMap[key] || valor;
+                                }
+                                else if (campo === 'IDADE') {
+                                    const idadeNum = parseInt(valor);
+                                    if (!isNaN(idadeNum) && idadeNum > 0) {
+                                        dadosJovem[campo] = idadeNum;
+                                    }
+                                }
+                                else {
+                                    dadosJovem[campo] = valor;
+                                }
+                            }
+                        }
+                        
+                        // Se não tem idade mas tem data de nascimento, calcular
+                        if (!dadosJovem['IDADE'] && dataNascimento) {
+                            const idadeCalculada = calcularIdade(dataNascimento);
+                            if (idadeCalculada > 0) {
+                                dadosJovem['IDADE'] = idadeCalculada;
+                            }
+                        }
+                        
+                        // Processar campos numéricos
+                        const camposNumericos = ['HORAS', 'HORAS_CUMPRIDAS', 'SALDO', 'MESES'];
+                        for (const campo of camposNumericos) {
+                            const idx = colIndex[campo];
+                            if (idx !== undefined && row[idx] !== undefined && row[idx] !== '') {
+                                let valor = row[idx];
+                                if (typeof valor === 'string') {
+                                    valor = parseFloat(valor.replace(',', '.').replace(/[^0-9.,-]/g, ''));
+                                }
+                                if (!isNaN(valor) && valor >= 0) {
+                                    dadosJovem[campo] = valor;
+                                }
+                            }
+                        }
+                        
+                        // Status
+                        if (colIndex['STATUS'] !== undefined && row[colIndex['STATUS']]) {
+                            let status = String(row[colIndex['STATUS']]).toUpperCase().trim();
+                            const statusMap = {
+                                'REGULAR': 'REGULAR',
+                                'IRREGULAR': 'IRREGULAR',
+                                'EM DESCUMPRIMENTO': 'EM DESCUMPRIMENTO',
+                                'SUSPENSO': 'SUSPENSO',
+                                'MEDIDA FINALIZADA': 'MEDIDA FINALIZADA',
+                                'LIBERADO': 'LIBERADO'
+                            };
+                            for (const [key, value] of Object.entries(statusMap)) {
+                                if (status.includes(key) || key.includes(status)) {
+                                    status = value;
+                                    break;
+                                }
+                            }
+                            dadosJovem['STATUS'] = status;
+                        }
+                        
+                        // Verificar se jovem já existe
+                        let jovemExistente = null;
+                        
+                        if (dadosJovem['CPF'] && dadosJovem['CPF'].length >= 11) {
+                            jovemExistente = estado.jovens.find(j => 
+                                (j['CPF'] || '').replace(/\D/g, '') === dadosJovem['CPF']
+                            );
+                        }
+                        
+                        if (!jovemExistente) {
+                            const nomeBusca = nome.toUpperCase().trim();
+                            jovemExistente = estado.jovens.find(j => {
+                                const jNome = (j['NOME'] || '').toUpperCase().trim();
+                                return jNome === nomeBusca || 
+                                       jNome.includes(nomeBusca) || 
+                                       nomeBusca.includes(jNome);
+                            });
+                        }
+                        
+                        if (jovemExistente) {
+                            // ATUALIZAR JOVEM EXISTENTE
+                            const jovemId = jovemExistente.id;
+                            
+                            const historicoFrequencia = jovemExistente.historicoFrequencia || [];
+                            const observacoes = jovemExistente.observacoes || [];
+                            const documentos = jovemExistente.documentos || [];
+                            const acoesLA = jovemExistente.acoesLA || [];
+                            const profissionalLA = jovemExistente.profissionalLA || '';
+                            const avaliacoes = jovemExistente.avaliacoes || [];
+                            
+                            const jovemAtualizado = { 
+                                id: jovemId,
+                                profissionalLA: profissionalLA,
+                                historicoFrequencia: historicoFrequencia,
+                                observacoes: observacoes,
+                                documentos: documentos,
+                                acoesLA: acoesLA,
+                                avaliacoes: avaliacoes,
+                                'HORAS': jovemExistente['HORAS'] || 0,
+                                'HORAS_CUMPRIDAS': jovemExistente['HORAS_CUMPRIDAS'] || 0,
+                                'SALDO': jovemExistente['SALDO'] || 0,
+                                status: jovemExistente.status || 'REGULAR'
+                            };
+                            
+                            // Adicionar/atualizar campos
+                            for (const [key, value] of Object.entries(dadosJovem)) {
+                                if (key === 'STATUS' || key === 'ID_DIGITAL') {
+                                    jovemAtualizado[key] = value;
+                                } else if (key !== 'HORAS' && key !== 'HORAS_CUMPRIDAS' && key !== 'SALDO' && key !== 'MESES') {
+                                    jovemAtualizado[key] = value;
+                                }
+                            }
+                            
+                            // Se tiver data de nascimento e mês aniversario vazio
+                            if (jovemAtualizado['NASC.'] && !jovemAtualizado['MÊS ANIVERSARIO']) {
+                                const dataNasc = new Date(jovemAtualizado['NASC.']);
+                                if (!isNaN(dataNasc.getTime())) {
+                                    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                                                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+                                    jovemAtualizado['MÊS ANIVERSARIO'] = meses[dataNasc.getMonth()];
+                                }
+                            }
+                            
+                            // Salvar
+                            await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
+                            
+                            const index = estado.jovens.findIndex(j => j.id === jovemId);
+                            if (index !== -1) {
+                                estado.jovens[index] = jovemAtualizado;
+                            }
+                            
+                            atualizados++;
+                        } else {
+                            // CRIAR NOVO JOVEM
+                            const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                            
+                            const novoJovem = {
+                                id: novoId,
+                                status: dadosJovem['STATUS'] || 'REGULAR',
+                                historicoFrequencia: [],
+                                observacoes: [],
+                                documentos: [],
+                                acoesLA: [],
+                                avaliacoes: [],
+                                'HORAS': dadosJovem['HORAS'] || 0,
+                                'HORAS_CUMPRIDAS': dadosJovem['HORAS_CUMPRIDAS'] || 0,
+                                'SALDO': dadosJovem['SALDO'] || 0,
+                                'MÊS ANIVERSARIO': '',
+                                'ID_DIGITAL': dadosJovem['ID_DIGITAL'] || ''
+                            };
+                            
+                            // Adicionar campos
+                            for (const [key, value] of Object.entries(dadosJovem)) {
+                                if (key !== 'HORAS' && key !== 'HORAS_CUMPRIDAS' && key !== 'SALDO' && key !== 'MESES') {
+                                    novoJovem[key] = value;
+                                }
+                            }
+                            
+                            // Garantir que todos os campos existam
+                            for (const [key] of CAMPOS) {
+                                if (!novoJovem[key]) novoJovem[key] = '';
+                            }
+                            
+                            // Se tiver data de nascimento, calcular idade e mês
+                            if (novoJovem['NASC.']) {
+                                const dataNasc = new Date(novoJovem['NASC.']);
+                                if (!isNaN(dataNasc.getTime())) {
+                                    const idade = calcularIdade(dataNasc);
+                                    if (idade > 0) {
+                                        novoJovem['IDADE'] = idade;
+                                    }
+                                    
+                                    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                                                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+                                    novoJovem['MÊS ANIVERSARIO'] = meses[dataNasc.getMonth()];
+                                }
+                            }
+                            
+                            // Salvar
+                            await upstash('SET', `jovem:${novoId}`, JSON.stringify(novoJovem));
+                            await upstash('SADD', 'jovens:all', novoId);
+                            estado.jovens.push(novoJovem);
+                            importados++;
+                        }
+                        
+                    } catch (rowError) {
+                        console.error('Erro ao processar linha:', row, rowError);
+                        erros++;
+                    }
+                }
+                
+                await new Promise(r => setTimeout(r, 50));
+            }
+            
+            await carregarTodosDados();
+            
+            let mensagem = `✅ Importação concluída!`;
+            if (importados > 0) mensagem += ` ${importados} novos adicionados.`;
+            if (atualizados > 0) mensagem += ` ${atualizados} atualizados.`;
+            if (ignorados > 0) mensagem += ` ${ignorados} linhas ignoradas (legendas/vazias).`;
+            if (erros > 0) mensagem += ` ⚠️ ${erros} erros.`;
+            mensagem += ` Total de linhas processadas: ${linhasProcessadas}`;
+            
+            statusDiv.className = 'success';
+            statusDiv.textContent = mensagem;
+            
+            carregarLista();
+            renderizarDashboard();
+            renderizarAcompanhamento();
+            popularSelectAcompInd();
+            
+            alert(mensagem);
+            
+        } catch (err) {
+            statusDiv.className = 'error';
+            statusDiv.textContent = '❌ Erro: ' + err.message;
+            console.error('Erro na importação:', err);
+            alert('Erro na importação: ' + err.message + '\n\nVerifique se a planilha tem o cabeçalho correto.');
+        }
+    };
+    
+    input.click();
+}
+
+// ============================================================
 // AVISO DE OBSERVAÇÕES PARA GESTOR
 // ============================================================
 function exibirAvisoObservacoes() {}
@@ -4392,7 +4348,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Calcular idade automaticamente quando a data de nascimento mudar no formulário
+    // Calcular idade automaticamente quando a data de nascimento mudar
     const nascInput = document.getElementById('campo_NASC.');
     if (nascInput) {
         nascInput.addEventListener('change', function() {
