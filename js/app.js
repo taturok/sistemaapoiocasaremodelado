@@ -3799,8 +3799,9 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAÇÃO DE PLANILHA - VERSÃO CORRIGIDA
+// FUNÇÃO DE IMPORTAÇÃO DE PLANILHA - VERSÃO CORRIGIDA
 // ============================================================
+
 async function importarPlanilha() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -3826,10 +3827,10 @@ async function importarPlanilha() {
                 cellDates: false,
                 cellFormula: false,
                 sheetRows: 2000,
-                raw: true,
-                dateNF: 'yyyy-mm-dd'
+                raw: true
             });
             
+            // Pegar a primeira aba (GERAL)
             const sheetName = wb.SheetNames[0];
             const ws = wb.Sheets[sheetName];
             
@@ -3837,7 +3838,7 @@ async function importarPlanilha() {
                 throw new Error('Planilha vazia ou formato inválido.');
             }
             
-            // Converter para array de arrays para preservar melhor os dados
+            // Converter para array de arrays
             const rawRows = XLSX.utils.sheet_to_json(ws, { 
                 raw: true,
                 defval: '',
@@ -3848,49 +3849,76 @@ async function importarPlanilha() {
                 throw new Error('Planilha vazia ou sem dados.');
             }
             
-            // Encontrar a linha do cabeçalho
+            console.log('🔍 Planilha carregada. Total de linhas:', rawRows.length);
+            console.log('📋 Primeiras 5 linhas:', rawRows.slice(0, 5));
+            
+            // ============================================================
+            // ENCONTRAR O CABEÇALHO CORRETO
+            // ============================================================
             let headerRowIndex = -1;
             let headerRow = null;
             
+            // A planilha tem o cabeçalho com "NOME" na coluna B (índice 1)
+            // As colunas são: A=REFERENCIA, B=NOME, C=NOME DO RESPONSÁVEL, etc.
             for (let i = 0; i < Math.min(30, rawRows.length); i++) {
                 const row = rawRows[i];
                 if (!row || row.length === 0) continue;
                 
-                const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join(' ');
+                // Verificar se a linha contém "NOME" (coluna B)
+                const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join('|');
                 
-                const hasNome = rowStr.includes('NOME');
-                const hasMedida = rowStr.includes('MEDIDA');
-                const hasReferencia = rowStr.includes('REFERENCIA') || rowStr.includes('REFERÊNCIA');
-                const hasStatus = rowStr.includes('STATUS') || rowStr.includes('SITUAÇÃO') || rowStr.includes('SITUACAO');
-                const hasNasc = rowStr.includes('NASC') || rowStr.includes('NASCIMENTO');
-                
-                if ((hasNome && hasMedida) || (hasNome && hasReferencia) || (hasNome && hasStatus) || (hasNome && hasNasc)) {
+                // Procurar por "NOME" na linha
+                if (rowStr.includes('NOME') && rowStr.includes('MEDIDA')) {
                     headerRowIndex = i;
                     headerRow = row;
                     console.log('✅ Cabeçalho encontrado na linha', i);
-                    console.log('📋 Colunas:', headerRow);
+                    console.log('📋 Cabeçalho:', headerRow);
                     break;
                 }
             }
             
-            if (headerRowIndex === -1 || !headerRow) {
-                throw new Error('Cabeçalho da planilha não encontrado. Verifique se as colunas "NOME" estão presentes.');
+            // Se não encontrou com MEDIDA, tentar apenas com NOME
+            if (headerRowIndex === -1) {
+                for (let i = 0; i < Math.min(20, rawRows.length); i++) {
+                    const row = rawRows[i];
+                    if (!row || row.length === 0) continue;
+                    
+                    const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join('|');
+                    if (rowStr.includes('NOME') && rowStr.includes('NASC')) {
+                        headerRowIndex = i;
+                        headerRow = row;
+                        console.log('✅ Cabeçalho alternativo encontrado na linha', i);
+                        break;
+                    }
+                }
             }
             
-            // Mapear índices das colunas
+            if (headerRowIndex === -1 || !headerRow) {
+                throw new Error('Cabeçalho da planilha não encontrado. Verifique se a coluna "NOME" existe.');
+            }
+            
+            // ============================================================
+            // MAPEAR ÍNDICES DAS COLUNAS
+            // ============================================================
             const colIndex = {};
-            const colNames = {
+            
+            // Normalizar o cabeçalho para busca
+            const headerNormalized = headerRow.map(cell => String(cell || '').trim().toUpperCase());
+            console.log('📋 Cabeçalho normalizado:', headerNormalized);
+            
+            // Definir os nomes das colunas e suas variações
+            const colMap = {
                 'REFERENCIA': ['REFERENCIA', 'REFERÊNCIA', 'REF'],
                 'NOME': ['NOME', 'NOME COMPLETO', 'NOME DO ADOLESCENTE'],
-                'NOME DO RESPONSÁVEL': ['NOME DO RESPONSÁVEL', 'RESPONSÁVEL'],
+                'NOME DO RESPONSÁVEL': ['NOME DO RESPONSÁVEL', 'RESPONSÁVEL', 'NOME DO RESPONSAVEL'],
                 'REINCIDÊNCIA': ['REINCIDÊNCIA', 'REINCIDENCIA'],
-                'MEDIDA': ['MEDIDA', 'MSE', 'TIPO DE MEDIDA', 'MEDIDA SOCIOEDUCATIVA'],
+                'MEDIDA': ['MEDIDA', 'MSE', 'TIPO DE MEDIDA'],
                 'MESES': ['MESES'],
-                'HORAS': ['HORAS', 'TOTAL HORAS', 'HORAS_ATRIBUIDAS'],
-                'HORAS_CUMPRIDAS': ['HORAS_CUMPRIDAS', 'HORAS CUMPRIDAS', 'HORASCUMPRIDAS'],
+                'HORAS': ['HORAS', 'TOTAL HORAS', 'HORAS ATRIBUIDAS'],
+                'HORAS_CUMPRIDAS': ['HORAS_CUMPRIDAS', 'HORAS CUMPRIDAS'],
                 'SALDO': ['SALDO', 'SALDO DE HORAS'],
                 'PROTETIVA': ['PROTETIVA'],
-                'NASC.': ['NASC.', 'NASCIMENTO', 'DATA NASC', 'DATA NASCIMENTO', 'DATA DE NASCIMENTO'],
+                'NASC.': ['NASC.', 'NASCIMENTO', 'DATA NASC', 'DATA NASCIMENTO'],
                 'MÊS ANIVERSARIO': ['MÊS ANIVERSARIO', 'MES ANIVERSARIO', 'MÊS ANIVER'],
                 'NATURALIDADE': ['NATURALIDADE'],
                 'IDADE': ['IDADE'],
@@ -3917,42 +3945,64 @@ async function importarPlanilha() {
                 'QUAL?': ['QUAL?', 'QUAL'],
                 'PREFERE NOME SOCIAL?': ['PREFERE NOME SOCIAL?', 'NOME SOCIAL?'],
                 'QUAL NOME SOCIAL?': ['QUAL NOME SOCIAL?', 'NOME SOCIAL'],
-                'ID_DIGITAL': ['ID_DIGITAL', 'ID DIGITAL', 'DIGITAL', 'IMPRESSÃO DIGITAL'],
+                'ID_DIGITAL': ['ID_DIGITAL', 'ID DIGITAL', 'DIGITAL'],
                 'STATUS': ['STATUS', 'SITUAÇÃO', 'SITUACAO']
             };
             
-            // Mapear índices com busca mais flexível
-            for (const [field, possibleNames] of Object.entries(colNames)) {
-                for (const name of possibleNames) {
-                    const idx = headerRow.findIndex(cell => {
-                        const cellStr = String(cell || '').trim().toUpperCase();
-                        const nameStr = name.toUpperCase();
-                        return cellStr === nameStr || 
-                               cellStr.includes(nameStr) || 
-                               nameStr.includes(cellStr) ||
-                               cellStr.replace(/[^A-Z]/g, '') === nameStr.replace(/[^A-Z]/g, '');
-                    });
-                    if (idx !== -1) {
-                        colIndex[field] = idx;
-                        console.log(`✅ "${field}" → coluna ${idx} ("${headerRow[idx]}")`);
-                        break;
+            // Mapear cada coluna
+            for (const [field, possibleNames] of Object.entries(colMap)) {
+                for (let idx = 0; idx < headerNormalized.length; idx++) {
+                    const headerValue = headerNormalized[idx];
+                    if (!headerValue) continue;
+                    
+                    for (const name of possibleNames) {
+                        const nameUpper = name.toUpperCase().trim();
+                        // Verificar se o cabeçalho contém o nome ou vice-versa
+                        if (headerValue === nameUpper || 
+                            headerValue.includes(nameUpper) || 
+                            nameUpper.includes(headerValue) ||
+                            headerValue.replace(/[^A-Z]/g, '') === nameUpper.replace(/[^A-Z]/g, '')) {
+                            colIndex[field] = idx;
+                            console.log(`✅ "${field}" → coluna ${idx} ("${headerRow[idx]}")`);
+                            break;
+                        }
                     }
+                    if (colIndex[field] !== undefined) break;
                 }
             }
             
             // Verificar se encontrou colunas essenciais
             if (colIndex['NOME'] === undefined) {
+                // Tentar encontrar NOME em qualquer coluna que contenha "NOME"
+                for (let idx = 0; idx < headerNormalized.length; idx++) {
+                    if (headerNormalized[idx] && headerNormalized[idx].includes('NOME')) {
+                        colIndex['NOME'] = idx;
+                        console.log(`✅ "NOME" encontrado na coluna ${idx} ("${headerRow[idx]}")`);
+                        break;
+                    }
+                }
+            }
+            
+            if (colIndex['NOME'] === undefined) {
                 throw new Error('Coluna "NOME" não encontrada. Verifique o cabeçalho da planilha.');
             }
             
-            // Processar linhas de dados
+            console.log('📊 Mapeamento de colunas:', colIndex);
+            
+            // ============================================================
+            // PROCESSAR LINHAS DE DADOS
+            // ============================================================
+            // Ignorar linhas de legenda e linhas vazias
             const dataRows = rawRows.slice(headerRowIndex + 1).filter(row => {
                 const hasData = row.some(cell => cell && String(cell).trim() !== '');
                 if (!hasData) return false;
                 
                 const rowStr = row.map(cell => String(cell || '').toUpperCase().trim()).join(' ');
-                const ignorePatterns = ['LEGENDA', 'CÓDIGOS', 'RENDA TOTAL', 'BENEFÍCIO', 
-                                       'NOVOS ADOLESCENTES', 'AGUARDANDO', 'TOTAL', 'SUM('];
+                const ignorePatterns = [
+                    'LEGENDA', 'CÓDIGOS', 'RENDA TOTAL', 'BENEFÍCIO', 
+                    'NOVOS ADOLESCENTES', 'AGUARDANDO', 'TOTAL', 'SUM(',
+                    'PACTUAÇÃO', 'PRESENÇA', 'AUSENCIA', 'JUSTIFICADO', 'DESC'
+                ];
                 for (const pattern of ignorePatterns) {
                     if (rowStr.includes(pattern)) return false;
                 }
@@ -3965,6 +4015,22 @@ async function importarPlanilha() {
             
             console.log(`📊 Processando ${dataRows.length} linhas de dados...`);
             
+            // ============================================================
+            // CAMPOS PARA ATUALIZAÇÃO
+            // ============================================================
+            const camposPessoais = [
+                'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA',
+                'MEDIDA', 'MESES', 'PROTETIVA', 'NASC.', 'NATURALIDADE',
+                'IDADE', 'GÊNERO', 'COR', 'COMPOSIÇÃO FAMILIAR', 'RENDA',
+                'BENEFICIO', 'PAA', 'ENDEREÇO', 'BAIRRO', 'TELEFONE',
+                'CRAS', 'UBS', 'CPF', 'ESTUDA?', 'SÉRIE', 'ESCOLA',
+                'TRABALHA?', 'FUNÇÃO', 'VINCULO', 'REDE', 'USO DE SPA?',
+                'QUAL?', 'PREFERE NOME SOCIAL?', 'QUAL NOME SOCIAL?',
+                'MÊS ANIVERSARIO', 'ID_DIGITAL'
+            ];
+            
+            const camposNumericos = ['HORAS', 'HORAS_CUMPRIDAS', 'SALDO', 'IDADE', 'MESES'];
+            
             let importados = 0;
             let atualizados = 0;
             let erros = 0;
@@ -3973,6 +4039,9 @@ async function importarPlanilha() {
             
             statusDiv.textContent = `⏳ Processando ${dataRows.length} linhas...`;
             
+            // ============================================================
+            // PROCESSAR EM LOTE
+            // ============================================================
             const batchSize = 10;
             for (let batchStart = 0; batchStart < dataRows.length; batchStart += batchSize) {
                 const batchEnd = Math.min(batchStart + batchSize, dataRows.length);
@@ -3988,27 +4057,29 @@ async function importarPlanilha() {
                             await new Promise(r => setTimeout(r, 10));
                         }
                         
-                        // Extrair nome
+                        // Extrair nome (coluna B)
                         let nome = '';
                         if (colIndex['NOME'] !== undefined && row[colIndex['NOME']]) {
                             nome = String(row[colIndex['NOME']]).trim();
                         }
                         
+                        // Se não tem nome, pular
                         if (!nome) {
                             ignorados++;
                             continue;
                         }
                         
-                        // Verificar se é uma linha de legenda
+                        // Verificar se é uma linha de legenda (nomes curtos demais)
                         const nomeUpper = nome.toUpperCase().trim();
                         const palavrasIgnorar = [
                             'REGULAR', 'IRREGULAR', 'EM DESCUMPRIMENTO', 'MEDIDA FINALIZADA',
                             'LIBERADO', 'SUSPENSO', 'TOTAL', 'LEGENDA', 'CÓDIGOS', 'PACTUAÇÃO',
-                            'PRESENÇA', 'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TER', 'QUIN', 'SÁB'
+                            'PRESENÇA', 'AUSENCIA', 'JUSTIFICADO', 'DESC', 'TER', 'QUIN', 'SÁB',
+                            'NOVOS ADOLESCENTES', 'AGUARDANDO', 'PIA', 'MSE'
                         ];
                         let ignorar = false;
                         for (const palavra of palavrasIgnorar) {
-                            if (nomeUpper.includes(palavra) && nomeUpper.length < 20) {
+                            if (nomeUpper === palavra || (nomeUpper.includes(palavra) && nome.length < 15)) {
                                 ignorar = true;
                                 break;
                             }
@@ -4018,11 +4089,13 @@ async function importarPlanilha() {
                             continue;
                         }
                         
-                        // Extrair dados
+                        // ============================================================
+                        // EXTRAIR DADOS
+                        // ============================================================
                         const dadosJovem = {};
                         let dataNascimento = null;
                         
-                        for (const campo of Object.keys(colNames)) {
+                        for (const campo of Object.keys(colMap)) {
                             const idx = colIndex[campo];
                             if (idx !== undefined && row[idx] !== undefined && row[idx] !== '') {
                                 let valor = String(row[idx]).trim();
@@ -4058,7 +4131,8 @@ async function importarPlanilha() {
                                         'LA': 'LA', 'LIBERDADE ASSISTIDA': 'LA',
                                         'PSC': 'PSC', 'PRESTAÇÃO DE SERVIÇO': 'PSC',
                                         'INTERNAÇÃO': 'Internação',
-                                        'LIBERAÇÃO': 'Liberação'
+                                        'LIBERAÇÃO': 'Liberação',
+                                        'PSC/LA': 'PSC/LA'
                                     };
                                     const key = valor.toUpperCase().trim();
                                     dadosJovem[campo] = medidaMap[key] || valor;
@@ -4069,10 +4143,23 @@ async function importarPlanilha() {
                                         dadosJovem[campo] = idadeNum;
                                     }
                                 }
+                                else if (campo === 'MÊS ANIVERSARIO') {
+                                    // Se tem valor, manter
+                                    dadosJovem[campo] = valor;
+                                }
                                 else {
                                     dadosJovem[campo] = valor;
                                 }
                             }
+                        }
+                        
+                        // Se não tem data de nascimento mas tem idade, tentar calcular
+                        if (!dadosJovem['NASC.'] && dadosJovem['IDADE']) {
+                            // Não podemos calcular a data exata, mas podemos usar a idade
+                            // para estimar o ano de nascimento
+                            const hoje = new Date();
+                            const anoNasc = hoje.getFullYear() - parseInt(dadosJovem['IDADE']);
+                            // Apenas armazenar a idade já está ok
                         }
                         
                         // Se não tem idade mas tem data de nascimento, calcular
@@ -4084,7 +4171,6 @@ async function importarPlanilha() {
                         }
                         
                         // Processar campos numéricos
-                        const camposNumericos = ['HORAS', 'HORAS_CUMPRIDAS', 'SALDO', 'MESES'];
                         for (const campo of camposNumericos) {
                             const idx = colIndex[campo];
                             if (idx !== undefined && row[idx] !== undefined && row[idx] !== '') {
@@ -4118,15 +4204,19 @@ async function importarPlanilha() {
                             dadosJovem['STATUS'] = status;
                         }
                         
-                        // Verificar se jovem já existe
+                        // ============================================================
+                        // VERIFICAR SE JOVEM JÁ EXISTE
+                        // ============================================================
                         let jovemExistente = null;
                         
+                        // Buscar por CPF
                         if (dadosJovem['CPF'] && dadosJovem['CPF'].length >= 11) {
                             jovemExistente = estado.jovens.find(j => 
                                 (j['CPF'] || '').replace(/\D/g, '') === dadosJovem['CPF']
                             );
                         }
                         
+                        // Buscar por nome
                         if (!jovemExistente) {
                             const nomeBusca = nome.toUpperCase().trim();
                             jovemExistente = estado.jovens.find(j => {
@@ -4137,10 +4227,14 @@ async function importarPlanilha() {
                             });
                         }
                         
+                        // ============================================================
+                        // ATUALIZAR OU CRIAR JOVEM
+                        // ============================================================
                         if (jovemExistente) {
                             // ATUALIZAR JOVEM EXISTENTE
                             const jovemId = jovemExistente.id;
                             
+                            // Preservar dados sensíveis
                             const historicoFrequencia = jovemExistente.historicoFrequencia || [];
                             const observacoes = jovemExistente.observacoes || [];
                             const documentos = jovemExistente.documentos || [];
@@ -4162,16 +4256,17 @@ async function importarPlanilha() {
                                 status: jovemExistente.status || 'REGULAR'
                             };
                             
-                            // Adicionar/atualizar campos
+                            // Adicionar/atualizar campos pessoais
                             for (const [key, value] of Object.entries(dadosJovem)) {
-                                if (key === 'STATUS' || key === 'ID_DIGITAL') {
+                                if (camposPessoais.includes(key) || key === 'STATUS') {
                                     jovemAtualizado[key] = value;
-                                } else if (key !== 'HORAS' && key !== 'HORAS_CUMPRIDAS' && key !== 'SALDO' && key !== 'MESES') {
+                                }
+                                if (camposNumericos.includes(key)) {
                                     jovemAtualizado[key] = value;
                                 }
                             }
                             
-                            // Se tiver data de nascimento e mês aniversario vazio
+                            // Se tiver data de nascimento e mês aniversario vazio, preencher
                             if (jovemAtualizado['NASC.'] && !jovemAtualizado['MÊS ANIVERSARIO']) {
                                 const dataNasc = new Date(jovemAtualizado['NASC.']);
                                 if (!isNaN(dataNasc.getTime())) {
@@ -4184,6 +4279,7 @@ async function importarPlanilha() {
                             // Salvar
                             await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
                             
+                            // Atualizar estado local
                             const index = estado.jovens.findIndex(j => j.id === jovemId);
                             if (index !== -1) {
                                 estado.jovens[index] = jovemAtualizado;
@@ -4209,9 +4305,9 @@ async function importarPlanilha() {
                                 'ID_DIGITAL': dadosJovem['ID_DIGITAL'] || ''
                             };
                             
-                            // Adicionar campos
+                            // Adicionar campos pessoais
                             for (const [key, value] of Object.entries(dadosJovem)) {
-                                if (key !== 'HORAS' && key !== 'HORAS_CUMPRIDAS' && key !== 'SALDO' && key !== 'MESES') {
+                                if (camposPessoais.includes(key) || camposNumericos.includes(key)) {
                                     novoJovem[key] = value;
                                 }
                             }
@@ -4252,6 +4348,9 @@ async function importarPlanilha() {
                 await new Promise(r => setTimeout(r, 50));
             }
             
+            // ============================================================
+            // FINALIZAR
+            // ============================================================
             await carregarTodosDados();
             
             let mensagem = `✅ Importação concluída!`;
@@ -4281,7 +4380,6 @@ async function importarPlanilha() {
     
     input.click();
 }
-
 // ============================================================
 // AVISO DE OBSERVAÇÕES PARA GESTOR
 // ============================================================
