@@ -192,7 +192,7 @@
             <div class="campo-digital-container">
                 <label>🖐️ ID da Impressão Digital</label>
                 <div class="input-group">
-                    <input type="text" id="campo_ID_DIGITAL" placeholder="Ex: 123456">
+                    <input type="text" id="campo_ID_DIGITAL" placeholder="Ex: 123456" autocomplete="off">
                     <span class="helper-text"><i class="fas fa-info-circle"></i> Código único para leitor biométrico</span>
                 </div>
             </div>
@@ -200,7 +200,7 @@
             <!-- CAMPO MÊS ANIVERSARIO COM BOTÃO AUTO -->
             <div class="campo" style="grid-column: 1 / -1;">
                 <label>📅 MÊS ANIVERSARIO</label>
-                <div class="campo-mes-container" style="display:flex; gap:8px; align-items:center; width:100%; max-width:400px;">
+                <div class="campo-mes-container">
                     <input type="text" id="campo_MÊS ANIVERSARIO" placeholder="Ex: Janeiro" style="flex:1;">
                     <button type="button" class="btn-atualizar-mes" onclick="atualizarMesAniversario()" title="Preencher automaticamente baseado na data de nascimento">
                         <i class="fas fa-magic"></i> Auto
