@@ -950,7 +950,7 @@ function getFiltrosSelecionados(containerId) {
 }
 
 // ============================================================
-// FUNÇÃO CARREGAR LISTA
+// FUNÇÃO CARREGAR LISTA - COM CAMPOS EDITÁVEIS
 // ============================================================
 function carregarLista() {
     const tbody = document.getElementById('listaCorpo');
@@ -1056,15 +1056,20 @@ function carregarLista() {
 
         const isSelecionado = estado.selecionadosLote.has(j.id);
 
+        // 🔥 CAMPOS DE HORAS EDITÁVEIS
+        const horasAtribuidasInput = `<input type="number" id="horas_atribuidas_${j.id}" value="${horasAtribuidas}" min="0" step="1" style="width:60px; padding:2px 4px; border:1px solid #d1d9e6; border-radius:4px; text-align:center;" onchange="atualizarHoras('${j.id}', 'HORAS', this.value)">`;
+        const horasCumpridasInput = `<input type="number" id="horas_cumpridas_${j.id}" value="${horasCumpridas}" min="0" step="0.5" style="width:60px; padding:2px 4px; border:1px solid #d1d9e6; border-radius:4px; text-align:center;" onchange="atualizarHoras('${j.id}', 'HORAS_CUMPRIDAS', this.value)">`;
+        const saldoInput = `<input type="number" id="saldo_${j.id}" value="${saldo}" min="0" step="0.5" style="width:60px; padding:2px 4px; border:1px solid #d1d9e6; border-radius:4px; text-align:center;" onchange="atualizarHoras('${j.id}', 'SALDO', this.value)">`;
+
         return `<tr>
             <td><input type="checkbox" data-id="${j.id}" ${isSelecionado ? 'checked' : ''} onchange="toggleSelecionarJovem('${j.id}')"></td>
             <td>${j['NOME'] || j['REFERENCIA'] || '-'}</td>
             <td>${j['ID_DIGITAL'] || '-'}</td>
             <td>${j['IDADE'] || '-'}</td>
             <td>${j['MEDIDA'] || '-'}</td>
-            <td>${horasAtribuidas}h</td>
-            <td>${horasCumpridas}h</td>
-            <td>${renderSaldo}</td>
+            <td>${horasAtribuidasInput}</td>
+            <td>${horasCumpridasInput}</td>
+            <td>${saldoInput}</td>
             <td><span style="font-weight:600; padding:4px 12px; border-radius:20px; ${bgStatus}">${j.status || 'REGULAR'}</span></td>
             <td>${motivoStatus}</td>
             <td>${ultimo}</td>
@@ -1081,6 +1086,169 @@ function carregarLista() {
     document.getElementById('selecionarTodos').checked = false;
     atualizarBarraSelecao();
 }
+
+// ============================================================
+// ATUALIZAR HORAS DIRETAMENTE NA LISTA
+// ============================================================
+window.atualizarHoras = async function(jovemId, campo, valor) {
+    const jovem = estado.jovens.find(j => j.id === jovemId);
+    if (!jovem) {
+        alert('Jovem não encontrado.');
+        return;
+    }
+    
+    const camposPermitidos = ['HORAS', 'HORAS_CUMPRIDAS', 'SALDO'];
+    if (!camposPermitidos.includes(campo)) {
+        alert('Campo não permitido para edição direta.');
+        return;
+    }
+    
+    const novoValor = parseFloat(valor);
+    if (isNaN(novoValor) || novoValor < 0) {
+        alert('Digite um valor válido (número positivo).');
+        const campoId = campo === 'HORAS' ? 'horas_atribuidas' : 
+                       campo === 'HORAS_CUMPRIDAS' ? 'horas_cumpridas' : 'saldo';
+        const input = document.getElementById(`${campoId}_${jovemId}`);
+        if (input) {
+            input.value = jovem[campo] || 0;
+        }
+        return;
+    }
+    
+    jovem[campo] = novoValor;
+    
+    try {
+        await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+        
+        const campoId = campo === 'HORAS' ? 'horas_atribuidas' : 
+                       campo === 'HORAS_CUMPRIDAS' ? 'horas_cumpridas' : 'saldo';
+        const input = document.getElementById(`${campoId}_${jovemId}`);
+        if (input) {
+            input.style.borderColor = '#10b981';
+            input.style.background = '#f0fdf4';
+            setTimeout(() => {
+                input.style.borderColor = '';
+                input.style.background = '';
+            }, 1500);
+        }
+        
+        if (campo === 'HORAS' || campo === 'HORAS_CUMPRIDAS') {
+            const horasAtribuidas = parseFloat(jovem['HORAS'] || 0);
+            const horasCumpridas = parseFloat(jovem['HORAS_CUMPRIDAS'] || 0);
+            const novoSaldo = Math.max(0, horasAtribuidas - horasCumpridas);
+            
+            if (jovem['SALDO'] !== novoSaldo) {
+                jovem['SALDO'] = novoSaldo;
+                await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+                
+                const saldoInput = document.getElementById(`saldo_${jovemId}`);
+                if (saldoInput) {
+                    saldoInput.value = novoSaldo;
+                    saldoInput.style.borderColor = '#f59e0b';
+                    saldoInput.style.background = '#fffbeb';
+                    setTimeout(() => {
+                        saldoInput.style.borderColor = '';
+                        saldoInput.style.background = '';
+                    }, 1500);
+                }
+            }
+        }
+        
+        carregarFichaIndividual();
+        console.log(`✅ ${campo} atualizado para ${jovem['NOME']}: ${novoValor}`);
+        
+    } catch (err) {
+        alert('Erro ao atualizar: ' + err.message);
+        jovem[campo] = jovem[campo] || 0;
+    }
+};
+
+// ============================================================
+// ATUALIZAR MÊS ANIVERSARIO AUTOMATICAMENTE
+// ============================================================
+window.atualizarMesAniversario = function() {
+    const nascInput = document.getElementById('campo_NASC.');
+    const mesInput = document.getElementById('campo_MÊS ANIVERSARIO');
+    
+    if (!nascInput || !mesInput) {
+        alert('Campos não encontrados.');
+        return;
+    }
+    
+    const nascValue = nascInput.value;
+    if (!nascValue) {
+        alert('Preencha a data de nascimento primeiro.');
+        return;
+    }
+    
+    const data = new Date(nascValue);
+    if (isNaN(data.getTime())) {
+        alert('Data de nascimento inválida.');
+        return;
+    }
+    
+    const meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    
+    mesInput.value = meses[data.getMonth()];
+    mesInput.style.borderColor = '#10b981';
+    mesInput.style.background = '#f0fdf4';
+    
+    setTimeout(() => {
+        mesInput.style.borderColor = '';
+        mesInput.style.background = '';
+    }, 2000);
+};
+
+// ============================================================
+// ATUALIZAR MÊS ANIVERSARIO EM LOTE (TODOS OS JOVENS)
+// ============================================================
+window.atualizarTodosMesesAniversario = async function() {
+    if (!confirm('Deseja atualizar o campo "MÊS ANIVERSARIO" para TODOS os jovens baseado na data de nascimento?')) {
+        return;
+    }
+    
+    const meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    
+    let atualizados = 0;
+    let ignorados = 0;
+    let erros = 0;
+    
+    for (const jovem of estado.jovens) {
+        const nascStr = jovem['NASC.'];
+        if (!nascStr) {
+            ignorados++;
+            continue;
+        }
+        
+        try {
+            const data = new Date(nascStr);
+            if (isNaN(data.getTime())) {
+                ignorados++;
+                continue;
+            }
+            
+            const mesNome = meses[data.getMonth()];
+            if (jovem['MÊS ANIVERSARIO'] !== mesNome) {
+                jovem['MÊS ANIVERSARIO'] = mesNome;
+                await upstash('SET', `jovem:${jovem.id}`, JSON.stringify(jovem));
+                atualizados++;
+            }
+        } catch (err) {
+            erros++;
+            console.error('Erro ao atualizar:', jovem['NOME'], err);
+        }
+    }
+    
+    await carregarTodosDados();
+    carregarLista();
+    alert(`✅ ${atualizados} jovens atualizados!\n⚠️ ${ignorados} ignorados (sem data de nascimento)\n❌ ${erros} erros`);
+};
 
 // ============================================================
 // FUNÇÃO ABRIR FICHA MODAL
@@ -3510,7 +3678,7 @@ function exportarExcel() {
 }
 
 // ============================================================
-// IMPORTAR PLANILHA
+// IMPORTAR PLANILHA - CORRIGIDO (NÃO ALTERA HORAS E STATUS)
 // ============================================================
 async function importarPlanilha() {
     const input = document.createElement('input');
@@ -3644,6 +3812,17 @@ async function importarPlanilha() {
                 throw new Error('Coluna "NOME" não encontrada.');
             }
 
+            // 🔥 CAMPOS QUE SERÃO ATUALIZADOS (APENAS DADOS PESSOAIS)
+            const camposPessoais = [
+                'REFERENCIA', 'NOME', 'NOME DO RESPONSÁVEL', 'REINCIDÊNCIA',
+                'MEDIDA', 'MESES', 'PROTETIVA', 'NASC.', 'NATURALIDADE',
+                'IDADE', 'GÊNERO', 'COR', 'COMPOSIÇÃO FAMILIAR', 'RENDA',
+                'BENEFICIO', 'PAA', 'ENDEREÇO', 'BAIRRO', 'TELEFONE',
+                'CRAS', 'UBS', 'CPF', 'ESTUDA?', 'SÉRIE', 'ESCOLA',
+                'TRABALHA?', 'FUNÇÃO', 'VINCULO', 'REDE', 'USO DE SPA?',
+                'QUAL?', 'PREFERE NOME SOCIAL?', 'QUAL NOME SOCIAL?'
+            ];
+
             const campoParaColuna = {
                 'REFERENCIA': colMap.REFERENCIA,
                 'NOME': colMap.NOME,
@@ -3651,9 +3830,6 @@ async function importarPlanilha() {
                 'REINCIDÊNCIA': colMap.REINCIDENCIA,
                 'MEDIDA': colMap.MEDIDA,
                 'MESES': colMap.MESES,
-                'HORAS': colMap.HORAS,
-                'HORAS_CUMPRIDAS': colMap.HORAS_CUMPRIDAS,
-                'SALDO': colMap.SALDO,
                 'PROTETIVA': colMap.PROTETIVA,
                 'NASC.': colMap.NASCIMENTO,
                 'NATURALIDADE': colMap.NATURALIDADE,
@@ -3669,8 +3845,11 @@ async function importarPlanilha() {
                 'ESTUDA?': colMap.ESTUDA,
                 'TRABALHA?': colMap.TRABALHA,
                 'FUNÇÃO': colMap.FUNCAO,
+                'VINCULO': colMap.FUNCAO,
+                'REDE': colMap.FUNCAO,
                 'USO DE SPA?': colMap.USO_SPA,
                 'QUAL?': colMap.QUAL_SPA,
+                'PREFERE NOME SOCIAL?': colMap.NOME_SOCIAL,
                 'QUAL NOME SOCIAL?': colMap.NOME_SOCIAL
             };
 
@@ -3733,27 +3912,6 @@ async function importarPlanilha() {
                             continue;
                         }
 
-                        let statusPlanilha = 'REGULAR';
-                        if (colMap.STATUS && row[colMap.STATUS]) {
-                            const statusRaw = String(row[colMap.STATUS]).toUpperCase().trim();
-                            const statusMap = {
-                                'REGULAR': 'REGULAR',
-                                'ATIVO': 'REGULAR',
-                                'IRREGULAR': 'IRREGULAR',
-                                'SUSPENSO': 'SUSPENSO',
-                                'EM DESCUMPRIMENTO': 'EM DESCUMPRIMENTO',
-                                'DESCUMPRIMENTO': 'EM DESCUMPRIMENTO',
-                                'CONCLUÍDO': 'MEDIDA FINALIZADA',
-                                'CONCLUIDO': 'MEDIDA FINALIZADA',
-                                'FINALIZADA': 'MEDIDA FINALIZADA',
-                                'FINALIZADO': 'MEDIDA FINALIZADA',
-                                'MEDIDA FINALIZADA': 'MEDIDA FINALIZADA',
-                                'LIBERADO': 'LIBERADO',
-                                'LIBERAÇÃO': 'LIBERADO'
-                            };
-                            statusPlanilha = statusMap[statusRaw] || statusRaw;
-                        }
-
                         let jovemExistente = null;
                         
                         let cpfPlanilha = '';
@@ -3784,9 +3942,6 @@ async function importarPlanilha() {
                                     else if (valor.toUpperCase().includes('FEM')) valor = 'F';
                                     else if (valor.toUpperCase().includes('NÃO BINÁRIO') || valor.toUpperCase().includes('NB')) valor = 'NB';
                                 }
-                                if ((campo === 'HORAS' || campo === 'MESES' || campo === 'HORAS_CUMPRIDAS' || campo === 'SALDO') && valor) {
-                                    valor = parseFloat(String(valor).replace(',', '.')) || 0;
-                                }
                                 if (campo === 'IDADE' && valor) {
                                     valor = parseInt(valor) || 0;
                                 }
@@ -3797,34 +3952,11 @@ async function importarPlanilha() {
                         
                         dadosJovem['NOME'] = nome;
 
-                        // Fallback para HORAS_CUMPRIDAS
-                        if (!dadosJovem['HORAS_CUMPRIDAS'] || dadosJovem['HORAS_CUMPRIDAS'] === 0) {
-                            let totalPresencas = 0;
-                            for (const key of Object.keys(row)) {
-                                const val = String(row[key] || '').toUpperCase().trim();
-                                if (val === 'P') {
-                                    totalPresencas++;
-                                }
-                            }
-                            if (totalPresencas > 0) {
-                                dadosJovem['HORAS_CUMPRIDAS'] = totalPresencas * 4;
-                                console.log(`✅ Calculado HORAS_CUMPRIDAS para ${nome}: ${totalPresencas} presenças × 4 = ${dadosJovem['HORAS_CUMPRIDAS']}h`);
-                            }
-                        }
-                        
-                        // Fallback para SALDO
-                        if (!dadosJovem['SALDO'] || dadosJovem['SALDO'] === 0) {
-                            const horasAtribuidas = parseFloat(dadosJovem['HORAS'] || 0);
-                            const horasCumpridas = parseFloat(dadosJovem['HORAS_CUMPRIDAS'] || 0);
-                            dadosJovem['SALDO'] = Math.max(0, horasAtribuidas - horasCumpridas);
-                            console.log(`✅ Calculado SALDO para ${nome}: ${horasAtribuidas} - ${horasCumpridas} = ${dadosJovem['SALDO']}`);
-                        }
-
-                        console.log(`📊 ${nome}: HORAS=${dadosJovem['HORAS']}, CUMPRIDAS=${dadosJovem['HORAS_CUMPRIDAS']}, SALDO=${dadosJovem['SALDO']}`);
-
+                        // 🔥 ATUALIZAR APENAS DADOS PESSOAIS, MANTER HORAS E STATUS
                         if (jovemExistente) {
                             const jovemId = jovemExistente.id;
                             
+                            // Manter dados existentes
                             const historicoFrequencia = jovemExistente.historicoFrequencia || [];
                             const observacoes = jovemExistente.observacoes || [];
                             const documentos = jovemExistente.documentos || [];
@@ -3838,22 +3970,26 @@ async function importarPlanilha() {
                                 observacoes: observacoes,
                                 documentos: documentos,
                                 acoesLA: acoesLA,
-                                avaliacoes: jovemExistente.avaliacoes || []
+                                avaliacoes: jovemExistente.avaliacoes || [],
+                                // 🔥 MANTER STATUS E HORAS EXISTENTES
+                                status: jovemExistente.status || 'REGULAR',
+                                'HORAS': jovemExistente['HORAS'] || 0,
+                                'HORAS_CUMPRIDAS': jovemExistente['HORAS_CUMPRIDAS'] || 0,
+                                'SALDO': jovemExistente['SALDO'] || 0
                             };
                             
+                            // 🔥 ATUALIZAR APENAS CAMPOS PESSOAIS
                             for (const [key, value] of Object.entries(dadosJovem)) {
-                                jovemAtualizado[key] = value;
-                            }
-                            
-                            for (const [key] of CAMPOS) {
-                                if (!jovemAtualizado[key] && jovemExistente[key] !== undefined) {
-                                    jovemAtualizado[key] = jovemExistente[key];
+                                if (camposPessoais.includes(key)) {
+                                    jovemAtualizado[key] = value;
                                 }
                             }
                             
-                            jovemAtualizado.status = statusPlanilha;
-                            jovemAtualizado['HORAS_CUMPRIDAS'] = dadosJovem['HORAS_CUMPRIDAS'] || jovemAtualizado['HORAS_CUMPRIDAS'] || 0;
-                            jovemAtualizado['SALDO'] = dadosJovem['SALDO'] || jovemAtualizado['SALDO'] || 0;
+                            // 🔥 GARANTIR QUE HORAS E STATUS NÃO SEJAM ALTERADOS
+                            jovemAtualizado['HORAS'] = jovemExistente['HORAS'] || 0;
+                            jovemAtualizado['HORAS_CUMPRIDAS'] = jovemExistente['HORAS_CUMPRIDAS'] || 0;
+                            jovemAtualizado['SALDO'] = jovemExistente['SALDO'] || 0;
+                            jovemAtualizado.status = jovemExistente.status || 'REGULAR';
                             
                             await upstash('SET', `jovem:${jovemId}`, JSON.stringify(jovemAtualizado));
                             
@@ -3865,21 +4001,25 @@ async function importarPlanilha() {
                             atualizados++;
                             
                         } else {
+                            // 🔥 NOVO JOVEM
                             const novoId = 'j_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                             const novoJovem = { 
                                 id: novoId, 
-                                status: statusPlanilha,
+                                status: 'REGULAR',
                                 historicoFrequencia: [],
                                 observacoes: [],
                                 documentos: [],
                                 acoesLA: [],
                                 avaliacoes: [],
-                                'HORAS_CUMPRIDAS': dadosJovem['HORAS_CUMPRIDAS'] || 0,
-                                'SALDO': dadosJovem['SALDO'] || 0
+                                'HORAS': 0,
+                                'HORAS_CUMPRIDAS': 0,
+                                'SALDO': 0
                             };
                             
                             for (const [key, value] of Object.entries(dadosJovem)) {
-                                novoJovem[key] = value;
+                                if (camposPessoais.includes(key)) {
+                                    novoJovem[key] = value;
+                                }
                             }
                             
                             for (const [key] of CAMPOS) {
