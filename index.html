@@ -191,6 +191,21 @@
                 <label>🖐️ ID da Impressão Digital</label>
                 <input type="text" id="campo_ID_DIGITAL" placeholder="Ex: 123456" style="max-width:300px;">
             </div>
+            
+            <!-- CAMPO MÊS ANIVERSARIO COM BOTÃO AUTO -->
+            <div class="campo" style="grid-column: 1 / -1;">
+                <label>📅 MÊS ANIVERSARIO</label>
+                <div class="campo-mes-container" style="display:flex; gap:8px; align-items:center; width:100%; max-width:400px;">
+                    <input type="text" id="campo_MÊS ANIVERSARIO" placeholder="Ex: Janeiro" style="flex:1;">
+                    <button type="button" class="btn-atualizar-mes" onclick="atualizarMesAniversario()" title="Preencher automaticamente baseado na data de nascimento" style="background:#8b5cf6; color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;">
+                        <i class="fas fa-magic"></i> Auto
+                    </button>
+                </div>
+                <span style="font-size:0.7rem; color:#6b7280; margin-top:4px; display:block;">
+                    <i class="fas fa-info-circle"></i> Clique no botão "Auto" para preencher automaticamente baseado na data de nascimento
+                </span>
+            </div>
+
             <div id="containerAcoesLA" style="display:none; background:#f8fafc; padding:15px; border-radius:12px; margin-bottom:15px; border:1px solid #e2e8f0;">
                 <h4 style="color:#1e2a4a; margin-bottom:10px;">📋 Ações de Compromisso (LA) com Prazo</h4>
                 <p style="font-size:0.85rem; color:#6b7280; margin-bottom:10px;">Adicione as ações que o jovem se comprometeu a realizar.</p>
@@ -201,10 +216,15 @@
                 </div>
                 <ul id="listaAcoesLAForm" style="margin-top:10px; padding-left:20px; font-size:0.9rem; max-height:200px; overflow-y:auto;"></ul>
             </div>
+
             <div class="acao-botoes" style="display:flex; flex-wrap:wrap; gap:12px; margin-top:10px;">
                 <button type="button" id="salvarBtn" class="btn-primary">💾 Salvar Jovem</button>
                 <button type="button" id="importarExcelBtn" class="btn-success">📂 Importar Planilha</button>
                 <button type="button" id="limparFormBtn" class="btn-secondary">🗑️ Limpar</button>
+                <!-- NOVO BOTÃO: ATUALIZAR MÊS ANIVERSÁRIO (TODOS) -->
+                <button type="button" onclick="atualizarTodosMesesAniversario()" class="btn-warning" style="color:white;">
+                    <i class="fas fa-calendar"></i> Atualizar Mês Aniversário (Todos)
+                </button>
             </div>
         </form>
         <div id="statusImportacao" style="margin-top:10px; display:none; padding:10px; border-radius:8px;"></div>
@@ -250,6 +270,14 @@
                 <div class="filtro-checkbox-group" id="filtroIdade"></div>
             </div>
         </div>
+
+        <!-- LEGENDA EXPLICATIVA -->
+        <div style="display:flex; flex-wrap:wrap; gap:16px; padding:8px 4px; font-size:0.75rem; color:#6b7280; border-bottom:1px solid #f1f5f9; margin-bottom:12px;">
+            <span><i class="fas fa-pencil-alt" style="color:#2563EB;"></i> Campos editáveis diretamente na lista</span>
+            <span><span style="display:inline-block; width:12px; height:12px; background:#f0fdf4; border:1px solid #10b981; border-radius:3px; vertical-align:middle;"></span> Campo editado com sucesso</span>
+            <span><span style="display:inline-block; width:12px; height:12px; background:#fffbeb; border:1px solid #f59e0b; border-radius:3px; vertical-align:middle;"></span> Saldo recalculado automaticamente</span>
+        </div>
+
         <div class="flex" style="margin-bottom:16px;">
             <input type="text" id="buscaFrequencia" placeholder="🔍 Buscar rápido..." style="flex:1; padding:8px 16px; border:1px solid #d1d9e6; border-radius:40px;">
             <button id="exportarExcelBtn" class="btn-success"><i class="fas fa-file-excel"></i> Exportar</button>
@@ -273,9 +301,9 @@
                     <th>ID Digital</th>
                     <th>Idade</th>
                     <th>Medida</th>
-                    <th>Horas Atribuídas</th>
-                    <th>Horas Cumpridas</th>
-                    <th>Saldo</th>
+                    <th class="tooltip-horas" data-tooltip="Edite diretamente o total de horas atribuídas">Horas Atribuídas</th>
+                    <th class="tooltip-horas" data-tooltip="Edite diretamente o total de horas já cumpridas">Horas Cumpridas</th>
+                    <th class="tooltip-horas" data-tooltip="Edite diretamente o saldo restante">Saldo</th>
                     <th>Status</th>
                     <th>Motivo</th>
                     <th>Último</th>
@@ -299,6 +327,9 @@
                 </select>
             </div>
             <button id="btnImprimirFicha" class="btn-primary" onclick="imprimirFichaIndividual()" style="display:none;">🖨️ Imprimir Ficha</button>
+            <button onclick="atualizarTodosMesesAniversario()" class="btn-warning" style="color:white; display:none;" id="btnCorrigirMesesAcomp">
+                <i class="fas fa-calendar"></i> Corrigir Meses
+            </button>
         </div>
         <div id="fichaIndividual" style="display:none;">
             <div class="card" style="border-left-color:#2c3e66; background:#f8fafc; margin-bottom:20px;">
